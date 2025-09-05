@@ -9,6 +9,14 @@ import { Button } from '~/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select';
 import { toast } from 'sonner';
 import { XIcon, SaveIcon, PlusIcon } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '~/components/ui/dialog';
 import { api } from "~/trpc/react";
 import * as Sucrase from 'sucrase';
 
@@ -60,6 +68,8 @@ export function CodePanelG({
   const { getCurrentProps, replace, updateScene, updateAndRefresh } = useVideoState();
   const [localCode, setLocalCode] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
+  const [durationDialogOpen, setDurationDialogOpen] = useState(false);
+  const [durationChoice, setDurationChoice] = useState<{ parsed?: number; current?: number } | null>(null);
   const utils = api.useUtils();
   const monaco = useMonaco();
   const { theme } = useTheme();
@@ -70,6 +80,17 @@ export function CodePanelG({
       monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
         noSemanticValidation: true,
         noSuggestionDiagnostics: true,
+      });
+      // Ensure TSX support and modern TS settings for better syntax validation
+      monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+        jsx: monaco.languages.typescript.JsxEmit.ReactJSX,
+        allowNonTsExtensions: true,
+        target: monaco.languages.typescript.ScriptTarget.ES2020,
+        module: monaco.languages.typescript.ModuleKind.ESNext,
+        noEmit: true,
+        allowJs: true,
+        checkJs: false,
+        strict: false,
       });
     }
   }, [monaco]);
@@ -152,9 +173,12 @@ export function CodePanelG({
 
   // Save code mutation
   const saveCodeMutation = api.scenes.updateSceneCode.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Code saved successfully!");
       setIsSaving(false);
+      
+      // Invalidate iterations query to ensure restore button updates
+      await utils.generation.getBatchMessageIterations.invalidate();
       
       // 🚨 CRITICAL FIX: Use updateAndRefresh instead of updateScene to trigger proper video refresh
       if (selectedScene) {
@@ -202,12 +226,13 @@ export function CodePanelG({
 
   // Add scene mutation - use chat generation
   const addSceneMutation = api.generation.generateScene.useMutation({
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       toast.success("Scene added successfully!");
       
       // Invalidate caches to refresh scenes
-      utils.generation.getProjectScenes.invalidate({ projectId });
-      utils.chat.getMessages.invalidate({ projectId });
+      await utils.generation.getProjectScenes.invalidate({ projectId });
+      await utils.chat.getMessages.invalidate({ projectId });
+      await utils.generation.getBatchMessageIterations.invalidate();
       
       // Update VideoState store immediately to ensure scene is available
       if (result.data) {
@@ -272,6 +297,16 @@ export function CodePanelG({
     }
   }, [projectId, addSceneMutation]);
 
+  const performSave = useCallback(async (overwriteDuration: boolean) => {
+    if (!selectedScene) return;
+    await saveCodeMutation.mutateAsync({
+      projectId,
+      sceneId: selectedScene.id,
+      code: localCode,
+      overwriteDuration
+    });
+  }, [selectedScene, localCode, projectId, saveCodeMutation]);
+
   // Save code to database
   const handleSave = useCallback(async () => {
     if (!selectedScene || !localCode.trim()) {
@@ -290,19 +325,27 @@ export function CodePanelG({
       // Try to compile with Sucrase first to validate
       compileWithSucrase(localCode);
       
-      // Save to database
-      await saveCodeMutation.mutateAsync({
-        projectId,
-        sceneId: selectedScene.id,
-        code: localCode
-      });
+      // Best-effort detect declared duration in code and compare with current
+      const durationRegex = /durationInFrames\s*=\s*(\d+)/i;
+      const match = localCode.match(durationRegex);
+      const parsed = match?.[1] ? parseInt(match[1], 10) : undefined;
+      const currentDuration = selectedScene.duration || 0;
+
+      // If mismatch, open a nicer dialog and defer save based on choice
+      if (parsed && parsed > 0 && parsed !== currentDuration) {
+        setDurationChoice({ parsed, current: currentDuration });
+        setDurationDialogOpen(true);
+        return; // Wait for user choice; saving happens in dialog actions
+      }
+
+      await performSave(false);
 
     } catch (error) {
       console.error('[CodePanelG] Save failed:', error);
       toast.error(error instanceof Error ? error.message : "Failed to save code");
       setIsSaving(false);
     }
-  }, [selectedScene, localCode, projectId, saveCodeMutation]);
+  }, [selectedScene, localCode, performSave]);
 
   // Auto-save on code change (debounced)
   const handleCodeChange = useCallback((value: string | undefined) => {
@@ -419,7 +462,9 @@ export function CodePanelG({
       <div className="flex-1 overflow-hidden">
         <Editor
           height="100%"
-          defaultLanguage="typescript"
+          language="typescript"
+          // Hint Monaco to parse TSX by giving the model a .tsx path
+          path={`inmemory://model/${selectedScene.id}.tsx`}
           value={localCode}
           onChange={handleCodeChange}
           theme={theme === 'dark' ? 'vs-dark' : 'vs-light'}
@@ -468,6 +513,45 @@ export function CodePanelG({
           }}
         />
       </div>
+
+      {/* Duration mismatch dialog */}
+      <Dialog open={durationDialogOpen} onOpenChange={(o) => {
+        setDurationDialogOpen(o);
+        if (!o) setIsSaving(false);
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Duration mismatch detected</DialogTitle>
+            <DialogDescription>
+              The code declares a different duration than the current scene.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="text-sm text-gray-700 space-y-1">
+            <div><span className="font-medium">Current:</span> {durationChoice?.current} frames</div>
+            <div><span className="font-medium">From code:</span> {durationChoice?.parsed} frames</div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              onClick={async () => {
+                setDurationDialogOpen(false);
+                await performSave(false);
+              }}
+            >
+              Keep current
+            </Button>
+            <Button
+              className="bg-orange-500 hover:bg-orange-600"
+              onClick={async () => {
+                setDurationDialogOpen(false);
+                await performSave(true);
+              }}
+            >
+              Update to code
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

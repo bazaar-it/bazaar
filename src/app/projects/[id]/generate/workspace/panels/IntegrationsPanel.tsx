@@ -242,10 +242,10 @@ export default function IntegrationsPanel({ projectId }: IntegrationsPanelProps)
                           <CheckCircle className="h-5 w-5 text-green-600" />
                           <div>
                             <p className="text-sm font-medium text-green-900">
-                              Connected as @{githubConnection.username}
+                              Connected as @{githubConnection?.username}
                             </p>
                             <p className="text-xs text-green-700">
-                              {githubConnection.repoCount} repositories available
+                              {githubConnection?.repoCount} repositories available
                             </p>
                           </div>
                         </div>

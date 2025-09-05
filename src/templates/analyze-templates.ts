@@ -1,7 +1,7 @@
 // Script to analyze templates and determine their format compatibility
 // This is a temporary analysis script to help determine which formats each template supports
 
-import { type VideoFormat } from '../app/projects/new/FormatSelector';
+import { type VideoFormat } from '../lib/types/video/remotion-constants';
 
 // Template analysis results based on manual review
 export const templateFormatAnalysis = {
@@ -17,8 +17,8 @@ export const templateFormatAnalysis = {
     reason: 'Centered text animation, works in all formats'
   },  'gradient-text': {
     name: 'Gradient Text',
-    supportedFormats: ['landscape', 'portrait'] as VideoFormat[],
-    reason: 'Gradient text with responsive layout, optimized for landscape and portrait'
+    supportedFormats: ['portrait', 'square'] as VideoFormat[],
+    reason: 'Gradient text with responsive layout, optimized for portrait and square'
   },  'dot-dot-dot': {
     name: 'Dot Dot Dot',
     supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
@@ -31,8 +31,8 @@ export const templateFormatAnalysis = {
   },
   'word-flip': {
     name: 'Word Flip',
-    supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
-    reason: 'Text animation, adaptable'
+    supportedFormats: ['landscape'] as VideoFormat[],
+    reason: 'Text animation, optimized for landscape'
   },
   'morphing-text': {
     name: 'Morphing Text',
@@ -46,8 +46,8 @@ export const templateFormatAnalysis = {
   },
   'carousel-text': {
     name: 'Carousel Text',
-    supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
-    reason: 'Rotating text, centered'
+    supportedFormats: ['portrait', 'square'] as VideoFormat[],
+    reason: 'Rotating text, works better in portrait and square'
   },
   'draw-on': {
     name: 'Draw On',
@@ -83,16 +83,6 @@ export const templateFormatAnalysis = {
   },
 
   // Landscape-optimized templates (work best in landscape, okay in square)
-  'fintech-ui': {
-    name: 'Fintech UI',
-    supportedFormats: ['landscape', 'square'] as VideoFormat[],
-    reason: 'Dashboard layout with multiple panels, needs horizontal space'
-  },
-  'growth-graph': {
-    name: 'Growth Graph',
-    supportedFormats: ['landscape', 'square'] as VideoFormat[],
-    reason: 'Horizontal graph visualization, better in landscape'
-  },
   'tesla-stock-graph': {
     name: 'Tesla Stock Graph',
     supportedFormats: ['landscape', 'square'] as VideoFormat[],
@@ -100,8 +90,8 @@ export const templateFormatAnalysis = {
   },
   'dual-screen-app': {
     name: 'Dual Screen App',
-    supportedFormats: ['landscape'] as VideoFormat[],
-    reason: 'Shows two phone screens side by side, requires landscape'
+    supportedFormats: ['portrait', 'square'] as VideoFormat[],
+    reason: 'Better suited for portrait and square formats'
   },
   'coding': {
     name: 'Coding',
@@ -122,18 +112,18 @@ export const templateFormatAnalysis = {
   // Sign-in templates (work in all formats but better in portrait/square for mobile)
   'apple-sign-in': {
     name: 'Apple Sign In',
-    supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
-    reason: 'Sign-in button, works in all formats but great for mobile'
+    supportedFormats: ['portrait', 'square'] as VideoFormat[],
+    reason: 'Sign-in button, optimized for mobile formats'
   },
   'github-sign-in': {
     name: 'GitHub Sign In',
-    supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
-    reason: 'Sign-in button, adaptable to all formats'
+    supportedFormats: ['portrait', 'square'] as VideoFormat[],
+    reason: 'Sign-in button, optimized for mobile formats'
   },
   'google-sign-in': {
     name: 'Google Sign In',
-    supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
-    reason: 'Sign-in button, works everywhere'
+    supportedFormats: ['portrait', 'square'] as VideoFormat[],
+    reason: 'Sign-in button, optimized for mobile formats'
   },
 
   // Audio/visual templates (format agnostic)
@@ -201,7 +191,8 @@ export const templateFormatAnalysis = {
     name: 'Vibey BG',
     supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
     reason: 'Vibey magenta-to-cyan gradient background template adapts perfectly to all aspect ratios'
-  },  'vibes-bg-gradient': {
+  },
+  'vibes-bg-gradient': {
     name: 'Rainbow BG',
     supportedFormats: ['landscape', 'portrait', 'square'] as VideoFormat[],
     reason: 'Background gradient template with vibrant color transitions adapts to all formats'

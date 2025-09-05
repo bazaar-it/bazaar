@@ -2,7 +2,7 @@ import { z } from "zod";
 import { protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
 import { scenes, projects, messages } from "~/server/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, gte, sql } from "drizzle-orm";
 import { messageService } from "~/server/services/data/message.service";
 import { orchestrator } from "~/brain/orchestratorNEW";
 import type { BrainDecision } from "~/lib/types/ai/brain.types";
@@ -29,6 +29,7 @@ export const generateScene = protectedProcedure
       imageUrls: z.array(z.string()).optional(),
       videoUrls: z.array(z.string()).optional(),
       audioUrls: z.array(z.string()).optional(),
+      sceneUrls: z.array(z.string()).optional(), // Scene IDs that were attached/dragged into chat
       modelOverride: z.string().optional(), // Optional model ID for overriding default model
       useGitHub: z.boolean().optional(), // Explicit GitHub component search mode
     }).optional(),
@@ -45,14 +46,39 @@ export const generateScene = protectedProcedure
     console.log(`[${response.getRequestId()}] Starting scene generation`, { projectId, userMessage });
 
     try {
-      // 1. Verify project ownership
-      const project = await db.query.projects.findFirst({
-        where: and(
-          eq(projects.id, projectId),
-          eq(projects.userId, userId)
-        ),
-      });
+      // PARALLELIZED: Fetch all data at once (saves 700-1000ms)
+      const startTime = Date.now();
+      
+      // 1. Parallel fetch: project, scenes, messages, and usage check
+      const [project, existingScenes, recentMessages, usageCheck] = await Promise.all([
+        // Project ownership check
+        db.query.projects.findFirst({
+          where: and(
+            eq(projects.id, projectId),
+            eq(projects.userId, userId)
+          ),
+        }),
+        
+        // Existing scenes
+        db.query.scenes.findMany({
+          where: eq(scenes.projectId, projectId),
+          orderBy: [scenes.order],
+        }),
+        
+        // Chat history - with smart limit for performance
+        db.query.messages.findMany({
+          where: eq(messages.projectId, projectId),
+          orderBy: [desc(messages.sequence)],
+          limit: 100, // Smart limit: 100 messages is plenty for context
+        }),
+        
+        // Usage check (runs in parallel)
+        UsageService.checkPromptUsage(userId, input.metadata?.timezone || 'UTC'),
+      ]);
+      
+      console.log(`[${response.getRequestId()}] Parallel DB queries took ${Date.now() - startTime}ms`);
 
+      // 1.1 Validate project exists
       if (!project) {
         return response.error(
           ErrorCode.NOT_FOUND,
@@ -62,12 +88,8 @@ export const generateScene = protectedProcedure
         ) as any as SceneCreateResponse;
       }
 
-      // 1.5. Check prompt usage limits
-      // Get user timezone from input or default to UTC
-      const userTimezone = input.metadata?.timezone || 'UTC';
-      const usageCheck = await UsageService.checkPromptUsage(userId, userTimezone);
+      // 1.2 Check usage limits
       if (!usageCheck.allowed) {
-        // Throw TRPCError for proper error handling in the client
         throw new TRPCError({
           code: 'PRECONDITION_FAILED',
           message: usageCheck.message || "Daily prompt limit reached",
@@ -88,34 +110,27 @@ export const generateScene = protectedProcedure
         tsxCode: string;
       }> = [];
       
-      // Get existing scenes first
-      const existingScenes = await db.query.scenes.findMany({
-        where: eq(scenes.projectId, projectId),
-        orderBy: [scenes.order],
-      });
-      
-      if (project.isWelcome && existingScenes.length === 0) {
-        // First real scene - clear welcome flag
-        console.log(`[${response.getRequestId()}] First real scene - clearing welcome flag`);
-        await db.update(projects)
+      // Handle welcome project flag if needed
+      if (project.isWelcome) {
+        // Clear welcome flag (async, no need to wait)
+        db.update(projects)
           .set({ isWelcome: false })
-          .where(eq(projects.id, projectId));
+          .where(eq(projects.id, projectId))
+          .catch((err) => console.error(`[${response.getRequestId()}] Failed to clear welcome flag:`, err));
         
-        storyboardForBrain = [];
-      } else if (project.isWelcome && existingScenes.length > 0) {
-        // Welcome project but has scenes already - just clear the flag
-        console.log(`[${response.getRequestId()}] Welcome project with scenes - clearing flag only`);
-        await db.update(projects)
-          .set({ isWelcome: false })
-          .where(eq(projects.id, projectId));
-        
-        storyboardForBrain = existingScenes.map(scene => ({
-          id: scene.id,
-          name: scene.name,
-          duration: scene.duration,
-          order: scene.order,
-          tsxCode: scene.tsxCode,
-        }));
+        if (existingScenes.length === 0) {
+          console.log(`[${response.getRequestId()}] First real scene - welcome flag cleared`);
+          storyboardForBrain = [];
+        } else {
+          console.log(`[${response.getRequestId()}] Welcome project with scenes - flag cleared`);
+          storyboardForBrain = existingScenes.map(scene => ({
+            id: scene.id,
+            name: scene.name,
+            duration: scene.duration,
+            order: scene.order,
+            tsxCode: scene.tsxCode,
+          }));
+        }
       } else {
         // Normal project with scenes
         storyboardForBrain = existingScenes.map(scene => ({
@@ -127,12 +142,7 @@ export const generateScene = protectedProcedure
         }));
       }
 
-      // 3. Get chat history
-      const recentMessages = await db.query.messages.findMany({
-        where: eq(messages.projectId, projectId),
-        orderBy: [desc(messages.sequence)],
-        limit: 10,
-      });
+      // 3. Process chat history (already fetched in parallel)
       
       const chatHistory = recentMessages.reverse().map(msg => ({
         role: msg.role,
@@ -150,7 +160,7 @@ export const generateScene = protectedProcedure
         const { githubConnections } = await import("~/server/db/schema/github-connections");
         const { eq, and } = await import("drizzle-orm");
         
-        const connections = await ctx.db
+        const connections = await db
           .select()
           .from(githubConnections)
           .where(and(
@@ -190,9 +200,9 @@ export const generateScene = protectedProcedure
             // Create a caller for the router
             const caller = figmaImportRouter.createCaller({
               session: ctx.session,
-              db: ctx.db,
+              db: db,
               headers: ctx.headers,
-            });
+            } as any);
             
             // Fetch the component data
             const componentResult = await caller.fetchComponentData({
@@ -250,6 +260,7 @@ export const generateScene = protectedProcedure
           imageUrls: userContext?.imageUrls,
           videoUrls: userContext?.videoUrls,
           audioUrls: userContext?.audioUrls,
+          sceneUrls: userContext?.sceneUrls, // Pass attached scene IDs to orchestrator
           modelOverride: userContext?.modelOverride,
           useGitHub: userContext?.useGitHub, // Pass the explicit GitHub flag
           githubConnected,
@@ -409,8 +420,30 @@ export const generateScene = protectedProcedure
       }
 
       // 9. Return universal response
-      // ✅ SPECIAL CASE: Scene planner doesn't create scenes, only scene plan messages
-      if (!toolResult.scene) {
+      // ✅ SPECIAL CASES: Tools that don't create scenes
+      // - Audio add: succeeds without returning a scene
+      // - Scene planner: [disabled]
+      if (!toolResult.scene && !toolResult.scenes) {
+        if (decision.toolName === 'addAudio' && toolResult.success) {
+          // Count usage for successful operation
+          await UsageService.incrementPromptUsage(userId);
+          // Return a lightweight success payload so client can update chat and UI
+          return {
+            data: undefined,
+            meta: {
+              success: true,
+              // Use a distinct operation so client can detect audio add
+              operation: 'audio.add',
+            },
+            context: {
+              reasoning: decision.reasoning,
+              // Prefer explicit chatResponse from tool if present; fall back to decision text
+              chatResponse: (toolResult as any).chatResponse || (decision as any).chatResponse,
+            },
+            assistantMessageId,
+            additionalMessageIds: toolResult.additionalMessageIds || [],
+          } as any as SceneCreateResponse;
+        }
         /* [SCENEPLANNER DISABLED] - All scenePlanner logic commented out
         if (decision.toolName === 'scenePlanner') {
           // Scene planner succeeded - increment usage
@@ -428,13 +461,38 @@ export const generateScene = protectedProcedure
           ) as any as SceneCreateResponse;
         // }
       }
+      
+      // Handle websiteToVideo which returns multiple scenes
+      if (decision.toolName === 'websiteToVideo' && toolResult.scenes) {
+        // Increment usage for successful generation
+        await UsageService.incrementPromptUsage(userId);
+        
+        // Return the first scene as the primary response, but all scenes are already saved
+        const primaryScene = toolResult.scenes[0];
+        const successResponse = response.success(
+          primaryScene,
+          'scene.create',
+          'scene'
+        ) as any as SceneCreateResponse;
+        
+        // Add metadata about all scenes created (cast to any for dynamic properties)
+        (successResponse as any).additionalScenes = toolResult.scenes.length - 1;
+        (successResponse as any).allSceneIds = toolResult.scenes.map((s: any) => s.id);
+        
+        // Include debug data for admin panel if present
+        if (toolResult.debugData) {
+          (successResponse as any).debugData = toolResult.debugData;
+        }
+        
+        return successResponse;
+      }
 
       // Scene is already a proper SceneEntity from the database
       // Determine the correct operation based on the tool used
       // Map all operations to valid API response operations
       let operation: 'scene.create' | 'scene.update' | 'scene.delete' = 'scene.create';
-      if (decision.toolName) {
-        const toolOp = TOOL_OPERATION_MAP[decision.toolName];
+      if (decision.toolName && decision.toolName in TOOL_OPERATION_MAP) {
+        const toolOp = TOOL_OPERATION_MAP[decision.toolName as keyof typeof TOOL_OPERATION_MAP];
         switch (toolOp) {
           case 'scene.create':
           // case 'multi-scene.create': // [DISABLED] Map multi-scene to regular scene.create
@@ -452,8 +510,18 @@ export const generateScene = protectedProcedure
       }
       
       // Increment usage on successful generation
+      const userTimezone = input.metadata?.timezone || 'UTC';
       await UsageService.incrementPromptUsage(userId, userTimezone);
       
+      if (!toolResult.scene) {
+        return response.error(
+          ErrorCode.INTERNAL_ERROR,
+          "Scene creation failed - no scene returned from tool",
+          operation,
+          'scene'
+        ) as any as SceneCreateResponse;
+      }
+
       const successResponse = response.success(
         toolResult.scene, 
         operation, 
@@ -535,14 +603,26 @@ export const removeScene = protectedProcedure
         ) as any as SceneDeleteResponse;
       }
 
+      // Prepare payload for client-side undo
+      const deletedScenePayload = {
+        id: scene.id,
+        projectId: scene.projectId,
+        name: scene.name,
+        tsxCode: scene.tsxCode,
+        duration: scene.duration,
+        order: scene.order,
+        props: scene.props,
+        layoutJson: scene.layoutJson,
+      } as const;
+
       // 2. Delete the scene
       await db.delete(scenes).where(eq(scenes.id, sceneId));
 
       console.log(`[${response.getRequestId()}] Scene deleted successfully`);
 
-      // 3. Return success response
+      // 3. Return success response (include payload for potential undo)
       return response.success(
-        { deletedId: sceneId },
+        { deletedId: sceneId, deletedScene: deletedScenePayload },
         'scene.delete',
         'scene',
         [sceneId]
@@ -561,6 +641,54 @@ export const removeScene = protectedProcedure
         'scene'
       ) as any as SceneDeleteResponse;
     }
+  });
+
+/**
+ * RESTORE SCENE (Undo)
+ */
+export const restoreScene = protectedProcedure
+  .input(z.object({
+    projectId: z.string(),
+    scene: z.object({
+      id: z.string(),
+      name: z.string(),
+      tsxCode: z.string(),
+      duration: z.number().min(1),
+      order: z.number().min(0),
+      props: z.any().optional(),
+      layoutJson: z.any().optional(),
+    })
+  }))
+  .mutation(async ({ input, ctx }) => {
+    const { projectId, scene } = input;
+    const userId = ctx.session.user.id;
+
+    // Verify project ownership
+    const project = await db.query.projects.findFirst({
+      where: and(eq(projects.id, projectId), eq(projects.userId, userId)),
+    });
+    if (!project) {
+      throw new TRPCError({ code: 'UNAUTHORIZED', message: "Access denied" });
+    }
+
+    // Bump order of existing scenes at or after the target position
+    await db.update(scenes)
+      .set({ order: sql`${scenes.order} + 1` })
+      .where(and(eq(scenes.projectId, projectId), gte(scenes.order, scene.order)));
+
+    // Insert scene back (preserve original ID)
+    const [restored] = await db.insert(scenes).values({
+      id: scene.id,
+      projectId,
+      name: scene.name,
+      tsxCode: scene.tsxCode,
+      duration: scene.duration,
+      order: scene.order,
+      props: scene.props as any,
+      layoutJson: scene.layoutJson as any,
+    }).returning();
+
+    return { success: true, scene: restored };
   });
 
 /**

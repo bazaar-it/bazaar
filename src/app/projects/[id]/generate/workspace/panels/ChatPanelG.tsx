@@ -14,10 +14,11 @@ import { cn } from "~/lib/cn";
 import { ChatMessage } from "~/components/chat/ChatMessage";
 import { GeneratingMessage } from "~/components/chat/GeneratingMessage";
 import { MediaUpload, type UploadedMedia, createMediaUploadHandlers } from "~/components/chat/MediaUpload";
+import { type DraftAttachment, type DbMessage } from "~/stores/videoState";
 import { AudioTrimPanel } from "~/components/audio/AudioTrimPanel";
 import { VoiceInput } from "~/components/chat/VoiceInput";
 import { AssetMentionAutocomplete } from "~/components/chat/AssetMentionAutocomplete";
-import { IconPicker } from "~/components/IconPicker";
+
 import { 
   parseAssetMentions, 
   resolveAssetMentions, 
@@ -40,6 +41,8 @@ interface ComponentMessage {
   status?: "pending" | "error" | "success" | "building" | "tool_calling";
   kind?: "text" | "error" | "status" | "tool_result" | "scene_plan";
   imageUrls?: string[];
+  videoUrls?: string[];
+  audioUrls?: string[];
 }
 
 interface ChatPanelGProps {
@@ -49,15 +52,44 @@ interface ChatPanelGProps {
   userId?: string;
 }
 
+// Helper functions to convert between UploadedMedia and DraftAttachment
+const convertToDraftAttachment = (media: UploadedMedia): DraftAttachment => ({
+  id: media.id,
+  status: media.status,
+  url: media.url,
+  error: media.error,
+  type: media.type,
+  isLoaded: media.isLoaded,
+  duration: media.duration,
+  name: media.file.name,
+  fileName: media.file.name,
+  fileSize: media.file.size,
+  mimeType: media.file.type,
+});
+
+const convertFromDraftAttachment = (draft: DraftAttachment): UploadedMedia => ({
+  id: draft.id,
+  file: new File([], draft.fileName || 'file', { type: draft.mimeType || 'application/octet-stream' }),
+  status: draft.status,
+  url: draft.url,
+  error: draft.error,
+  type: draft.type,
+  isLoaded: draft.isLoaded,
+  duration: draft.duration,
+});
+
 export default function ChatPanelG({
   projectId,
   selectedSceneId,
   onSceneGenerated,
   userId,
 }: ChatPanelGProps) {
-  // Get draft message from store to persist across panel changes
-  const draftMessage = useVideoState((state) => state.getDraftMessage(projectId));
+  // Get draft message and attachments from store to persist across panel changes
+  const draftMessage = useVideoState((state) => state.projects[projectId]?.draftMessage || '');
+  const draftAttachments = useVideoState((state) => state.projects[projectId]?.draftAttachments || []);
   const setDraftMessage = useVideoState((state) => state.setDraftMessage);
+  const setDraftAttachments = useVideoState((state) => state.setDraftAttachments);
+  const clearDraft = useVideoState((state) => state.clearDraft);
   const [message, setMessage] = useState(draftMessage);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationPhase, setGenerationPhase] = useState<'thinking' | 'generating'>('thinking');
@@ -76,9 +108,13 @@ export default function ChatPanelG({
   const inputRef = useRef<HTMLInputElement>(null);
   
   
-  // 🚨 NEW: State for media uploads
-  const [uploadedImages, setUploadedImages] = useState<UploadedMedia[]>([]);
+  // Use draft attachments from VideoState instead of local state
+  const [uploadedImages, setUploadedImages] = useState<UploadedMedia[]>(
+    draftAttachments.map(convertFromDraftAttachment)
+  );
   const [selectedIcons, setSelectedIcons] = useState<string[]>([]); // Track selected icons
+  const [selectedScenes, setSelectedScenes] = useState<{ id: string; index: number; name: string }[]>([]); // Dragged scene mentions
+  const [hiddenAttachments, setHiddenAttachments] = useState<{type: 'icon' | 'media', data: string, name?: string}[]>([]); // Hidden attachments not shown in message text
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -99,6 +135,8 @@ export default function ChatPanelG({
   // Fetch user assets for @mentions
   const { data: userAssets } = api.project.getUserUploads.useQuery();
   
+
+  
   // Check if user has GitHub connected and get discovered components
   const { data: githubConnection } = api.github.getConnection.useQuery();
   const { data: discoveredComponents } = api.githubDiscovery.discoverComponents.useQuery(
@@ -107,7 +145,7 @@ export default function ChatPanelG({
   );
   
   // Get video state and current scenes
-  const { getCurrentProps, replace, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene, deleteScene, removeMessage, setSceneGenerating, updateProjectAudio } = useVideoState();
+  const { getCurrentProps, replace, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene, deleteScene, removeMessage, setSceneGenerating, updateProjectAudio, syncDbMessages } = useVideoState();
   const currentProps = getCurrentProps();
   const scenes = currentProps?.scenes || [];
   
@@ -115,12 +153,34 @@ export default function ChatPanelG({
   const selectedScene = selectedSceneId ? scenes.find((s: any) => s.id === selectedSceneId) : null;
   
   // ✅ SINGLE SOURCE OF TRUTH: Use only VideoState for messages
+  // Load messages from database on mount
+  const { data: dbMessages } = api.chat.getMessages.useQuery({ 
+    projectId 
+  }, {
+    refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000, // 5 minute cache
+  });
+
   const messages = getProjectChatHistory(projectId);
   
   // Debug: Log messages to check for duplicates
   // Commented out to prevent re-render spam
   // console.log('[ChatPanelG] Messages from VideoState:', messages.length);
   
+  // Sync database messages to VideoState when loaded
+  useEffect(() => {
+    if (dbMessages && dbMessages.length > 0) {
+      console.log('[ChatPanelG] Syncing database messages to VideoState:', dbMessages.length);
+      const typedMessages: DbMessage[] = dbMessages.map(msg => ({
+        ...msg,
+        role: msg.role as 'user' | 'assistant',
+        kind: msg.kind as 'status' | 'text' | 'error' | 'tool_result' | 'scene_plan' | undefined
+      }));
+      syncDbMessages(projectId, typedMessages);
+    }
+  }, [dbMessages, projectId, syncDbMessages]);
+
+
   // Convert VideoState messages to component format for rendering
   const componentMessages: ComponentMessage[] = useMemo(() => {
     // ✅ DEDUPLICATE: Remove duplicate messages by ID to prevent React key errors
@@ -138,24 +198,33 @@ export default function ChatPanelG({
       status: msg.status,
       kind: msg.kind,
       imageUrls: msg.imageUrls,
+      videoUrls: msg.videoUrls,
+      audioUrls: msg.audioUrls,
     }));
   }, [messages]);
 
   // ✅ BATCH LOADING: Get iterations for all messages at once
   const messageIds = componentMessages
     .filter(m => !m.isUser && m.id && !m.id.startsWith('_') && !m.id.startsWith('temp-') && !m.id.startsWith('optimistic-') && !m.id.startsWith('system-') && !m.id.startsWith('user-'))
-    .map(m => m.id);
+    .map(m => m.id)
+    .filter(id => id && id.length > 0); // Additional validation to ensure no empty IDs
 
   const { data: messageIterations } = api.generation.getBatchMessageIterations.useQuery(
     { messageIds },
     { 
       enabled: messageIds.length > 0,
-      staleTime: 60000, // Cache for 1 minute
+      staleTime: 0, // Always fetch fresh data to ensure restore button shows immediately
+      refetchInterval: false, // Don't poll, but always get fresh data on mount/invalidation
     }
   );
 
   // ✅ CORRECT: Use the generation endpoint that goes through Brain Orchestrator
-  const generateSceneMutation = api.generation.generateScene.useMutation();
+  const generateSceneMutation = api.generation.generateScene.useMutation({
+    onSettled: async () => {
+      // Invalidate iterations query after any scene operation to ensure restore button appears
+      await utils.generation.getBatchMessageIterations.invalidate();
+    }
+  });
 
   // Auto-scroll function
   const scrollToBottom = useCallback(() => {
@@ -329,7 +398,12 @@ export default function ChatPanelG({
       toast.info('Figma mode auto-enabled for design');
     }
     
-    // Extract icon references from the message
+    // Process hidden attachments (icons from MediaPanel)
+    const hiddenIconRefs = hiddenAttachments
+      .filter(att => att.type === 'icon')
+      .map(att => att.data);
+    
+    // Extract any icon references that might still be in the message text (legacy)
     const iconPattern = /\[icon:([^\]]+)\]/g;
     const iconRefs: string[] = [];
     let iconMatch;
@@ -339,10 +413,17 @@ export default function ChatPanelG({
       }
     }
     
-    // If we have icons, append them to the message in a clear format
-    if (iconRefs.length > 0) {
-      trimmedMessage = trimmedMessage.replace(iconPattern, ''); // Remove icon markers
-      trimmedMessage = `${trimmedMessage.trim()}\n\nUse these specific icons: ${iconRefs.map(icon => `<window.IconifyIcon icon="${icon}" />`).join(', ')}`;
+    // Combine hidden icons with any icons in message text
+    const allIconRefs = [...hiddenIconRefs, ...iconRefs];
+    
+    // Remove icon markers from message text for backend processing (they're visual only)
+    const cleanedMessage = trimmedMessage.replace(iconPattern, '').trim();
+    
+    // If we have icons, append them to the backend message in a clear format
+    if (allIconRefs.length > 0) {
+      trimmedMessage = `${cleanedMessage}\n\nUse these specific icons: ${allIconRefs.map(icon => `<window.IconifyIcon icon="${icon}" />`).join(', ')}`.trim();
+    } else {
+      trimmedMessage = cleanedMessage;
     }
     
     // 🚨 NEW: Get image, video, and audio URLs from uploaded media
@@ -357,6 +438,13 @@ export default function ChatPanelG({
     let audioUrls = uploadedImages
       .filter(img => img.status === 'uploaded' && img.url && img.type === 'audio')
       .map(img => img.url!);
+    
+    // If scenes were attached via drag, append a friendly reference for the model and machine tokens (not shown in UI)
+    if (selectedScenes.length > 0) {
+      const humanRefs = selectedScenes.map(s => `@scene ${s.index}`).join(', ');
+      const idTokens = selectedScenes.map(s => `[scene:${s.id}]`).join(' ');
+      trimmedMessage = `${trimmedMessage}\n\nUse these specific scenes: ${humanRefs}\n${idTokens}`.trim();
+    }
     
     // Resolve @mentions and categorize URLs by type
     if (userAssets?.assets) {
@@ -413,14 +501,17 @@ export default function ChatPanelG({
       console.log('[ChatPanelG] 🎵 Including audio in chat submission:', audioUrls);
     }
     
-    // Show user message immediately (with original text including @mentions for display)
-    addUserMessage(projectId, originalMessage, imageUrls.length > 0 ? imageUrls : undefined);
+    // Get scene URLs from selected scenes
+    let sceneUrls = selectedScenes.map(s => s.id);
     
     // Clear input immediately for better UX
     setMessage("");
     setDraftMessage(projectId, ""); // Clear draft in store too
     setUploadedImages([]);
+    setDraftAttachments(projectId, []); // Clear draft attachments in store too
     setSelectedIcons([]); // Clear icon previews after sending
+    setSelectedScenes([]); // Clear scene mentions after sending
+    setHiddenAttachments([]); // Clear hidden attachments after sending
     setIsGenerating(true);
     setGenerationPhase('thinking'); // Start in thinking phase
     
@@ -454,10 +545,34 @@ export default function ChatPanelG({
     }
     
     // Let SSE handle DB sync in background
-    // Use finalMessage if it's a YouTube follow-up, otherwise use original message with @mentions
-    const displayMessage = finalMessage !== trimmedMessage ? finalMessage : originalMessage;
-    // Pass both GitHub and Figma modes to generation
-    generateSSE(displayMessage, imageUrls, videoUrls, audioUrls, selectedModel, isGitHubMode || isFigmaMode);
+    // Use finalMessage if it's a YouTube follow-up, otherwise use trimmedMessage (which includes icon info for backend)
+    const backendMessage = finalMessage !== trimmedMessage ? finalMessage : trimmedMessage;
+    
+    // ✨ NEW: Extract website URL from message
+    const urlRegex = /https?:\/\/[^\s]+/g;
+    const urls = backendMessage.match(urlRegex);
+    const websiteUrl = urls?.find(url => 
+      !url.includes('youtube.com') && 
+      !url.includes('youtu.be') &&
+      !url.includes('localhost') &&
+      !url.includes('127.0.0.1')
+    );
+    
+    // Pass both GitHub and Figma modes to generation, plus website URL
+    // Use backendMessage which contains icon information for the LLM
+    console.log('[ChatPanelG] Backend message with icon info:', backendMessage);
+    generateSSE(backendMessage, imageUrls, videoUrls, audioUrls, sceneUrls, selectedModel, isGitHubMode || isFigmaMode, websiteUrl);
+    
+    // Create display message for chat that includes icon information
+    let userDisplayMessage = originalMessage;
+    if (allIconRefs.length > 0) {
+      // Add icon markers to the display message for the chat
+      const iconMarkersText = allIconRefs.map(icon => `[icon:${icon}]`).join(' ');
+      userDisplayMessage = originalMessage ? `${originalMessage} ${iconMarkersText}` : iconMarkersText;
+    }
+    
+    // Show user message AFTER sending to backend to prevent overwriting
+    addUserMessage(projectId, userDisplayMessage, imageUrls, videoUrls, audioUrls, sceneUrls);
   };
 
   // Handle selecting an asset mention - moved before handleKeyDown to fix ReferenceError
@@ -543,20 +658,6 @@ export default function ChatPanelG({
     // Persist to store for panel switching
     setDraftMessage(projectId, newValue);
     
-    // Extract icon references from the message
-    const iconPattern = /\[icon:([^\]]+)\]/g;
-    const icons: string[] = [];
-    let match;
-    while ((match = iconPattern.exec(newValue)) !== null) {
-      if (match[1]) {
-        icons.push(match[1]);
-      }
-    }
-    if (icons.length > 0) {
-      console.log('[ChatPanelG] Extracted icons:', icons);
-    }
-    setSelectedIcons(icons);
-    
     // Check for @mention context
     if (textareaRef.current && userAssets?.assets) {
       const cursorPosition = textareaRef.current.selectionStart;
@@ -582,6 +683,11 @@ export default function ChatPanelG({
   const handleEditScenePlan = useCallback((prompt: string) => {
     setMessage(prompt);
     setDraftMessage(projectId, prompt); // Sync with store
+    // Clear attachments when editing scene plan
+    setUploadedImages([]);
+    setDraftAttachments(projectId, []);
+    setHiddenAttachments([]); // Clear hidden attachments
+    setSelectedIcons([]); // Clear selected icons
     // Focus the textarea after setting the message
     setTimeout(() => {
       if (textareaRef.current) {
@@ -591,7 +697,7 @@ export default function ChatPanelG({
         textareaRef.current.setSelectionRange(length, length);
       }
     }, 50);
-  }, [projectId, setDraftMessage]);
+  }, [projectId, setDraftMessage, setDraftAttachments]);
 
   // 🚨 NEW: Auto-resize textarea
   const adjustTextareaHeight = useCallback(() => {
@@ -613,34 +719,159 @@ export default function ChatPanelG({
     adjustTextareaHeight();
   }, [message]); // Remove adjustTextareaHeight from dependencies since it's stable
 
+  // Sync draft attachments with VideoState (consolidated to prevent infinite loop)
+  useEffect(() => {
+    const sceneAttachments = selectedScenes.map(scene => ({
+      id: `scene-${scene.id}`,
+      status: 'uploaded' as const,
+      type: 'scene' as const,
+      name: scene.name,
+      sceneId: scene.id,
+      sceneIndex: scene.index,
+      isLoaded: true
+    }));
+    
+    const allAttachments = [
+      ...uploadedImages.map(convertToDraftAttachment),
+      ...sceneAttachments
+    ];
+    
+    setDraftAttachments(projectId, allAttachments);
+  }, [selectedScenes, uploadedImages, projectId, setDraftAttachments]);
+
+  // Initialize selectedScenes from draftAttachments on mount only
+  useEffect(() => {
+    const sceneAttachments = draftAttachments
+      .filter(att => att.type === 'scene' && att.sceneId && att.sceneIndex !== undefined)
+      .map(att => ({
+        id: att.sceneId!,
+        index: att.sceneIndex!,
+        name: att.name || `Scene ${att.sceneIndex}`
+      }));
+    
+    if (sceneAttachments.length > 0) {
+      setSelectedScenes(sceneAttachments);
+    }
+  }, []); // Empty dependency array - only run on mount
+
+  // Robust focus management that works across environments
+  const focusTextarea = useCallback(() => {
+    if (!textareaRef.current) return false;
+    
+    const element = textareaRef.current;
+    
+    // Check if element can receive focus
+    if (element.disabled || element.readOnly) return false;
+    
+    // Check if already focused
+    if (document.activeElement === element) return true;
+    
+    // Check if another input/textarea has focus (don't steal focus from other inputs)
+    const activeEl = document.activeElement;
+    if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+      if (activeEl !== element) return false;
+    }
+    
+    try {
+      // Use preventScroll to avoid jarring jumps
+      element.focus({ preventScroll: true });
+      
+      // Verify focus was successful
+      if (document.activeElement === element) {
+        // Move cursor to end
+        const length = element.value.length;
+        element.setSelectionRange(length, length);
+        return true;
+      }
+    } catch (e) {
+      // Focus might fail in some browsers/situations
+      console.debug('Focus failed:', e);
+    }
+    
+    return false;
+  }, []);
+
   // Auto-focus textarea after generation completes
   useEffect(() => {
     if (generationComplete && textareaRef.current) {
-      setTimeout(() => {
-        textareaRef.current?.focus();
-        // Place cursor at end if there's existing text
-        const length = textareaRef.current?.value.length || 0;
-        textareaRef.current?.setSelectionRange(length, length);
-        // Reset the flag
-        setGenerationComplete(false);
-      }, 100);
+      let attempts = 0;
+      const maxAttempts = 5;
+      let rafId: number;
+      let timeoutId: NodeJS.Timeout;
+      
+      const attemptFocus = () => {
+        attempts++;
+        
+        if (focusTextarea() || attempts >= maxAttempts) {
+          // Success or max attempts reached
+          setGenerationComplete(false);
+          return;
+        }
+        
+        // Try again with exponential backoff
+        const delay = Math.min(50 * Math.pow(2, attempts - 1), 500);
+        timeoutId = setTimeout(attemptFocus, delay);
+      };
+      
+      // Start with requestAnimationFrame to align with browser paint
+      rafId = requestAnimationFrame(() => {
+        attemptFocus();
+      });
+      
+      return () => {
+        cancelAnimationFrame(rafId);
+        clearTimeout(timeoutId);
+      };
     }
-  }, [generationComplete]);
+  }, [generationComplete, focusTextarea]);
 
   // Also refocus when isGenerating changes from true to false
   useEffect(() => {
     if (!isGenerating && textareaRef.current) {
-      // Small delay to let React finish rendering
-      const timeoutId = setTimeout(() => {
-        if (!document.activeElement || 
-            document.activeElement === document.body ||
-            document.activeElement.tagName === 'BODY') {
-          textareaRef.current?.focus();
+      let rafId: number;
+      let timeoutIds: NodeJS.Timeout[] = [];
+      
+      // Multi-strategy approach for maximum compatibility
+      const strategies = [
+        { delay: 0, method: 'immediate' },      // Try immediately
+        { delay: 0, method: 'microtask' },      // After microtask queue
+        { delay: 16, method: 'frame' },         // After ~1 frame (60fps)
+        { delay: 100, method: 'short' },        // Short delay
+        { delay: 300, method: 'medium' },       // Medium delay (original)
+      ];
+      
+      const tryFocus = () => {
+        // Only try to focus if nothing else important has focus
+        const activeEl = document.activeElement;
+        const shouldFocus = !activeEl || 
+                           activeEl === document.body ||
+                           activeEl.tagName === 'BODY';
+        
+        if (shouldFocus) {
+          focusTextarea();
         }
-      }, 200);
-      return () => clearTimeout(timeoutId);
+      };
+      
+      // Execute strategies
+      strategies.forEach(({ delay, method }) => {
+        if (method === 'immediate') {
+          tryFocus();
+        } else if (method === 'microtask') {
+          Promise.resolve().then(tryFocus);
+        } else if (method === 'frame') {
+          rafId = requestAnimationFrame(tryFocus);
+        } else {
+          const id = setTimeout(tryFocus, delay);
+          timeoutIds.push(id);
+        }
+      });
+      
+      return () => {
+        cancelAnimationFrame(rafId);
+        timeoutIds.forEach(clearTimeout);
+      };
     }
-  }, [isGenerating]);
+  }, [isGenerating, focusTextarea]);
 
 
   // Create media upload handlers
@@ -655,41 +886,29 @@ export default function ChatPanelG({
     const handler = (e: Event) => {
       const { url, name } = (e as CustomEvent).detail || {};
       if (typeof url === 'string' && url.length > 0) {
-        // Check if this is an icon reference - handle differently than media files
+        // Check if this is an icon reference - add to hidden attachments instead of message text
         if (url.startsWith('[icon:')) {
-          // Icon reference - just add to message, don't treat as uploaded media
-          const reference = url; // Use the icon reference directly
-          setMessage((prev) => {
-            const newMessage = prev ? `${prev} ${reference}` : reference;
-            // Extract and update icon list for preview
-            const iconPattern = /\[icon:([^\]]+)\]/g;
-            const icons: string[] = [];
-            let match;
-            while ((match = iconPattern.exec(newMessage)) !== null) {
-              icons.push(match[1]);
-            }
-            setSelectedIcons(icons);
-            return newMessage;
-          });
+          const iconName = url.replace(/^\[icon:/, '').replace(/\]$/, '');
+          setHiddenAttachments((prev) => [...prev, { type: 'icon', data: iconName, name: iconName }]);
+          setSelectedIcons((prev) => [...prev, iconName]);
           return;
         }
         
-        // Regular media file - add as uploadedMedia entry
+        // Regular media file - add as uploadedMedia entry (this stays visible as a preview)
         const cleanUrl = url.split('?')[0]?.split('#')[0] || url;
         const ext = cleanUrl.split('.').pop()?.toLowerCase() || '';
         const isVideo = /(mp4|webm|mov|m4v)$/i.test(ext);
         const isAudio = /(mp3|wav|ogg|m4a)$/i.test(ext);
         const type: UploadedMedia['type'] = isVideo ? 'video' : isAudio ? 'audio' : 'image';
         const id = nanoid();
-        setUploadedImages((prev) => ([...prev, { id, file: new File([], url), status: 'uploaded', url, type, isLoaded: true }]));
-        // Append either the custom name reference or URL to the message
-        const reference = name ? `use the ${name}` : url;
-        setMessage((prev) => prev ? `${prev}\n${reference}` : reference);
+        // Use the actual name if provided, otherwise fallback to URL
+        const fileName = name || url.split('/').pop() || 'media';
+        setUploadedImages((prev) => ([...prev, { id, file: new File([], fileName), status: 'uploaded', url, type, isLoaded: true }]));
       }
     };
     window.addEventListener('chat-insert-media-url', handler as EventListener);
     return () => window.removeEventListener('chat-insert-media-url', handler as EventListener);
-  }, [setSelectedIcons]);
+  }, []);
 
   // Wrap drag handlers to manage isDragOver state
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -733,6 +952,17 @@ export default function ChatPanelG({
       const jsonData = e.dataTransfer.getData('application/json');
       if (jsonData) {
         const data = JSON.parse(jsonData);
+        // Timeline scene drop
+        if (data.type === 'timeline-scene' && data.sceneId) {
+          const mention = { id: String(data.sceneId), index: Number(data.index) || 0, name: String(data.name || '') };
+          setSelectedScenes((prev) => {
+            if (prev.some((s) => s.id === mention.id)) return prev;
+            return [...prev, mention];
+          });
+          setIsDragOver(false);
+          toast.success(`Attached ${mention.name || `Scene ${mention.index}`}`);
+          return;
+        }
         if (data.type === 'github-component') {
           // Handle GitHub component(s) drop
           let componentsToAdd: any[] = [];
@@ -782,9 +1012,16 @@ export default function ChatPanelG({
         const isVideo = /(mp4|webm|mov|m4v)$/i.test(ext);
         const isAudio = /(mp3|wav|ogg|m4a)$/i.test(ext);
         const type: UploadedMedia['type'] = isVideo ? 'video' : isAudio ? 'audio' : 'image';
+        
+        // Get the media name if available
+        const mediaName = e.dataTransfer.getData('media/name') || '';
+        
         const id = nanoid();
-        setUploadedImages((prev) => ([...prev, { id, file: new File([], url), status: 'uploaded', url, type, isLoaded: true }]));
-        setMessage((prev) => prev ? `${prev}\n${url}` : url);
+        // Create a proper File object with the correct name
+        const fileName = mediaName || url.split('/').pop() || 'audio-file';
+        const file = new File([], fileName, { type: isAudio ? 'audio/mpeg' : isVideo ? 'video/mp4' : 'image/jpeg' });
+        
+        setUploadedImages((prev) => ([...prev, { id, file, status: 'uploaded', url, type, isLoaded: true }]));
       }
     } catch {}
     setIsDragOver(false);
@@ -807,6 +1044,7 @@ export default function ChatPanelG({
       duration: 30, // Default duration - will be updated when loaded
       startTime: 0,
       endTime: 30,
+      timelineOffsetSec: 0,
       volume: 0.7, // Default volume
       fadeInDuration: 0.5, // Nice default fade
       fadeOutDuration: 0.5,
@@ -821,13 +1059,16 @@ export default function ChatPanelG({
 
   // Reset component state when projectId changes (for new projects)
   useEffect(() => {
-    // Restore draft message from store
+    // Restore draft message and attachments from store
     const draft = useVideoState.getState().getDraftMessage(projectId);
+    const draftAttachments = useVideoState.getState().getDraftAttachments(projectId);
     setMessage(draft);
     setIsGenerating(false);
     setGenerationPhase('thinking');
     setGenerationComplete(false);
-    setUploadedImages([]); // 🚨 NEW: Clear uploaded images when switching projects
+    setUploadedImages(draftAttachments.map(convertFromDraftAttachment)); // Restore draft attachments when switching projects
+    setHiddenAttachments([]); // Clear hidden attachments when switching projects
+    setSelectedIcons([]); // Clear selected icons when switching projects
     
     console.log('[ChatPanelG] Reset state for new project:', projectId);
   }, [projectId]);
@@ -967,22 +1208,10 @@ export default function ChatPanelG({
                 props: revertedScene.props || {}
               }
             };
-            
-            const updatedScenes = [...currentScenes, transformedScene];
-            const currentPropsData = getCurrentProps();
-            
-            if (currentPropsData) {
-              const updatedProps = {
-                ...currentPropsData,
-                scenes: updatedScenes,
-                meta: {
-                  ...currentPropsData.meta,
-                  duration: updatedScenes.reduce((sum: number, s: any) => sum + s.duration, 0),
-                }
-              };
-              
-              replace(projectId, updatedProps);
-            }
+            // Removed optimistic replace for stability.
+            // Rely on DB invalidation + PreviewPanelG sync to prevent transient duplicates.
+            // See memory-bank/sprints/sprint98_autofix_analysis/progress.md
+            await utils.generation.getProjectScenes.invalidate({ projectId });
           } else {
             // Scene was updated
             updateScene(projectId, revertedScene.id, revertedScene);
@@ -1020,6 +1249,17 @@ export default function ChatPanelG({
     onError: (error) => {
       console.error('Failed to enhance prompt:', error);
       toast.error('Failed to enhance prompt');
+    }
+  });
+
+  // Restore scene mutation
+  const restoreSceneMutation = api.generation.restoreScene.useMutation({
+    onSuccess: () => {
+      toast.success('Scene restored');
+    },
+    onError: (error) => {
+      console.error('Failed to restore scene:', error);
+      toast.error('Failed to restore scene');
     }
   });
 
@@ -1064,6 +1304,9 @@ export default function ChatPanelG({
         setGenerationPhase('generating');
         
         try {
+          // Extract scene IDs from selectedScenes
+          const attachedSceneIds = selectedScenes.map(s => s.id);
+          
           const result = await generateSceneMutation.mutateAsync({
             projectId,
             userMessage,
@@ -1071,6 +1314,7 @@ export default function ChatPanelG({
               imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
               videoUrls: videoUrls.length > 0 ? videoUrls : undefined,
               audioUrls: audioUrls.length > 0 ? audioUrls : undefined,
+              sceneUrls: attachedSceneIds.length > 0 ? attachedSceneIds : undefined, // Pass attached scene IDs
               modelOverride: modelOverride,
               useGitHub: useGitHub,
             },
@@ -1182,6 +1426,26 @@ export default function ChatPanelG({
                 
                 // Invalidate the scenes query to ensure fresh data
                 await utils.generation.getProjectScenes.invalidate({ projectId });
+                // Offer undo using scene payload
+                try {
+                  toast.success('Scene deleted', {
+                    action: {
+                      label: 'Undo',
+                      onClick: () => restoreSceneMutation.mutate({
+                        projectId,
+                        scene: {
+                          id: actualScene.id,
+                          name: actualScene.name,
+                          tsxCode: (actualScene as any).tsxCode,
+                          duration: actualScene.duration || 150,
+                          order: (actualScene as any).order ?? 0,
+                          props: (actualScene as any).props,
+                          layoutJson: (actualScene as any).layoutJson,
+                        }
+                      })
+                    }
+                  } as any);
+                } catch {}
                 
               } else if (operation === 'scene.edit' || operation === 'scene.update' || operation === 'scene.trim') {
                 // For edits and trims, use the updateScene method from VideoState
@@ -1230,33 +1494,13 @@ export default function ChatPanelG({
                   ? [transformedScene]
                   : [...currentScenes, transformedScene];
                 
-                const currentPropsData = getCurrentProps();
-                if (currentPropsData) {
-                  const updatedProps = {
-                    ...currentPropsData,
-                    scenes: updatedScenes,
-                    meta: {
-                      ...currentPropsData.meta,
-                      duration: updatedScenes.reduce((sum: number, s: any) => sum + s.duration, 0),
-                      title: currentPropsData.meta?.title || 'New Project'
-                    }
-                  };
-                  
-                  replace(projectId, updatedProps);
-                  
-                  console.log('[ChatPanelG] ✅ Added scene to VideoState:', {
-                    sceneId: transformedScene.id,
-                    totalScenes: updatedScenes.length,
-                    replacedWelcome: isWelcomeProject
-                  });
-                  
-                  // Invalidate the scenes query to ensure fresh data
-                  await utils.generation.getProjectScenes.invalidate({ projectId });
-                  
-                  // Call the callback if provided
-                  if (onSceneGenerated) {
-                    onSceneGenerated(transformedScene.id);
-                  }
+                // Removed optimistic replace.
+                // Rely on DB invalidation + PreviewPanelG sync for canonical ordering.
+                // See memory-bank/sprints/sprint98_autofix_analysis/progress.md
+                await utils.generation.getProjectScenes.invalidate({ projectId });
+                // Callback can still be invoked with the new ID if needed
+                if (onSceneGenerated) {
+                  onSceneGenerated(transformedScene.id);
                 }
               }
             }
@@ -1341,6 +1585,8 @@ export default function ChatPanelG({
           
           // Always invalidate scenes to ensure UI is in sync with database
           await utils.generation.getProjectScenes.invalidate({ projectId });
+          // Also invalidate project data so audio additions/edits reflect immediately in Timeline
+          await utils.project.getById.invalidate({ id: projectId });
         }
       }
     },
@@ -1406,37 +1652,41 @@ export default function ChatPanelG({
       {/* Messages container */}
       <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4" onScroll={handleScroll}>
         <div className="space-y-4">
-          {componentMessages.map((msg, index) => {
-          // Find all scene plan messages
-          const scenePlanMessages = componentMessages.filter(m => m.kind === 'scene_plan');
-          const isFirstScenePlan = msg.kind === 'scene_plan' && scenePlanMessages[0]?.id === msg.id;
-          const totalScenePlans = scenePlanMessages.length;
-          
-          return (
-            <ChatMessage
-              key={msg.id}
-              message={{
-                id: msg.id,
-                message: msg.content,
-                isUser: msg.isUser,
-                timestamp: msg.timestamp.getTime(),
-                status: msg.status,
-                kind: msg.kind,
-                imageUrls: msg.imageUrls,
-              }}
-              onImageClick={(imageUrl) => {
-                // TODO: Implement image click handler
-                console.log('Image clicked:', imageUrl);
-              }}
-              projectId={projectId}
-              userId={userId}
-              onRevert={isReverting ? undefined : handleRevert}
-              onEditScenePlan={handleEditScenePlan}
-              hasIterations={messageIterations?.[msg.id] ? messageIterations[msg.id]!.length > 0 : false}
-              isFirstScenePlan={isFirstScenePlan}
-              totalScenePlans={totalScenePlans}
-            />
-          );
+          {messages.map((msg, index) => {
+            // Find all scene plan messages
+            const scenePlanMessages = messages.filter(m => m.kind === 'scene_plan');
+            const isFirstScenePlan = msg.kind === 'scene_plan' && scenePlanMessages[0]?.id === msg.id;
+            const totalScenePlans = scenePlanMessages.length;
+            
+            return (
+              <ChatMessage
+                key={`${msg.id}-${index}`}
+                message={{
+                  id: msg.id,
+                  message: msg.message,
+                  isUser: msg.isUser,
+                  timestamp: msg.timestamp,
+                  status: msg.status,
+                  kind: msg.kind,
+                  imageUrls: msg.imageUrls,
+                  videoUrls: msg.videoUrls,
+                  audioUrls: msg.audioUrls,
+                  sceneUrls: msg.sceneUrls,
+                }}
+                
+                onImageClick={(imageUrl) => {
+                  // TODO: Implement image click handler
+                  console.log('Image clicked:', imageUrl);
+                }}
+                projectId={projectId}
+                userId={userId}
+                onRevert={isReverting ? undefined : handleRevert}
+                onEditScenePlan={handleEditScenePlan}
+                hasIterations={messageIterations?.[msg.id] ? messageIterations[msg.id]!.length > 0 : false}
+                isFirstScenePlan={isFirstScenePlan}
+                totalScenePlans={totalScenePlans}
+              />
+            );
           })}
           
           {/* Show pulsating message UI when generating */}
@@ -1458,7 +1708,7 @@ export default function ChatPanelG({
 
         {/* Media upload preview area */}
         <MediaUpload
-          uploadedMedia={uploadedImages}
+          uploadedMedia={uploadedImages.filter(media => media.type !== 'scene')}
           onMediaChange={setUploadedImages}
           projectId={projectId}
           onAudioExtract={handleAudioExtract}
@@ -1481,10 +1731,34 @@ export default function ChatPanelG({
           >
             {/* Text area container with fixed height that stops before icons */}
             <div className="flex flex-col w-full">
+              {/* Scene mentions (dragged from timeline) */}
+              {selectedScenes.length > 0 && (
+                <div className="flex flex-wrap gap-2 px-3 py-2 border-b border-gray-200 bg-gray-50 rounded-t-2xl">
+                  <span className="text-xs text-gray-500 mr-2">Scenes:</span>
+                  {selectedScenes.map((s, i) => (
+                    <div
+                      key={`${s.id}-${i}`}
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-gray-200 rounded-lg shadow-sm"
+                      title={s.name}
+                    >
+                      <span className="text-xs text-gray-700 font-medium">Scene {s.index}</span>
+                      <span className="text-[10px] text-gray-500 ml-1 max-w-[120px] truncate">{s.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedScenes(prev => prev.filter(x => x.id !== s.id))}
+                        className="ml-1 text-gray-400 hover:text-red-500 transition-colors"
+                        aria-label={`Remove ${s.name}`}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Icon previews */}
               {selectedIcons.length > 0 && (
                 <div className="flex flex-wrap gap-2 px-3 py-2 border-b border-gray-200 bg-gray-50 rounded-t-2xl">
-                  <span className="text-xs text-gray-500 mr-2">Icons:</span>
                   {selectedIcons.map((iconName, index) => (
                     <div 
                       key={`${iconName}-${index}`}
@@ -1500,11 +1774,14 @@ export default function ChatPanelG({
                       <button
                         type="button"
                         onClick={() => {
-                          // Remove icon from message
+                          // Remove icon from both hidden attachments and selected icons
+                          setHiddenAttachments(prev => prev.filter(att => !(att.type === 'icon' && att.data === iconName)));
+                          setSelectedIcons(prev => prev.filter((_, i) => i !== index));
+                          
+                          // Also remove from message text if it exists there (legacy support)
                           const pattern = `[icon:${iconName}]`;
                           const newMessage = message.replace(pattern, '').trim();
                           setMessage(newMessage);
-                          setSelectedIcons(prev => prev.filter((_, i) => i !== index));
                         }}
                         className="ml-1 text-gray-400 hover:text-red-500 transition-colors"
                         aria-label={`Remove ${iconName}`}

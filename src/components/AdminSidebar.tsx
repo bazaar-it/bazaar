@@ -26,7 +26,10 @@ export default function AdminSidebar({ activeSection, onSectionChange }: AdminSi
     pathname === '/admin/paywall-analytics' ? 'paywall-analytics' :
     pathname === '/admin/evals' ? 'evals' :
     pathname === '/admin/live' ? 'live' :
-    pathname === '/admin/error-analytics' ? 'error-analytics' : 'homepage';
+    pathname === '/admin/error-analytics' ? 'error-analytics' :
+    pathname === '/admin/brand-extraction' ? 'brand-extraction' :
+    pathname === '/admin/project-search' ? 'project-search' :
+    pathname === '/admin/prompt-ab-testing' ? 'prompt-ab-testing' : 'homepage';
 
   return (
     <div className="w-72 bg-gradient-to-b from-gray-900 to-gray-800 shadow-2xl min-h-screen">
@@ -74,6 +77,21 @@ export default function AdminSidebar({ activeSection, onSectionChange }: AdminSi
               <span className="font-medium">User Management</span>
             </Link>
 
+            {/* Project Search */}
+            <Link 
+              href="/admin/project-search"
+              className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg w-full text-left transition-all duration-200 ${
+                currentSection === 'project-search'
+                  ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-700/50'
+              }`}
+            >
+              <svg className="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <span className="font-medium">Project Search</span>
+            </Link>
+
             {/* Analytics */}
             <Link 
               href="/admin/analytics"
@@ -102,6 +120,22 @@ export default function AdminSidebar({ activeSection, onSectionChange }: AdminSi
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M4 6a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2V8a2 2 0 00-2-2H4z" />
               </svg>
               Live Stream
+            </Link>
+
+            {/* Brand Extraction */}
+            <Link 
+              href="/admin/brand-extraction"
+              className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg w-full text-left transition-all duration-200 ${
+                currentSection === 'brand-extraction'
+                  ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-700/50'
+              }`}
+            >
+              <svg className="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+              </svg>
+              <span className="font-medium">Brand Extraction</span>
+              <span className="ml-2 px-2 py-0.5 text-xs bg-yellow-500 text-black rounded-full">NEW</span>
             </Link>
 
             {/* Marketing Dashboard */}
@@ -237,6 +271,21 @@ export default function AdminSidebar({ activeSection, onSectionChange }: AdminSi
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
               Error Analytics
+            </Link>
+
+            {/* Prompt A/B Testing */}
+            <Link 
+              href="/admin/prompt-ab-testing"
+              className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg w-full text-left transition-all duration-200 ${
+                currentSection === 'prompt-ab-testing'
+                  ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-700/50'
+              }`}
+            >
+              <svg className="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              </svg>
+              Prompt A/B Testing
             </Link>
 
             {/* Coming Soon section */}

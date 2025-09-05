@@ -17,7 +17,7 @@ interface GoogleFontResult {
 }
 
 interface RemotionGoogleFonts {
-  loadFont: (fontName: string) => GoogleFontResult;
+  loadFont: (fontName: string, options?: { weights?: string[] }) => GoogleFontResult | void;
   Inter: () => GoogleFontResult;
   Roboto: () => GoogleFontResult;
   OpenSans: () => GoogleFontResult;
@@ -44,8 +44,13 @@ declare global {
     LucideIcons: typeof LucideIcons;
     Rough: typeof rough;
     RemotionGoogleFonts: RemotionGoogleFonts;
+    RemotionGoogleFontsLoaded?: Set<string>;
     IconifyIcon: typeof Icon;
     BazaarAvatars: BazaarAvatars;
+    bazaarFontsLoaded?: boolean;
+    bazaarSingleSceneFontsLoaded?: boolean;
+    projectAudio?: any;
+    NativeAudio?: typeof Audio;
     react?: typeof React;
     remotion?: typeof Remotion;
     __REMOTION_COMPONENT?: React.ComponentType<any>;

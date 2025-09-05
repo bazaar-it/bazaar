@@ -1,4 +1,4 @@
-import type { EnhancedWebAnalysis } from "~/tools/webAnalysis/WebAnalysisEnhanced";
+import type { ExtractedBrandDataV4 } from "~/tools/webAnalysis/WebAnalysisAgentV4";
 import type { FormattedBrandStyle } from "./brand-formatter";
 import type { SelectedTemplate } from "./template-selector";
 import type { HeroJourneyScene } from "~/tools/narrative/herosJourney";
@@ -12,7 +12,7 @@ export interface CustomizedScene {
 export interface CustomizationOptions {
   templates: SelectedTemplate[];
   brandStyle: FormattedBrandStyle;
-  websiteData: EnhancedWebAnalysis;
+  websiteData: ExtractedBrandDataV4; // Use V4 data structure
   narrativeScenes: HeroJourneyScene[];
 }
 
@@ -24,6 +24,10 @@ export class TemplateCustomizer {
     for (let i = 0; i < templates.length; i++) {
       const template = templates[i];
       const narrativeScene = narrativeScenes[i];
+      
+      if (!template || !narrativeScene) {
+        continue;
+      }
       
       const customizedCode = this.customizeTemplateCode(
         template.templateCode,
@@ -46,7 +50,7 @@ export class TemplateCustomizer {
   private customizeTemplateCode(
     templateCode: string,
     brandStyle: FormattedBrandStyle,
-    websiteData: EnhancedWebAnalysis,
+    websiteData: ExtractedBrandDataV4,
     narrativeScene: HeroJourneyScene,
     template: SelectedTemplate
   ): string {
@@ -128,20 +132,20 @@ export class TemplateCustomizer {
   
   private replaceContent(
     code: string,
-    websiteData: EnhancedWebAnalysis,
+    websiteData: ExtractedBrandDataV4,
     narrativeScene: HeroJourneyScene,
     template: SelectedTemplate
   ): string {
     let result = code;
     
-    // Replace placeholder texts
+    // Replace placeholder texts - handle V2 data structure
     const contentReplacements = [
       { from: /Your Title Here/gi, to: narrativeScene.title },
       { from: /Your text here/gi, to: narrativeScene.narrative },
       { from: /Lorem ipsum.*/gi, to: narrativeScene.narrative },
-      { from: /Welcome to our platform/gi, to: websiteData.copy.valueProposition.headline },
-      { from: /Get Started/gi, to: websiteData.copy.ctas.primary },
-      { from: /Learn More/gi, to: websiteData.copy.ctas.secondary },
+      { from: /Welcome to our platform/gi, to: websiteData.product?.value_prop?.headline || websiteData.brand?.identity?.name || 'Welcome' },
+      { from: /Get Started/gi, to: websiteData.content?.ctas?.[0]?.label || 'Get Started' },
+      { from: /Learn More/gi, to: websiteData.content?.ctas?.[1]?.label || websiteData.content?.ctas?.[0]?.label || 'Learn More' },
     ];
     
     // Add visual elements as text
@@ -155,28 +159,31 @@ export class TemplateCustomizer {
     // Add specific content based on emotional beat
     switch (narrativeScene.emotionalBeat) {
       case 'problem':
-        result = result.replace(/The Old Way/gi, websiteData.product.problem || 'The challenge');
+        result = result.replace(/The Old Way/gi, websiteData.product?.problem || 'The challenge');
         break;
       case 'discovery':
-        result = result.replace(/Introducing/gi, `Introducing ${websiteData.title}`);
+        result = result.replace(/Introducing/gi, `Introducing ${websiteData.brand?.identity?.name || 'Our Solution'}`);
         break;
       case 'transformation':
         // Add features
-        websiteData.product.features.slice(0, 3).forEach((feature, index) => {
+        (websiteData.product?.features || []).slice(0, 3).forEach((feature: any, index: number) => {
           result = result.replace(
             new RegExp(`Benefit ${index + 1}`, 'gi'),
-            feature.title
+            feature.title || feature.name
           );
         });
         break;
       case 'triumph':
         // Add social proof
-        if (websiteData.socialProof.stats.customers) {
-          result = result.replace(/1000\+/gi, websiteData.socialProof.stats.customers);
+        if (websiteData.socialProof?.stats?.length) {
+          const userStat = websiteData.socialProof.stats.find((s: any) => s.label?.toLowerCase().includes('user'));
+          if (userStat) {
+            result = result.replace(/1000\+/gi, userStat.value);
+          }
         }
         break;
       case 'invitation':
-        result = result.replace(/Start Your Journey/gi, websiteData.copy.ctas.primary);
+        result = result.replace(/Start Your Journey/gi, websiteData.content?.ctas?.[0]?.label || 'Get Started');
         break;
     }
     

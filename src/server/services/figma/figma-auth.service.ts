@@ -152,7 +152,7 @@ export class FigmaAuthService {
   /**
    * Get user's Figma connection
    */
-  async getConnection(userId: string) {
+  async getConnection(userId: string): Promise<any> {
     const connections = await db
       .select()
       .from(figmaConnections)
@@ -164,6 +164,9 @@ export class FigmaAuthService {
     }
 
     const connection = connections[0];
+    if (!connection) {
+      return null;
+    }
     
     // Check if token needs refresh
     if (connection.expiresAt && connection.expiresAt < new Date()) {

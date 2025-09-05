@@ -1,7 +1,7 @@
 // src/server/api/routers/admin.ts
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
-import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory, emailSubscribers, exports, promoCodes, promoCodeUsage, paywallEvents, paywallAnalytics, creditTransactions, templates, templateUsages } from "~/server/db/schema";
+import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory, emailSubscribers, exports, promoCodes, promoCodeUsage, paywallEvents, paywallAnalytics, creditTransactions, templates, templateUsages, brandProfiles, autofixMetrics, autofixSessions } from "~/server/db/schema";
 import { sql, and, gte, lt, lte, desc, count, eq, like, or, inArray, asc, countDistinct } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -37,6 +37,26 @@ const adminOnlyProcedure = protectedProcedure.use(async ({ ctx, next }) => {
 });
 
 export const adminRouter = createTRPCRouter({
+  // Get Brand Profile for a project - admin only
+  getBrandProfile: adminOnlyProcedure
+    .input(z.object({ projectId: z.string() }))
+    .query(async ({ input }) => {
+      const profile = await db
+        .select()
+        .from(brandProfiles)
+        .where(eq(brandProfiles.projectId, input.projectId))
+        .limit(1);
+
+      if (!profile[0]) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Brand profile not found for this project.",
+        });
+      }
+
+      return profile[0];
+    }),
+
   // Check if current user is admin
   checkAdminAccess: protectedProcedure
     .query(async ({ ctx }) => {
@@ -3510,6 +3530,440 @@ export default function GeneratedScene() {
           retainedAfterDay: retainedAfterDay.size,
           retainedAfterWeek: retainedAfterWeek.size,
         },
+      };
+    }),
+
+  // Search for a project by ID - admin only (uses production database)
+  searchProject: adminOnlyProcedure
+    .input(z.object({ projectId: z.string() }))
+    .query(async ({ input }) => {
+      // Get the project with all related data
+      const projectData = await db
+        .select({
+          id: projects.id,
+          name: projects.name,
+          createdAt: projects.createdAt,
+          updatedAt: projects.updatedAt,
+          userId: projects.userId,
+          music: projects.music,
+          shareLink: projects.shareLink,
+        })
+        .from(projects)
+        .where(eq(projects.id, input.projectId))
+        .limit(1);
+
+      if (!projectData[0]) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Project not found",
+        });
+      }
+
+      const project = projectData[0];
+
+      // Parse music field if it's a string
+      let parsedMusic = null;
+      if (project.music) {
+        try {
+          parsedMusic = typeof project.music === 'string' 
+            ? JSON.parse(project.music) 
+            : project.music;
+        } catch (e) {
+          console.warn('Failed to parse music field:', e);
+          parsedMusic = null;
+        }
+      }
+
+      // Get user info
+      const userData = await db
+        .select({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+        })
+        .from(users)
+        .where(eq(users.id, project.userId))
+        .limit(1);
+
+      // Get all scenes
+      const projectScenes = await db
+        .select()
+        .from(scenes)
+        .where(eq(scenes.projectId, project.id))
+        .orderBy(asc(scenes.order));
+
+      // Get all messages
+      const projectMessages = await db
+        .select()
+        .from(messages)
+        .where(eq(messages.projectId, project.id))
+        .orderBy(asc(messages.createdAt));
+
+      return {
+        ...project,
+        music: parsedMusic,
+        user: userData[0] || null,
+        scenes: projectScenes,
+        messages: projectMessages,
+      };
+    }),
+
+  // Duplicate a project - admin only
+  duplicateProject: adminOnlyProcedure
+    .input(z.object({ projectId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      // Get the original project
+      const originalProject = await db
+        .select()
+        .from(projects)
+        .where(eq(projects.id, input.projectId))
+        .limit(1);
+
+      if (!originalProject[0]) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Original project not found",
+        });
+      }
+
+      const original = originalProject[0];
+
+      // Create new project for the admin user
+      const newProjectId = crypto.randomUUID();
+      const newProject = await db
+        .insert(projects)
+        .values({
+          id: newProjectId,
+          name: `${original.name} (Copy)`,
+          userId: ctx.session.user.id, // Admin becomes the owner
+          music: original.music,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .returning();
+
+      if (!newProject[0]) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to create new project",
+        });
+      }
+
+      // Get all scenes from original project
+      const originalScenes = await db
+        .select()
+        .from(scenes)
+        .where(eq(scenes.projectId, input.projectId))
+        .orderBy(asc(scenes.order));
+
+      // Duplicate all scenes
+      if (originalScenes.length > 0) {
+        const newScenes = originalScenes.map(scene => ({
+          id: crypto.randomUUID(),
+          projectId: newProjectId,
+          name: scene.name,
+          code: scene.code,
+          duration: scene.duration,
+          order: scene.order,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }));
+
+        await db.insert(scenes).values(newScenes);
+      }
+
+      // Copy initial messages (optional - you might want to skip user messages)
+      const originalMessages = await db
+        .select()
+        .from(messages)
+        .where(eq(messages.projectId, input.projectId))
+        .limit(2); // Just copy the first system message if exists
+
+      if (originalMessages.length > 0) {
+        const systemMessage = originalMessages.find(m => m.role === 'system');
+        if (systemMessage) {
+          await db.insert(messages).values({
+            id: crypto.randomUUID(),
+            projectId: newProjectId,
+            content: systemMessage.content,
+            role: 'system',
+            createdAt: new Date(),
+          });
+        }
+      }
+
+      return newProject[0];
+    }),
+
+  // Save auto-fix metrics to database
+  saveAutofixMetric: protectedProcedure
+    .input(z.object({
+      projectId: z.string(),
+      sceneId: z.string().optional(),
+      errorMessage: z.string(),
+      errorType: z.string().optional(),
+      errorSignature: z.string().optional(),
+      fixAttemptNumber: z.number().default(1),
+      fixStrategy: z.string().optional(),
+      fixSuccess: z.boolean(),
+      fixDurationMs: z.number().optional(),
+      apiCallsCount: z.number().optional(),
+      estimatedCost: z.number().optional(),
+      sessionId: z.string().optional(),
+      userAgent: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const metric = await db
+        .insert(autofixMetrics)
+        .values({
+          ...input,
+          userId: ctx.session.user.id,
+          createdAt: new Date(),
+        })
+        .returning();
+
+      return metric[0];
+    }),
+
+  // Update or create auto-fix session
+  updateAutofixSession: protectedProcedure
+    .input(z.object({
+      sessionId: z.string(),
+      projectId: z.string().optional(),
+      totalErrors: z.number().optional(),
+      uniqueErrors: z.number().optional(),
+      successfulFixes: z.number().optional(),
+      failedFixes: z.number().optional(),
+      totalApiCalls: z.number().optional(),
+      totalCost: z.number().optional(),
+      circuitBreakerTripped: z.boolean().optional(),
+      killSwitchActivated: z.boolean().optional(),
+      endSession: z.boolean().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { sessionId, endSession, ...updateData } = input;
+      
+      // Check if session exists
+      const existingSession = await db
+        .select()
+        .from(autofixSessions)
+        .where(eq(autofixSessions.sessionId, sessionId))
+        .limit(1);
+
+      if (existingSession[0]) {
+        // Update existing session
+        const updates: any = { ...updateData };
+        if (endSession) {
+          updates.endedAt = new Date();
+        }
+        
+        const updated = await db
+          .update(autofixSessions)
+          .set(updates)
+          .where(eq(autofixSessions.sessionId, sessionId))
+          .returning();
+          
+        return updated[0];
+      } else {
+        // Create new session
+        const newSession = await db
+          .insert(autofixSessions)
+          .values({
+            sessionId,
+            userId: ctx.session.user.id,
+            projectId: input.projectId,
+            totalErrors: input.totalErrors || 0,
+            uniqueErrors: input.uniqueErrors || 0,
+            successfulFixes: input.successfulFixes || 0,
+            failedFixes: input.failedFixes || 0,
+            totalApiCalls: input.totalApiCalls || 0,
+            totalCost: input.totalCost,
+            circuitBreakerTripped: input.circuitBreakerTripped || false,
+            killSwitchActivated: input.killSwitchActivated || false,
+            startedAt: new Date(),
+          })
+          .returning();
+          
+        return newSession[0];
+      }
+    }),
+
+  // Get auto-fix metrics for admin dashboard
+  getAutofixMetrics: adminOnlyProcedure
+    .input(z.object({
+      timeframe: z.enum(['24h', '7d', '30d', 'all']).default('7d'),
+      projectId: z.string().optional(),
+      userId: z.string().optional(),
+    }))
+    .query(async ({ input }) => {
+      let startDate = new Date();
+      
+      switch (input.timeframe) {
+        case '24h':
+          startDate.setHours(startDate.getHours() - 24);
+          break;
+        case '7d':
+          startDate.setDate(startDate.getDate() - 7);
+          break;
+        case '30d':
+          startDate.setDate(startDate.getDate() - 30);
+          break;
+        case 'all':
+          startDate = new Date(0);
+          break;
+      }
+
+      // Build query conditions
+      const conditions = [gte(autofixMetrics.createdAt, startDate)];
+      if (input.projectId) {
+        conditions.push(eq(autofixMetrics.projectId, input.projectId));
+      }
+      if (input.userId) {
+        conditions.push(eq(autofixMetrics.userId, input.userId));
+      }
+
+      // Get metrics
+      const metrics = await db
+        .select({
+          id: autofixMetrics.id,
+          projectId: autofixMetrics.projectId,
+          sceneId: autofixMetrics.sceneId,
+          userId: autofixMetrics.userId,
+          errorMessage: autofixMetrics.errorMessage,
+          errorType: autofixMetrics.errorType,
+          errorSignature: autofixMetrics.errorSignature,
+          fixAttemptNumber: autofixMetrics.fixAttemptNumber,
+          fixStrategy: autofixMetrics.fixStrategy,
+          fixSuccess: autofixMetrics.fixSuccess,
+          fixDurationMs: autofixMetrics.fixDurationMs,
+          apiCallsCount: autofixMetrics.apiCallsCount,
+          estimatedCost: autofixMetrics.estimatedCost,
+          sessionId: autofixMetrics.sessionId,
+          createdAt: autofixMetrics.createdAt,
+        })
+        .from(autofixMetrics)
+        .where(and(...conditions))
+        .orderBy(desc(autofixMetrics.createdAt))
+        .limit(1000);
+
+      // Get aggregated stats
+      const stats = await db
+        .select({
+          totalErrors: count(),
+          successfulFixes: sql<number>`COUNT(CASE WHEN ${autofixMetrics.fixSuccess} = true THEN 1 END)`,
+          failedFixes: sql<number>`COUNT(CASE WHEN ${autofixMetrics.fixSuccess} = false THEN 1 END)`,
+          uniqueErrors: countDistinct(autofixMetrics.errorSignature),
+          totalApiCalls: sql<number>`COALESCE(SUM(${autofixMetrics.apiCallsCount}), 0)`,
+          totalCost: sql<number>`COALESCE(SUM(${autofixMetrics.estimatedCost}), 0)`,
+          avgFixDuration: sql<number>`AVG(${autofixMetrics.fixDurationMs})`,
+        })
+        .from(autofixMetrics)
+        .where(and(...conditions));
+
+      // Get sessions
+      const sessionConditions = [gte(autofixSessions.startedAt, startDate)];
+      if (input.projectId) {
+        sessionConditions.push(eq(autofixSessions.projectId, input.projectId));
+      }
+      if (input.userId) {
+        sessionConditions.push(eq(autofixSessions.userId, input.userId));
+      }
+
+      const sessions = await db
+        .select()
+        .from(autofixSessions)
+        .where(and(...sessionConditions))
+        .orderBy(desc(autofixSessions.startedAt))
+        .limit(100);
+
+      return {
+        metrics,
+        stats: stats[0] || {
+          totalErrors: 0,
+          successfulFixes: 0,
+          failedFixes: 0,
+          uniqueErrors: 0,
+          totalApiCalls: 0,
+          totalCost: 0,
+          avgFixDuration: 0,
+        },
+        sessions,
+        timeframe: input.timeframe,
+      };
+    }),
+
+  // Test different system prompts in parallel
+  testSystemPrompts: adminOnlyProcedure
+    .input(z.object({
+      prompt: z.string(),
+      versions: z.array(z.enum(["original", "v2", "v3-taste", "v4-balanced"])),
+      format: z.object({
+        width: z.number(),
+        height: z.number(),
+        format: z.string()
+      })
+    }))
+    .mutation(async ({ input }) => {
+      const startTime = Date.now();
+      
+      // Import code generator dynamically
+      const { codeGenerator } = await import("~/tools/add/add_helpers/CodeGeneratorNEW");
+      
+      // Generate code for each version in parallel
+      const generationPromises = input.versions.map(async (version) => {
+        const versionStartTime = Date.now();
+        
+        try {
+          // Call code generator with specific version
+          const result = await codeGenerator.generateCodeDirect({
+            userPrompt: input.prompt,
+            functionName: `Scene_${version.replace('-', '_')}_${Date.now()}`,
+            projectId: 'test-project', // Test project ID
+            projectFormat: input.format,
+            promptVersion: version // Pass the version to use
+          });
+          
+          return {
+            version,
+            code: result.code,
+            duration: result.duration,
+            name: result.name,
+            generationTime: Date.now() - versionStartTime,
+            tokenUsage: 0 // Would need to track this in the generator
+          };
+        } catch (error) {
+          console.error(`Failed to generate with ${version}:`, error);
+          // Return error placeholder
+          return {
+            version,
+            code: `// Error generating with ${version}\n// ${error instanceof Error ? error.message : 'Unknown error'}`,
+            duration: 180,
+            name: `Error - ${version}`,
+            generationTime: Date.now() - versionStartTime,
+            tokenUsage: 0
+          };
+        }
+      });
+      
+      const results = await Promise.all(generationPromises);
+      
+      return {
+        results,
+        totalTime: Date.now() - startTime,
+        prompt: input.prompt
+      };
+    }),
+    
+  // Get available prompt versions
+  getAvailablePrompts: adminOnlyProcedure
+    .query(async () => {
+      return {
+        versions: [
+          { id: "original", name: "Original", description: "Current production prompt" },
+          { id: "v2", name: "V2 - Few Shot (9)", description: "9 conversational examples" },
+          { id: "v3-taste", name: "V3 - Taste Focus", description: "3 high-quality examples" },
+          { id: "v4-balanced", name: "V4 - Balanced", description: "3 balanced examples" }
+        ]
       };
     }),
 });

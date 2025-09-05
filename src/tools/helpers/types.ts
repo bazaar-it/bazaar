@@ -176,26 +176,7 @@ export interface TrimToolOutput extends BaseToolOutput {
 
 // ============================================================================
 // NEW SPECIALIZED TOOL TYPES
-// ============================================================================
 
-export interface TypographyToolInput extends BaseToolInput {
-  textStyle?: 'fast' | 'typewriter' | 'cascade';
-  projectFormat?: {
-    format: 'landscape' | 'portrait' | 'square';
-    width: number;
-    height: number;
-  };
-  previousSceneContext?: {
-    tsxCode: string;
-    style?: string;
-  };
-}
-
-export interface TypographyToolOutput extends BaseToolOutput {
-  tsxCode: string;
-  name: string;
-  duration: number;
-}
 
 export interface ImageRecreatorToolInput extends BaseToolInput {
   imageUrls: string[];
@@ -441,15 +422,6 @@ export const trimToolInputSchema = baseToolInputSchema.extend({
 // SCHEMAS FOR NEW SPECIALIZED TOOLS
 // ============================================================================
 
-export const typographyToolInputSchema = baseToolInputSchema.extend({
-  textStyle: z.enum(['fast', 'typewriter', 'cascade']).optional(),
-  projectFormat: z.object({
-    format: z.enum(['landscape', 'portrait', 'square']),
-    width: z.number(),
-    height: z.number(),
-  }).optional(),
-});
-
 export const imageRecreatorToolInputSchema = baseToolInputSchema.extend({
   imageUrls: z.array(z.string()).min(1, "At least one image URL is required"),
   recreationType: z.enum(['full', 'segment']).optional(),
@@ -498,4 +470,67 @@ export interface ToolResult<T = BaseToolOutput> {
     toolName: string;
     timestamp: string;
   };
-} 
+}
+
+// ============================================================================
+// TRANSITION TOOL TYPES (Boundary refinement between scene N and N+1)
+// ============================================================================
+
+export type TransitionType = 'auto' | 'crossfade' | 'fadeThroughBlack' | 'slide' | 'push' | 'zoom' | 'whip';
+
+export interface BoundarySpec {
+  overlapFrames: number; // how many frames both scenes render simultaneously
+  type: TransitionType;
+  easing?: 'easeInOutCubic' | 'easeOutQuad' | 'easeInQuad' | 'linear';
+  direction?: 'left' | 'right' | 'up' | 'down';
+}
+
+export interface BoundaryPlan {
+  aSceneId: string;
+  bSceneId: string;
+  spec: BoundarySpec;
+  // Optional minimal code patches or hints limited to last/first window
+  edits?: Array<{
+    target: 'A' | 'B';
+    description: string;
+    // The tool may propose code snippets, not full files
+    snippet?: string;
+  }>;
+  reasoning?: string;
+}
+
+export interface TransitionToolInput extends BaseToolInput {
+  aSceneId: string;
+  bSceneId: string;
+  aCode: string;
+  bCode: string;
+  aDuration: number; // frames
+  bDuration: number; // frames
+  fps?: number; // default 30
+  requested?: Partial<BoundarySpec>; // caller preference (e.g., overlap length)
+}
+
+export interface TransitionToolOutput extends BaseToolOutput {
+  plan: BoundaryPlan;
+  // Optional updated code for A and/or B if safe to emit
+  updated?: {
+    A?: { tsxCode: string; duration?: number };
+    B?: { tsxCode: string; duration?: number };
+  };
+}
+
+export const transitionToolInputSchema = baseToolInputSchema.extend({
+  aSceneId: z.string().describe('Previous scene ID'),
+  bSceneId: z.string().describe('Next scene ID'),
+  aCode: z.string().min(50).describe('TSX of previous scene'),
+  bCode: z.string().min(50).describe('TSX of next scene'),
+  aDuration: z.number().int().min(1).describe('Duration of previous scene (frames)'),
+  bDuration: z.number().int().min(1).describe('Duration of next scene (frames)'),
+  fps: z.number().int().min(1).max(120).optional().default(30),
+  requested: z.object({
+    overlapFrames: z.number().int().min(5).max(180).optional(),
+    type: z.enum(['auto','crossfade','fadeThroughBlack','slide','push','zoom','whip']).optional(),
+    easing: z.enum(['easeInOutCubic','easeOutQuad','easeInQuad','linear']).optional(),
+    direction: z.enum(['left','right','up','down']).optional(),
+  }).optional(),
+});

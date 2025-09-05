@@ -4,8 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "~/components/ui/button";
 import { PlusIcon, MonitorIcon, SmartphoneIcon, SquareIcon } from "lucide-react";
-import { FormatSelectorModal } from "./FormatSelectorModal";
-import { type VideoFormat } from "~/app/projects/new/FormatSelector";
+import { type VideoFormat } from "~/lib/types/video/remotion-constants";
 import { api } from "~/trpc/react";
 import { useSession } from "next-auth/react";
 import { useLastUsedFormat } from "~/hooks/use-last-used-format";
@@ -30,12 +29,11 @@ export function NewProjectButton({
   onStart,
   onProjectCreated,
   children,
-  enableQuickCreate = false,
+  enableQuickCreate = true,
   disableFormatDropdown = false
 }: NewProjectButtonProps = {}) {
   const router = useRouter();
   const { data: session } = useSession();
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [showFormatOptions, setShowFormatOptions] = useState(false);
   const [selectedFormat, setSelectedFormat] = useState<VideoFormat | null>(null);
   const { lastFormat, updateLastFormat } = useLastUsedFormat();
@@ -133,7 +131,6 @@ export function NewProjectButton({
     onSuccess: (result) => {
       console.log(`Created project with format: ${selectedFormat}`);
       console.log(`Navigating to: /projects/${result.projectId}/generate`);
-      setIsModalOpen(false);
       if (onProjectCreated) {
         onProjectCreated(result.projectId);
       }
@@ -161,8 +158,8 @@ export function NewProjectButton({
       return;
     }
     
-    // Open the format selector modal
-    setIsModalOpen(true);
+    // Use last format or default to landscape
+    handleFormatSelect(lastFormat);
   };
 
   const handleFormatSelect = async (formatId: VideoFormat) => {
@@ -172,28 +169,10 @@ export function NewProjectButton({
     // Update the last used format
     updateLastFormat(formatId);
     
-    // Generate unique title
-    let title = "Untitled Video";
-    if (existingProjects && existingProjects.length > 0) {
-      // Find the highest number
-      const numbers = existingProjects
-        .map((p: any) => {
-          const match = /^Untitled Video (\d+)$/.exec(p.title || '');
-          return match && match[1] ? parseInt(match[1], 10) : 0;
-        })
-        .filter((n: number) => !isNaN(n));
-      
-      const highestNumber = Math.max(0, ...numbers);
-      title = highestNumber === 0 && !existingProjects.some((p: any) => p.title === "Untitled Video") 
-        ? "Untitled Video" 
-        : `Untitled Video ${highestNumber + 1}`;
-    }
-    
     // Hide format options and create project
     setShowFormatOptions(false);
-    setIsModalOpen(false);
     
-    // Create project with selected format
+    // Create project with selected format - title is generated server-side
     createProjectMutation.mutate({
       format: formatId
     });
@@ -212,12 +191,9 @@ export function NewProjectButton({
       return;
     }
     
-    // Hide dropdown if showing
-    setShowFormatOptions(false);
-    
-    // Create project with last used format (defaults to landscape)
-    handleFormatSelect(lastFormat);
-  }, [onStart, session?.user, router, lastFormat, handleFormatSelect]);
+    // Simple redirect to quick-create page - let it handle everything
+    router.push('/projects/quick-create');
+  }, [onStart, session?.user, router]);
 
   // Detect if we're on mobile
   const [isMobile, setIsMobile] = useState(false);
@@ -379,16 +355,6 @@ export function NewProjectButton({
             })}
           </div>
         </div>
-      )}
-      
-      {/* Format Selector Modal - shown on mobile or when quick create is disabled */}
-      {(!enableQuickCreate || isMobile) && (
-        <FormatSelectorModal
-          open={isModalOpen}
-          onOpenChange={setIsModalOpen}
-          onSelect={handleFormatSelect}
-          isCreating={createProjectMutation.isPending}
-        />
       )}
     </div>
   );

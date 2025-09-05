@@ -82,73 +82,17 @@ export default function AppHeader({
     setNewTitle(projectTitle || "");
   }, [projectTitle]);
 
+  // Check for existing share
+  const { data: existingShare } = api.share.getProjectShare.useQuery(
+    { projectId: projectId! },
+    { enabled: !!projectId }
+  );
+
   // Create share mutation
   const createShare = api.share.createShare.useMutation({
     onSuccess: async (data) => {
-      // Try to copy to clipboard with fallback for Safari
-      try {
-        // Check if we're in a secure context and have clipboard API
-        if (navigator.clipboard && window.isSecureContext) {
-          await navigator.clipboard.writeText(data.shareUrl);
-          toast.success("Share link copied to clipboard!");
-        } else {
-          // Fallback method using execCommand
-          const textArea = document.createElement("textarea");
-          textArea.value = data.shareUrl;
-          textArea.style.position = "fixed";
-          textArea.style.left = "-999999px";
-          textArea.style.top = "-999999px";
-          document.body.appendChild(textArea);
-          textArea.focus();
-          textArea.select();
-          
-          try {
-            const successful = document.execCommand('copy');
-            if (successful) {
-              toast.success("Share link copied to clipboard!");
-            } else {
-              // Show the URL in a toast with a copy button for Safari
-              toast.info(
-                <div className="flex flex-col gap-2">
-                  <p>Share link created!</p>
-                  <div className="flex items-center gap-2">
-                    <input 
-                      value={data.shareUrl} 
-                      readOnly 
-                      className="text-xs bg-gray-100 px-2 py-1 rounded flex-1"
-                      onClick={(e) => e.currentTarget.select()}
-                    />
-                    <button 
-                      onClick={() => {
-                        const input = document.querySelector<HTMLInputElement>('.sonner-toast input');
-                        if (input) {
-                          input.select();
-                          document.execCommand('copy');
-                          toast.success("Copied!");
-                        }
-                      }}
-                      className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
-                    >
-                      Copy
-                    </button>
-                  </div>
-                </div>,
-                { duration: 10000 }
-              );
-            }
-          } catch (err) {
-            console.error("execCommand copy failed:", err);
-            // Show URL in toast as final fallback
-            toast.info(`Share link: ${data.shareUrl}`, { duration: 10000 });
-          } finally {
-            document.body.removeChild(textArea);
-          }
-        }
-      } catch (error) {
-        console.error("Failed to copy to clipboard:", error);
-        // Show URL in toast as fallback
-        toast.info(`Share link: ${data.shareUrl}`, { duration: 10000 });
-      }
+      // Copy to clipboard and open in new tab
+      await handleShareSuccess(data.shareUrl, false);
       setIsSharing(false);
     },
     onError: (error) => {
@@ -156,6 +100,79 @@ export default function AppHeader({
       setIsSharing(false);
     },
   });
+
+  // Helper function to handle share success (both new and existing)
+  const handleShareSuccess = async (shareUrl: string, isExisting: boolean) => {
+    // Copy to clipboard
+    try {
+      // Check if we're in a secure context and have clipboard API
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(shareUrl);
+        toast.success(isExisting ? "Share link copied to clipboard!" : "Share link created and copied!");
+      } else {
+        // Fallback method using execCommand
+        const textArea = document.createElement("textarea");
+        textArea.value = shareUrl;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        try {
+          const successful = document.execCommand('copy');
+          if (successful) {
+            toast.success(isExisting ? "Share link copied to clipboard!" : "Share link created and copied!");
+          } else {
+            // Show the URL in a toast with a copy button for Safari
+            toast.info(
+              <div className="flex flex-col gap-2">
+                <p>Share link {isExisting ? "copied" : "created"}!</p>
+                <div className="flex items-center gap-2">
+                  <input 
+                    value={shareUrl} 
+                    readOnly 
+                    className="text-xs bg-gray-100 px-2 py-1 rounded flex-1"
+                    onClick={(e) => e.currentTarget.select()}
+                  />
+                  <button 
+                    onClick={() => {
+                      const input = document.querySelector<HTMLInputElement>('.sonner-toast input');
+                      if (input) {
+                        input.select();
+                        document.execCommand('copy');
+                        toast.success("Copied!");
+                      }
+                    }}
+                    className="text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>,
+              { duration: 10000 }
+            );
+          }
+        } catch (err) {
+          console.error("execCommand copy failed:", err);
+          // Show URL in toast as final fallback
+          toast.info(`Share link: ${shareUrl}`, { duration: 10000 });
+        } finally {
+          document.body.removeChild(textArea);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to copy to clipboard:", error);
+      // Show URL in toast as fallback
+      toast.info(`Share link: ${shareUrl}`, { duration: 10000 });
+    }
+
+    // Auto-open in new tab after a short delay
+    setTimeout(() => {
+      window.open(shareUrl, '_blank');
+    }, 1000);
+  };
 
   // Export/render mutations
   const startRender = api.render.startRender.useMutation({
@@ -217,14 +234,23 @@ export default function AppHeader({
     }
   }, [renderStatus, renderId, hasDownloaded, projectTitle]);
 
-  const handleShare = () => {
+  const handleShare = async () => {
     if (!projectId) return;
     
     setIsSharing(true);
-    createShare.mutate({
-      projectId,
-      title: projectTitle,
-    });
+    
+    // Check if share already exists
+    if (existingShare) {
+      // Share exists - copy to clipboard and redirect
+      await handleShareSuccess(existingShare.shareUrl, true);
+      setIsSharing(false);
+    } else {
+      // Create new share
+      createShare.mutate({
+        projectId,
+        title: projectTitle,
+      });
+    }
   };
 
   const handleDownload = () => {
@@ -275,6 +301,14 @@ export default function AppHeader({
                   className="flex-1 min-w-0 max-w-[240px] h-8 text-sm font-medium rounded-[15px] shadow-sm"
                   autoFocus
                   disabled={isRenaming}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleRenameClick();
+                    } else if (e.key === 'Escape') {
+                      setNewTitle(projectTitle || "");
+                      setIsEditingName(false);
+                    }
+                  }}
                 />
                 <div className="flex items-center ml-2 flex-shrink-0">
                   <Button 
@@ -304,14 +338,23 @@ export default function AppHeader({
               </div>
             ) : (
               <h1
-                className="text-sm font-medium cursor-pointer hover:text-primary px-2 text-center truncate min-w-0"
+                className={`text-sm font-medium cursor-pointer hover:text-primary px-2 text-center truncate min-w-0 ${
+                  isRenaming ? 'text-gray-400 pointer-events-none' : ''
+                }`}
                 onClick={() => {
                   setNewTitle(projectTitle);
                   setIsEditingName(true);
                 }}
                 title={projectTitle} // Show full title on hover
               >
-                {projectTitle}
+                {isRenaming ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span>{newTitle}</span>
+                  </div>
+                ) : (
+                  projectTitle
+                )}
               </h1>
             )}
           </div>

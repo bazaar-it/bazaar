@@ -1,12 +1,146 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Undo2, AlertCircle, Play } from 'lucide-react';
+import { Undo2, Play, Pause, Volume2 } from 'lucide-react';
+import { Icon } from '@iconify/react';
 import type { ChatMessage as ChatMessageType } from '~/stores/videoState';
 import { useVideoState } from '~/stores/videoState';
 import { GeneratingMessage } from './GeneratingMessage';
+import { SceneAttachments } from './SceneAttachments';
 import { api } from '~/trpc/react';
 import { toast } from 'sonner';
+
+// Function to extract icons and clean text
+const extractIconsFromMessage = (text: string) => {
+  const iconPattern = /\[icon:([^\]]+)\]/g;
+  const icons: string[] = [];
+  let match;
+
+  // Extract all icons
+  while ((match = iconPattern.exec(text)) !== null) {
+    if (match[1]) {
+      icons.push(match[1]);
+    }
+  }
+  
+  // Remove icon markers from text
+  const cleanText = text.replace(iconPattern, '').trim();
+  
+  return { icons, cleanText };
+};
+
+// Audio Player Component
+interface AudioPlayerProps {
+  audioUrl: string;
+  index: number;
+}
+
+function AudioPlayer({ audioUrl, index }: AudioPlayerProps) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const audio = new Audio(audioUrl);
+    audioRef.current = audio;
+    
+    const handleLoadedMetadata = () => {
+      setDuration(audio.duration);
+      setIsLoaded(true);
+    };
+    
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+    };
+    
+    const handleEnded = () => {
+      setIsPlaying(false);
+      setCurrentTime(0);
+    };
+    
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('ended', handleEnded);
+    
+    return () => {
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('ended', handleEnded);
+      audio.pause();
+    };
+  }, [audioUrl]);
+
+  const togglePlayPause = () => {
+    if (!audioRef.current) return;
+    
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      audioRef.current.play();
+      setIsPlaying(true);
+    }
+  };
+
+  const formatTime = (time: number) => {
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const remainingTime = duration - currentTime;
+
+  return (
+    <div className="relative">
+      <div className="w-full bg-white border rounded-lg p-3 flex items-center gap-3 hover:bg-gray-50 transition-colors">
+        {/* Play/Pause Button */}
+        <button
+          onClick={togglePlayPause}
+          className="w-8 h-8 bg-black hover:bg-black/60 text-white cursor-pointer rounded-full flex items-center justify-center transition-colors flex-shrink-0"
+          title={isPlaying ? "Pause audio" : "Play audio"}
+        >
+          {isPlaying ? (
+            <Pause className="w-4 h-4" />
+          ) : (
+            <Play className="w-4 h-4" />
+          )}
+        </button>
+
+        {/* Audio Icon */}
+        <div className="flex-shrink-0">
+          <Volume2 className="w-5 h-5 text-gray-500" />
+        </div>
+
+        {/* Progress Bar and Time */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between text-xs text-gray-600 mb-1 pr-20">
+            <span>Audio File {index + 1}</span>
+          </div>
+          
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div 
+              className="bg-black h-2 rounded-full transition-all duration-100"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          
+          <div className="flex items-center justify-between text-xs text-gray-500 mt-1">
+            <span>{formatTime(currentTime)}</span>
+            <span>{formatTime(duration)}</span>
+          </div>
+        </div>
+
+        {/* Green Checkmark */}
+        <div className="bg-green-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs flex-shrink-0">
+          ✓
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface ChatMessageProps {
   message: ChatMessageType;
@@ -130,7 +264,8 @@ function ChatMessageComponent({ message, onImageClick, projectId, onRevert, hasI
     { messageId: message.id! },
     { 
       enabled: hasIterationsProp === undefined && !message.isUser && !!message.id && !!projectId,
-      staleTime: 60000, // Cache for 1 minute
+      staleTime: 0, // Always fetch fresh data to ensure restore button shows immediately
+      refetchInterval: false, // Don't poll, but always get fresh data on mount
     }
   );
   
@@ -380,29 +515,113 @@ function ChatMessageComponent({ message, onImageClick, projectId, onRevert, hasI
                 </div>
               </div>
             )}
-            
-            <div className="text-sm leading-relaxed">
-              {/* Always use GeneratingMessage component for "Generating code" messages */}
-              {!message.isUser && 
-               message.message.toLowerCase().includes("generating code") && 
-               message.status === "pending" ? (
-                <GeneratingMessage />
-              ) : isSceneSuccess ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-green-600">✅</span>
-                  <span className="font-medium">{message.message}</span>
+
+            {/* Show uploaded videos for user messages */}
+            {message.isUser && message.videoUrls && message.videoUrls.length > 0 && (
+              <div className="space-y-2 mb-2">
+                <div className="grid grid-cols-2 gap-2">
+                  {message.videoUrls.map((videoUrl: string, index: number) => (
+                    <div 
+                      key={index} 
+                      className="relative cursor-pointer"
+                      onClick={() => onImageClick?.(videoUrl)}
+                    >
+                      <video 
+                        src={videoUrl} 
+                        className="w-full max-h-32 object-contain rounded border bg-gray-50"
+                        muted
+                        preload="metadata"
+                      />
+                      <div className="absolute top-1 right-1 bg-green-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
+                        ✓
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ) : (
-                <span>
-                  {message.message
-                    .replace(/<!-- SCENE_PLAN_DATA:.*? -->/, '')
-                    .replace(/<!-- SCENE_PLAN_OVERVIEW:.*? -->/, '')
-                    .replace(/\*\*(.*?)\*\*/g, '$1') // Remove ** bold formatting
-                    .replace(/^\*\*Scene \d+:\*\* /, '') // Remove "**Scene X:** " from the beginning
-                    .trim()}
-                </span>
-              )}
-            </div>
+                <div className="flex items-center gap-1 text-xs opacity-75">
+                  <span>📎</span>
+                  <span>{message.videoUrls.length} video{message.videoUrls.length > 1 ? 's' : ''} included</span>
+                </div>
+              </div>
+            )}
+
+            {/* Show uploaded audio files for user messages */}
+            {message.isUser && message.audioUrls && message.audioUrls.length > 0 && (
+              <div className="space-y-2 mb-2">
+                <div className="space-y-2">
+                  {message.audioUrls.map((audioUrl: string, index: number) => (
+                    <AudioPlayer 
+                      key={index} 
+                      audioUrl={audioUrl} 
+                      index={index}
+                    />
+                  ))}
+                </div>
+                <div className="flex items-center gap-1 text-xs opacity-75">
+                  <span>📎</span>
+                  <span>{message.audioUrls.length} audio file{message.audioUrls.length > 1 ? 's' : ''} included</span>
+                </div>
+              </div>
+            )}
+
+            {/* Show scene attachments for user messages */}
+            {message.isUser && message.sceneUrls && message.sceneUrls.length > 0 && projectId && (
+              <SceneAttachments sceneIds={message.sceneUrls} projectId={projectId} />
+            )}
+
+            
+
+            {/* Extract icons from message for top positioning */}
+            {(() => {
+              const processedMessage = message.message
+                .replace(/<!-- SCENE_PLAN_DATA:.*? -->/, '')
+                .replace(/<!-- SCENE_PLAN_OVERVIEW:.*? -->/, '')
+                .replace(/\*\*(.*?)\*\*/g, '$1') // Remove ** bold formatting
+                .replace(/^\*\*Scene \d+:\*\* /, '') // Remove "**Scene X:** " from the beginning
+                .trim();
+              
+              const { icons, cleanText } = extractIconsFromMessage(processedMessage);
+              
+              return (
+                <>
+                  {/* Show icons at the top like images */}
+                  {icons.length > 0 && (
+                    <div className="mb-2">
+                      <div className="flex flex-wrap gap-2">
+                        {icons.map((iconName: string, index: number) => (
+                          <div 
+                            key={`icon-${index}`} 
+                            className="bg-gray-50 rounded-lg p-3 border"
+                          >
+                            <Icon 
+                              icon={iconName} 
+                              className="w-8 h-8 text-gray-700"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Show text content */}
+                  <div className="text-sm leading-relaxed">
+                    {/* Always use GeneratingMessage component for "Generating code" messages */}
+                    {!message.isUser && 
+                     cleanText.toLowerCase().includes("generating code") && 
+                     message.status === "pending" ? (
+                      <GeneratingMessage />
+                    ) : isSceneSuccess ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-green-600">✅</span>
+                        <span className="font-medium">{cleanText}</span>
+                      </div>
+                    ) : (
+                      <div>{cleanText}</div>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
             
             {/* Scene plan overview actions (Create All button) */}
             {isScenePlanOverview && scenePlanOverviewData && (
@@ -530,7 +749,7 @@ export const ChatMessage = React.memo(ChatMessageComponent, (prevProps, nextProp
   // Custom comparison function - only re-render if these specific props change
   return (
     prevProps.message.id === nextProps.message.id &&
-    prevProps.message.content === nextProps.message.content &&
+    prevProps.message.message === nextProps.message.message &&
     prevProps.message.status === nextProps.message.status &&
     prevProps.message.kind === nextProps.message.kind &&
     prevProps.hasIterations === nextProps.hasIterations &&

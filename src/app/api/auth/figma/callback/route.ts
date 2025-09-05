@@ -4,7 +4,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { api } from '~/trpc/server';
+import { createCaller } from '~/server/api/root';
+import { createTRPCContext } from '~/server/api/trpc';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -31,12 +32,21 @@ export async function GET(request: NextRequest) {
     const userId = Buffer.from(state, 'base64').toString();
     
     // Exchange code for tokens using our tRPC endpoint
-    const caller = await api.createCaller({
+    // Create a basic context with headers
+    const ctx = await createTRPCContext({
+      headers: new Headers(),
+    });
+    
+    // Override the session in the context
+    const ctxWithSession = {
+      ...ctx,
       session: {
         user: { id: userId },
         expires: new Date(Date.now() + 1000 * 60 * 60).toISOString(),
       },
-    });
+    };
+    
+    const caller = createCaller(ctxWithSession);
     
     await caller.figma.connect({
       method: 'oauth',

@@ -62,8 +62,7 @@ export function StoryboardPanelG({
   // Force refresh when projectId changes
   useEffect(() => {
     console.log('[StoryboardPanelG] Project ID changed to:', projectId);
-    const { forceRefresh } = useVideoState.getState();
-    forceRefresh(projectId);
+    // Note: forceRefresh removed from VideoState - refresh handled via React Query
   }, [projectId]);
 
   // Generate scene code mutation - Updated to use MCP API

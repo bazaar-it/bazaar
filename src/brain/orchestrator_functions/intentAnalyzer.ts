@@ -83,6 +83,23 @@ export class IntentAnalyzer {
       }
     }
     
+    // 🚨 CRITICAL: Add attached scenes context
+    let attachedScenesInfo = "";
+    const attachedSceneIds = (input.userContext?.sceneUrls as string[]) || [];
+    if (attachedSceneIds.length > 0) {
+      attachedScenesInfo = `\n\n🚨 ATTACHED SCENES (User dragged these into chat):`;
+      attachedSceneIds.forEach((sceneId, idx) => {
+        const scene = storyboardSoFar?.find(s => s.id === sceneId);
+        if (scene) {
+          attachedScenesInfo += `\n${idx + 1}. "${scene.name}" (ID: ${sceneId})`;
+        } else {
+          attachedScenesInfo += `\n${idx + 1}. Scene ID: ${sceneId}`;
+        }
+      });
+      attachedScenesInfo += `\n\n🚨 CRITICAL: These attached scenes MUST be used as targetSceneId for any edit/delete/trim operations. The user explicitly selected these scenes by dragging them into the chat.`;
+      attachedScenesInfo += `\n\nsceneUrls contains: [${attachedSceneIds.join(', ')}]`;
+    }
+    
     // Add image context
     let imageInfo = "";
     if (contextPacket.imageContext && contextPacket.imageContext.recentImagesFromChat && contextPacket.imageContext.recentImagesFromChat.length > 0) {
@@ -153,7 +170,7 @@ ${contextPacket.assetContext.assetUrls.length} assets available in this project:
     return `USER: "${prompt}"
 
 STORYBOARD:
-${storyboardInfo}${imageInfo}${chatInfo}${webInfo}${assetInfo}
+${storyboardInfo}${attachedScenesInfo}${imageInfo}${chatInfo}${webInfo}${assetInfo}
 
 Respond with JSON only.`;
   }
@@ -221,6 +238,7 @@ Respond with JSON only.`;
       targetSceneId: parsed.targetSceneId,
       targetDuration: parsed.targetDuration, // Pass through targetDuration for trim
       referencedSceneIds: parsed.referencedSceneIds, // Pass through referenced scenes
+      websiteUrl: parsed.websiteUrl, // Pass through website URL for websiteToVideo tool
       userFeedback: parsed.userFeedback,
     };
 
