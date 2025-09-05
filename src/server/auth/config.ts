@@ -12,6 +12,7 @@ import {
   users,
   userCredits,
 } from "~/server/db/schema";
+import { sendNewUserNotification } from "~/server/services/email/notifications";
 
 /**
  * Module augmentation for `next-auth` types. Allows us to add custom properties to the `session`
@@ -126,6 +127,22 @@ export const authConfig = {
       } catch (error) {
         console.error(`[Auth] Failed to create credits for user ${user.email}:`, error);
         // Don't throw - let signup continue even if credits fail
+      }
+
+      // Send email notification to admin about new user
+      try {
+        // Try to determine the provider from recent account entries
+        const recentAccount = await db.query.accounts.findFirst({
+          where: eq(accounts.userId, user.id),
+          orderBy: (accounts, { desc }) => [desc(accounts.createdAt)],
+        });
+        const provider = recentAccount?.provider || 'Unknown';
+        
+        // Send notification email
+        await sendNewUserNotification(user, provider);
+      } catch (error) {
+        console.error(`[Auth] Failed to send new user notification:`, error);
+        // Don't throw - notifications should not break signup
       }
     }
   },
