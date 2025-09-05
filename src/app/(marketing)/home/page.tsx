@@ -17,7 +17,6 @@ import LiveBadge from "~/components/marketing/LiveBadge";
 
 export default function Homepage() {
   const { data: session, status } = useSession();
-  const [showVideo, setShowVideo] = useState(false);
   const [intendedAction, setIntendedAction] = useState<'try-for-free' | null>(null);
   
   // Add loading state for unauthenticated Try for Free button
@@ -61,20 +60,8 @@ export default function Homepage() {
         {/* Advanced Floating Particles - Hero Section Only */}
         <ParticleEffect />
 
-        {/* Announcement Banner + Live badge */}
-        <div className="w-full mb-8 flex flex-col items-center gap-3">
-          <div className="inline-flex items-center gap-3 bg-gray-100 py-2 px-3 rounded-full">
-            <span className="bg-gradient-to-r from-pink-500 to-orange-500 text-white px-3 py-1 rounded-full text-sm font-medium">
-              V2 is Live!
-            </span>
-            <button 
-              onClick={() => setShowVideo(true)}
-              className="text-pink-600 hover:text-pink-800 font-medium text-sm underline transition-colors"
-            >
-                                Watch the video
-            </button>
-          </div>
-          {/* Live on X indicator (shows only when live) */}
+        {/* Live on X indicator (shows only when live) */}
+        <div className="w-full mb-8 flex justify-center">
           <LiveBadge />
         </div>
         
@@ -271,34 +258,7 @@ export default function Homepage() {
 
       </main>
 
-      {/* Video Modal */}
-      {showVideo && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-          <div className="relative w-full max-w-4xl mx-4">
-            <button 
-              className="absolute -top-12 right-0 text-white hover:text-gray-300 w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors" 
-              onClick={() => setShowVideo(false)}
-              aria-label="Close video"
-            >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-            <div className="aspect-video">
-              <iframe
-                width="100%"
-                height="100%"
-                src="https://www.youtube.com/embed/rfrYyb83zys?autoplay=1"
-                title="Bazaar V3 Launch Video"
-                frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-                className="rounded-lg"
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Removed V2 announcement & video modal */}
 
 
       <style jsx global>{`

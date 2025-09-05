@@ -48,8 +48,7 @@ export default function LiveBadge({ pollMs = 30000 }: { pollMs?: number }) {
         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
         <span className="relative inline-flex rounded-full h-2 w-2 bg-red-600"></span>
       </span>
-      <span className="text-sm font-medium">We’re Live on X</span>
+      <span className="text-sm font-medium">The boys are live</span>
     </a>
   );
 }
-

@@ -25,6 +25,7 @@ export default function AdminSidebar({ activeSection, onSectionChange }: AdminSi
     pathname === '/admin/promo-codes' ? 'promo-codes' :
     pathname === '/admin/paywall-analytics' ? 'paywall-analytics' :
     pathname === '/admin/evals' ? 'evals' :
+    pathname === '/admin/live' ? 'live' :
     pathname === '/admin/error-analytics' ? 'error-analytics' : 'homepage';
 
   return (
@@ -86,6 +87,21 @@ export default function AdminSidebar({ activeSection, onSectionChange }: AdminSi
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
               Analytics
+            </Link>
+
+            {/* Live Stream */}
+            <Link 
+              href="/admin/live"
+              className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg w-full text-left transition-all duration-200 ${
+                currentSection === 'live'
+                  ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-700/50'
+              }`}
+            >
+              <svg className="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M4 6a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2V8a2 2 0 00-2-2H4z" />
+              </svg>
+              Live Stream
             </Link>
 
             {/* Marketing Dashboard */}
