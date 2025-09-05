@@ -58,6 +58,27 @@ const MarketingHeader = forwardRef<MarketingHeaderRef, MarketingHeaderProps>(
     const { data: session, status } = useSession();
     const router = useRouter();
     const [showLogin, setShowLogin] = useState(false);
+    const [isLiveStreaming, setIsLiveStreaming] = useState(false);
+
+    // Check if live streaming (you can update this with real API check later)
+    useEffect(() => {
+      // For now, we'll check if it's between certain hours or use a feature flag
+      // You can replace this with an actual API call to check streaming status
+      const checkLiveStatus = () => {
+        // Example: Check if current day is weekday and between 2-5 PM PST
+        const now = new Date();
+        const day = now.getDay();
+        const hour = now.getHours();
+        
+        // Enable live button manually for now - set to true when streaming
+        setIsLiveStreaming(false); // Set to true when you're live
+      };
+
+      checkLiveStatus();
+      const interval = setInterval(checkLiveStatus, 60000); // Check every minute
+      
+      return () => clearInterval(interval);
+    }, []);
 
     // Expose openLoginModal method to parent components
     useImperativeHandle(ref, () => ({
@@ -82,6 +103,26 @@ const MarketingHeader = forwardRef<MarketingHeaderRef, MarketingHeaderProps>(
               <span className="text-sm md:text-base font-medium bg-gradient-to-r from-pink-500 to-orange-500 bg-clip-text text-transparent">V2</span>
             </div>
           </div>
+          
+          {/* Live Streaming Button */}
+          {isLiveStreaming && (
+            <div className="absolute left-1/2 transform -translate-x-1/2">
+              <a
+                href="https://x.com/bazaar_ai"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-3 md:px-4 py-1.5 md:py-2 bg-red-500 text-white rounded-full font-semibold text-xs md:text-sm hover:bg-red-600 transition-all duration-200 shadow-lg animate-pulse"
+              >
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+                </span>
+                <span className="hidden md:inline">The boys are live</span>
+                <span className="inline md:hidden">LIVE</span>
+              </a>
+            </div>
+          )}
+          
           <div className="flex gap-2 md:gap-4 items-center">
             {status === "authenticated" ? (
               <div className="flex items-center gap-3">

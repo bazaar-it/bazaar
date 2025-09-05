@@ -72,6 +72,13 @@ export const env = createEnv({
     MODEL_PACK: z.string().optional().default("optimal-pack"),
     // Google Gemini API
     GOOGLE_GEMINI_API_KEY: z.string().optional(),
+    // Live stream status webhook + defaults
+    LIVE_STATUS_SECRET: z.string().optional(),
+    LIVE_URL_DEFAULT: z.string().url().optional(),
+    LIVE_FORCE: z
+      .string()
+      .transform(v => (v ?? '').toLowerCase())
+      .optional(),
   },
 
   /**
@@ -127,6 +134,9 @@ export const env = createEnv({
     LOG_AGENT_URL: process.env.LOG_AGENT_URL,
     MODEL_PACK: process.env.MODEL_PACK,
     GOOGLE_GEMINI_API_KEY: process.env.GOOGLE_GEMINI_API_KEY,
+    LIVE_STATUS_SECRET: process.env.LIVE_STATUS_SECRET,
+    LIVE_URL_DEFAULT: process.env.LIVE_URL_DEFAULT,
+    LIVE_FORCE: process.env.LIVE_FORCE,
     NEXT_PUBLIC_LOG_AGENT_URL: process.env.NEXT_PUBLIC_LOG_AGENT_URL,
     NEXT_PUBLIC_LOG_RUN_ID: process.env.NEXT_PUBLIC_LOG_RUN_ID,
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
