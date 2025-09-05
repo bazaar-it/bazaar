@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { api } from "~/trpc/react";
@@ -10,6 +10,8 @@ export default function QuickCreatePage() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const { lastFormat, updateLastFormat } = useLastUsedFormat();
+  const [hasAttemptedCreate, setHasAttemptedCreate] = useState(false);
+  const [timeoutReached, setTimeoutReached] = useState(false);
   
   // Check for existing projects (for title generation and smart redirect)
   const { data: existingProjects, isLoading: projectsLoading } = api.project.list.useQuery(undefined, {
@@ -25,9 +27,25 @@ export default function QuickCreatePage() {
     },
     onError: (error) => {
       console.error("Failed to quick create project:", error);
-      // Log error but don't redirect - let user retry
+      // Fallback to projects page on error
+      setTimeout(() => {
+        router.push("/projects");
+      }, 2000);
     }
   });
+
+  // Set a timeout to fallback after 10 seconds
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (!createProjectMutation.isSuccess) {
+        console.log('[QuickCreate] Timeout reached, redirecting to projects page');
+        setTimeoutReached(true);
+        router.push("/projects");
+      }
+    }, 10000);
+
+    return () => clearTimeout(timeout);
+  }, [createProjectMutation.isSuccess, router]);
 
   useEffect(() => {
     // Redirect to login if not authenticated
@@ -39,6 +57,9 @@ export default function QuickCreatePage() {
 
     // Wait for projects to load
     if (projectsLoading) return;
+
+    // Prevent multiple attempts or actions after timeout
+    if (hasAttemptedCreate || timeoutReached) return;
 
     // Smart redirect logic: if user has projects, redirect to latest
     if (existingProjects && existingProjects.length > 0) {
@@ -58,33 +79,34 @@ export default function QuickCreatePage() {
       return;
     }
 
-    // Auto-create project with last used format (defaults to landscape)
-    const createProject = async () => {
-      // Generate unique title
-      let title = "Untitled Video";
-      if (existingProjects && existingProjects.length > 0) {
-        // Find the highest number
-        const numbers = existingProjects
-          .map((p: any) => {
-            const match = /^Untitled Video (\d+)$/.exec(p.title || '');
-            return match && match[1] ? parseInt(match[1], 10) : 0;
-          })
-          .filter((n: number) => !isNaN(n));
-        
-        const highestNumber = Math.max(0, ...numbers);
-        title = highestNumber === 0 && !existingProjects.some((p: any) => p.title === "Untitled Video") 
-          ? "Untitled Video" 
-          : `Untitled Video ${highestNumber + 1}`;
-      }
-      
-      // Create project with last used format (defaults to landscape)
-      createProjectMutation.mutate({
-        format: lastFormat
-      });
-    };
+    // Mark that we've attempted to create
+    setHasAttemptedCreate(true);
 
-    createProject();
-  }, [session, status, router, createProjectMutation, existingProjects, lastFormat, projectsLoading]);
+    // Auto-create project with last used format (defaults to landscape)
+    // Generate unique title
+    let title = "Untitled Video";
+    if (existingProjects && existingProjects.length > 0) {
+      // Find the highest number
+      const numbers = existingProjects
+        .map((p: any) => {
+          const match = /^Untitled Video (\d+)$/.exec(p.title || '');
+          return match && match[1] ? parseInt(match[1], 10) : 0;
+        })
+        .filter((n: number) => !isNaN(n));
+      
+      const highestNumber = Math.max(0, ...numbers);
+      title = highestNumber === 0 && !existingProjects.some((p: any) => p.title === "Untitled Video") 
+        ? "Untitled Video" 
+        : `Untitled Video ${highestNumber + 1}`;
+    }
+    
+    // Create project with last used format (defaults to landscape)
+    createProjectMutation.mutate({
+      format: lastFormat,
+      title: title  // Pass the title to avoid undefined
+    });
+    // Fixed dependencies - using specific mutation state flags instead of the whole object
+  }, [session, status, router, createProjectMutation.isPending, createProjectMutation.isSuccess, existingProjects, lastFormat, projectsLoading, hasAttemptedCreate, timeoutReached]);
 
   // Loading state
   return (
