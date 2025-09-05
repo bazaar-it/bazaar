@@ -80,6 +80,8 @@ export const env = createEnv({
       .transform(v => (v ?? '').toLowerCase())
       .optional(),
     LIVE_MODE: z.enum(["manual", "webhook"]).optional().default("manual"),
+    // Admin notifications
+    ADMIN_NOTIFICATION_EMAIL: z.string().email().optional(),
   },
 
   /**
@@ -139,6 +141,7 @@ export const env = createEnv({
     LIVE_URL_DEFAULT: process.env.LIVE_URL_DEFAULT,
     LIVE_FORCE: process.env.LIVE_FORCE,
     LIVE_MODE: process.env.LIVE_MODE,
+    ADMIN_NOTIFICATION_EMAIL: process.env.ADMIN_NOTIFICATION_EMAIL,
     NEXT_PUBLIC_LOG_AGENT_URL: process.env.NEXT_PUBLIC_LOG_AGENT_URL,
     NEXT_PUBLIC_LOG_RUN_ID: process.env.NEXT_PUBLIC_LOG_RUN_ID,
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,

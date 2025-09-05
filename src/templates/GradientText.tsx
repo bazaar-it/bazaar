@@ -1,10 +1,6 @@
 // src/templates/GradientText.tsx
-import {
-  AbsoluteFill,
-  useCurrentFrame,
-  useVideoConfig,
-  interpolate,
-} from 'remotion';
+import React from 'react';
+import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from 'remotion';
 
 export default function GradientText() {
   const frame = useCurrentFrame();
@@ -13,20 +9,17 @@ export default function GradientText() {
   // Format detection for responsive sizing
   const aspectRatio = width / height;
   const isPortrait = aspectRatio < 1;
-  const isSquare = Math.abs(aspectRatio - 1) < 0.2;
-  
-  // Responsive sizing
+
+  // Fixed sizing (not responsive)
   const svgWidth = Math.min(width * 0.9, isPortrait ? width * 0.95 : 1400);
   const svgHeight = isPortrait ? height * 0.4 : 200;
-  const baseFontSize = Math.min(svgWidth, svgHeight) * 0.2;
-  const fontSize = isPortrait ? baseFontSize * 0.8 : baseFontSize;
+  const fontSize = 120; // Fixed large font size
 
   const loopDuration = fps * 2;
-  const hueBase = (frame % loopDuration) * (360 / loopDuration);
-  const getHue = (offset: number) => `hsl(${(hueBase + offset) % 360}, 100%, 60%)`;
+  const hueShift = (frame % loopDuration) * (360 / loopDuration) * 1.5;
 
   // Split text into words for portrait animation
-  const words = "Design without Limits".split(" ");
+  const words = "Create without Limits".split(" ");
 
   if (isPortrait) {
     // Use word-by-word animation for portrait like dark-bg-gradient-text
@@ -87,9 +80,9 @@ export default function GradientText() {
               }
             );
             
-            // Generate gradient for middle word
+            // Generate blue gradient for middle word
             const gradientStyle = index === 1 ? {
-              background: `linear-gradient(90deg, ${getHue(0)} 0%, ${getHue(60)} 20%, ${getHue(120)} 40%, ${getHue(180)} 60%, ${getHue(240)} 80%, ${getHue(300)} 100%)`,
+              background: `linear-gradient(${360 - hueShift}deg, hsl(200, 100%, 60%) 0%, hsl(210, 100%, 60%) 20%, hsl(220, 100%, 60%) 40%, hsl(230, 100%, 60%) 60%, hsl(240, 100%, 60%) 80%, hsl(200, 100%, 60%) 100%)`,
               backgroundClip: "text",
               WebkitBackgroundClip: "text",
               color: "transparent",
@@ -121,7 +114,7 @@ export default function GradientText() {
         backgroundColor: "#ffffff",
         justifyContent: "center",
         alignItems: "center",
-        display: "flex",
+        display: "flex"
       }}
     >
       <svg 
@@ -131,13 +124,20 @@ export default function GradientText() {
         style={{ maxWidth: '90%', height: 'auto' }}
       >
         <defs>
-          <linearGradient id="text-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor={getHue(0)} />
-            <stop offset="20%" stopColor={getHue(60)} />
-            <stop offset="40%" stopColor={getHue(120)} />
-            <stop offset="60%" stopColor={getHue(180)} />
-            <stop offset="80%" stopColor={getHue(240)} />
-            <stop offset="100%" stopColor={getHue(300)} />
+          <linearGradient
+            id="blue-gradient"
+            x1="0%"
+            y1="0%"
+            x2="100%"
+            y2="0%"
+            gradientTransform={`rotate(${360 - hueShift}, 0.5, 0.5)`}
+          >
+            <stop offset="0%" stopColor="hsl(200, 100%, 60%)" />
+            <stop offset="20%" stopColor="hsl(210, 100%, 60%)" />
+            <stop offset="40%" stopColor="hsl(220, 100%, 60%)" />
+            <stop offset="60%" stopColor="hsl(230, 100%, 60%)" />
+            <stop offset="80%" stopColor="hsl(240, 100%, 60%)" />
+            <stop offset="100%" stopColor="hsl(200, 100%, 60%)" />
           </linearGradient>
         </defs>
 
@@ -150,13 +150,13 @@ export default function GradientText() {
           fontSize={fontSize}
           textAnchor="middle"
         >
-          Design
+          Create
         </text>
 
         <text
           x={svgWidth * 0.5}
           y={svgHeight * 0.65}
-          fill="url(#text-gradient)"
+          fill="url(#blue-gradient)"
           fontFamily="Inter, sans-serif"
           fontWeight="700"
           fontSize={fontSize}
@@ -184,9 +184,9 @@ export default function GradientText() {
 // Template configuration - exported so registry can use it
 export const templateConfig = {
   id: 'gradient-text',
-  name: 'Gradient Text',
-  duration: 60,
-  previewFrame: 30,
+  name: 'Create without Limits',
+  duration: 90,
+  previewFrame: 15,
   getCode: () => `const {
 AbsoluteFill,
 useCurrentFrame,
@@ -194,7 +194,7 @@ useVideoConfig,
 interpolate,
 } = window.Remotion;
 
-export default function GradientText() {
+export default function BlueGradientText_me44xgz7() {
 const frame = useCurrentFrame();
 const { fps, width, height } = useVideoConfig();
 
@@ -203,18 +203,16 @@ const aspectRatio = width / height;
 const isPortrait = aspectRatio < 1;
 const isSquare = Math.abs(aspectRatio - 1) < 0.2;
 
-// Responsive sizing
+// Fixed sizing (not responsive)
 const svgWidth = Math.min(width * 0.9, isPortrait ? width * 0.95 : 1400);
 const svgHeight = isPortrait ? height * 0.4 : 200;
-const baseFontSize = Math.min(svgWidth, svgHeight) * 0.2;
-const fontSize = isPortrait ? baseFontSize * 0.8 : baseFontSize;
+const fontSize = 120; // Fixed large font size
 
 const loopDuration = fps * 2;
-const hueBase = (frame % loopDuration) * (360 / loopDuration);
-const getHue = (offset) => \`hsl(\${(hueBase + offset) % 360}, 100%, 60%)\`;
+const hueShift = (frame % loopDuration) * (360 / loopDuration) * 1.5;
 
 // Split text into words for portrait animation
-const words = "Design without Limits".split(" ");
+const words = "Create without Limits".split(" ");
 
 if (isPortrait) {
   // Use word-by-word animation for portrait like dark-bg-gradient-text
@@ -275,9 +273,9 @@ if (isPortrait) {
             }
           );
           
-          // Generate gradient for middle word
+          // Generate blue gradient for middle word
           const gradientStyle = index === 1 ? {
-            background: \`linear-gradient(90deg, \${getHue(0)} 0%, \${getHue(60)} 20%, \${getHue(120)} 40%, \${getHue(180)} 60%, \${getHue(240)} 80%, \${getHue(300)} 100%)\`,
+            background: \`linear-gradient(\${360 - hueShift}deg, hsl(200, 100%, 60%) 0%, hsl(210, 100%, 60%) 20%, hsl(220, 100%, 60%) 40%, hsl(230, 100%, 60%) 60%, hsl(240, 100%, 60%) 80%, hsl(200, 100%, 60%) 100%)\`,
             backgroundClip: "text",
             WebkitBackgroundClip: "text",
             color: "transparent",
@@ -319,13 +317,20 @@ return (
       style={{ maxWidth: '90%', height: 'auto' }}
     >
       <defs>
-        <linearGradient id="text-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor={getHue(0)} />
-          <stop offset="20%" stopColor={getHue(60)} />
-          <stop offset="40%" stopColor={getHue(120)} />
-          <stop offset="60%" stopColor={getHue(180)} />
-          <stop offset="80%" stopColor={getHue(240)} />
-          <stop offset="100%" stopColor={getHue(300)} />
+        <linearGradient
+          id="blue-gradient"
+          x1="0%"
+          y1="0%"
+          x2="100%"
+          y2="0%"
+          gradientTransform={\`rotate(\${360 - hueShift}, 0.5, 0.5)\`}
+        >
+          <stop offset="0%" stopColor="hsl(200, 100%, 60%)" />
+          <stop offset="20%" stopColor="hsl(210, 100%, 60%)" />
+          <stop offset="40%" stopColor="hsl(220, 100%, 60%)" />
+          <stop offset="60%" stopColor="hsl(230, 100%, 60%)" />
+          <stop offset="80%" stopColor="hsl(240, 100%, 60%)" />
+          <stop offset="100%" stopColor="hsl(200, 100%, 60%)" />
         </linearGradient>
       </defs>
 
@@ -338,13 +343,13 @@ return (
         fontSize={fontSize}
         textAnchor="middle"
       >
-        Design
+        Create
       </text>
 
       <text
         x={svgWidth * 0.5}
         y={svgHeight * 0.65}
-        fill="url(#text-gradient)"
+        fill="url(#blue-gradient)"
         fontFamily="Inter, sans-serif"
         fontWeight="700"
         fontSize={fontSize}

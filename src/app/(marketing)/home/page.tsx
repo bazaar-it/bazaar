@@ -9,7 +9,12 @@ import MarketingHeader from "~/components/marketing/MarketingHeader";
 import type { MarketingHeaderRef } from "~/components/marketing/MarketingHeader";
 import MarketingComponentPlayer from "~/components/MarketingComponentPlayer";
 import HomePageTextAnimation from "~/components/HomePageTextAnimation";
-import HomePageTemplatesSection from "~/components/marketing/HomePageTemplatesSection";
+import dynamic from 'next/dynamic';
+
+const HomePageTemplatesSection = dynamic(
+  () => import('~/components/marketing/HomePageTemplatesSection'),
+  { ssr: false }
+);
 import AspectRatioTransitionPlayer from "~/components/AspectRatioTransitionPlayer";
 import DynamicFormatTitle from "~/components/DynamicFormatTitle";
 import ParticleEffect from "~/components/marketing/ParticleEffect";
