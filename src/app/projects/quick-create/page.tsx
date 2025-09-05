@@ -27,9 +27,9 @@ export default function QuickCreatePage() {
     },
     onError: (error) => {
       console.error("Failed to quick create project:", error);
-      // Fallback to projects page on error
+      // Fallback to home page on error
       setTimeout(() => {
-        router.push("/projects");
+        router.push("/");
       }, 2000);
     }
   });
@@ -38,9 +38,9 @@ export default function QuickCreatePage() {
   useEffect(() => {
     const timeout = setTimeout(() => {
       if (!createProjectMutation.isSuccess) {
-        console.log('[QuickCreate] Timeout reached, redirecting to projects page');
+        console.log('[QuickCreate] Timeout reached, redirecting to home page');
         setTimeoutReached(true);
-        router.push("/projects");
+        router.push("/");
       }
     }, 10000);
 
