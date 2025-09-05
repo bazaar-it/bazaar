@@ -43,6 +43,7 @@ import CoolSkyBG, { templateConfig as coolSkyBGConfig } from './CoolSkyBG';
 import VibeyBG, { templateConfig as vibeyBGConfig } from './VibeyBG';
 import VibesBG, { templateConfig as vibesBGConfig } from './VibesBG';
 import FastText, { templateConfig as fastTextConfig } from './FastText';
+import FintechUI, { templateConfig as fintechUIConfig } from './FintechUI';
 
 export interface TemplateDefinition {
   id: string;
@@ -86,16 +87,19 @@ export const TEMPLATES: TemplateDefinition[] = [
     component: PromptUI,
   }),
 
-  
-  
-  
-  // 3. Mobile App
+  // 3. Fintech UI (ensure appears on homepage)
+  addFormatSupport({
+    ...fintechUIConfig,
+    component: FintechUI,
+  }),
+
+  // 4. Mobile App
   addFormatSupport({
     ...mobileAppConfig,
     component: MobileApp,
   }),
   
-  // 4. App Download
+  // 5. App Download
   addFormatSupport({
     ...appDownloadConfig,
     component: AppDownload,
