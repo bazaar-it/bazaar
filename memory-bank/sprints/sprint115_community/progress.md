@@ -1,6 +1,6 @@
 # Sprint 115: Implementation Progress
 
-## Current Status: 🟡 Planning Phase
+## Current Status: 🟢 In Progress
 **Sprint Start**: 2025-09-05  
 **Target Completion**: TBD  
 **Last Updated**: 2025-09-06
@@ -19,11 +19,11 @@
   - [ ] Generate TypeScript types
 
 ### Phase 2: Backend API
-- [ ] Create community router
+- [x] Create community router
   - [ ] Template CRUD operations
-  - [ ] Favorites system
-  - [ ] Usage tracking
-  - [ ] Analytics endpoints
+  - [x] Favorites system (favorite/unfavorite)
+  - [x] Usage tracking (useTemplate: copy scenes into project)
+  - [x] Analytics events (view/favorite/unfavorite/use)
 - [ ] Add authentication middleware
   - [ ] Cross-domain session sharing
   - [ ] Permission checks
@@ -50,19 +50,19 @@
 ### Phase 4: Community Panel (In-App)
 - [ ] Rename template panel
   - [ ] Update UI labels
-  - [ ] Add navigation tabs
-- [ ] Browse interface
-  - [ ] Grid layout
-  - [ ] Search/filter
+  - [x] Add navigation tabs (Explore / My Favorites / My Templates)
+- [x] Browse interface
+  - [x] Grid layout with responsive cards and hover actions
+  - [x] Search/filter
   - [ ] Pagination
-- [ ] Template preview
-  - [ ] Hover preview
-  - [ ] Full preview modal
+- [x] Template preview
+  - [x] Hover preview with correct aspect ratio per format
+  - [x] Full preview modal (80vw, rounded, header buttons)
   - [ ] Scene details
-- [ ] Import flow
-  - [ ] "Use Template" action
-  - [ ] Scene copying
-  - [ ] Project integration
+- [x] Import flow
+  - [x] "Use Template" action
+  - [x] Scene copying to project
+  - [x] Project integration and redirect
 
 ### Phase 5: Community Subdomain
 - [ ] Setup subdomain infrastructure
@@ -106,3 +106,12 @@
 - Resolved doc inconsistencies across files
 - Adopted normalized scenes + event-based metrics
 - Updated API_SPEC, DATABASE_SCHEMA, TODO to align
+ - Implemented community router with: listTemplates, getTemplate, favoriteTemplate, unfavoriteTemplate, useTemplate
+ - Emitted analytics events (view/favorite/unfavorite/use) and incremented cached counters
+ - Built `/community` page UI: sidebar categories, tabs, search, format filter (landscape/square/portrait)
+ - Fixed preview aspect ratio to match selected format across cards and modal
+ - Added hover video previews, static frame thumbnails, and modal redesign
+ - Wired Remix flow to create project and import template scenes
+ - Implemented Favorites tab using server data; added optimistic favorite/use counters with cache invalidation
+ - Removed hardcoded favorite counts; icons added (heart/shuffle) beside dynamic numbers
+ - Generated dev migration snapshot including community tables (push pending until DATABASE_URL configured)

@@ -14,10 +14,10 @@
 
 ### Core API
 - [ ] Implement createTemplate endpoint
-- [ ] Implement listTemplates endpoint
-- [ ] Implement getTemplate endpoint
-- [ ] Implement favoriteTemplate endpoint
-- [ ] Implement useTemplate endpoint (copy scenes to project)
+- [x] Implement listTemplates endpoint
+- [x] Implement getTemplate endpoint
+- [x] Implement favoriteTemplate endpoint
+- [x] Implement useTemplate endpoint (copy scenes to project)
 
 ### Template Creation UI
 - [ ] Add "Share to Community" button to project page
@@ -28,17 +28,17 @@
 
 ### Community Panel (In-App)
 - [ ] Rename "Templates" to "Community" in navigation
-- [ ] Add tabs: "Explore", "My Favorites", "My Templates"
-- [ ] Implement template grid display
-- [ ] Add search bar
-- [ ] Add category filter
-- [ ] Implement "Use Template" flow
+- [x] Add tabs: "Explore", "My Favorites", "My Templates"
+- [x] Implement template grid display
+- [x] Add search bar
+- [x] Add category filter
+- [x] Implement "Use Template" flow
 
 ### Basic Metrics
-- [ ] Emit community_events: view/favorite/unfavorite/use
-- [ ] Update cached counters on community_templates
+- [x] Emit community_events: view/favorite/unfavorite/use
+- [x] Update cached counters on community_templates
 - [ ] Nightly rollups into community_metrics_daily
-- [ ] Display counters on template cards
+- [x] Display counters on template cards
 
 ## 🟡 Important (Should Have)
 

@@ -28,6 +28,7 @@ import { iconsRouter } from "~/server/api/routers/icons";
 // import { websitePipelineRouter } from "~/server/api/routers/website-pipeline"; // Disabled - uses non-existent WebAnalysisEnhanced
 import { brandProfileRouter } from "~/server/api/routers/brandProfile";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
+import { communityRouter } from "~/server/api/routers/community";
 // Import server initialization to start background processes
 import "~/server/init";
 
@@ -65,6 +66,7 @@ export const appRouter = createTRPCRouter({
   icons: iconsRouter,
   // websitePipeline: websitePipelineRouter, // Disabled - uses non-existent WebAnalysisEnhanced
   brandProfile: brandProfileRouter,
+  community: communityRouter,
 });
 
 // export type definition of API

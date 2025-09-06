@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 import { api } from "~/trpc/react";
-import { Heart, Plus, ChevronDown, ChevronRight, ChevronLeft } from "lucide-react";
+import { Heart, Plus, ChevronDown, ChevronRight, ChevronLeft, Shuffle } from "lucide-react";
 import { cn } from "~/lib/cn";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "~/components/ui/dialog";
@@ -17,11 +17,29 @@ type CategoryItem = {
   count: number;
 };
 
+type VideoFormat = 'landscape' | 'portrait' | 'square';
+
+// Map selected format to composition dimensions for accurate previews
+function getFormatDims(format: VideoFormat) {
+  switch (format) {
+    case 'portrait':
+      return { width: 1080, height: 1920 };
+    case 'square':
+      return { width: 1080, height: 1080 };
+    case 'landscape':
+    default:
+      return { width: 1920, height: 1080 };
+  }
+}
+
 export default function CommunityPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [remixingId, setRemixingId] = useState<string | null>(null);
+  const [format, setFormat] = useState<VideoFormat>('landscape');
+  const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'mine'>("explore");
+  const [search, setSearch] = useState("");
   const [favorites, setFavorites] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set();
     try {
@@ -34,26 +52,85 @@ export default function CommunityPage() {
 
   const { data: session } = useSession();
   const [uiOpen, setUiOpen] = useState(true);
+  // Local optimistic overrides for counters
+  const [countOverrides, setCountOverrides] = useState<Record<string, { favoritesCount?: number; usageCount?: number }>>({});
 
-  // Fetch a broad list of templates; we'll filter client-side for sidebar categories
-  const { data: dbTemplates = [], isLoading } = api.templates.getAll.useQuery({
-    limit: 500,
+  // Fetch templates from community router (server filters format + search + category)
+  const { data: communityList, isLoading } = api.community.listTemplates.useQuery({
+    limit: 200,
+    filter: {
+      format,
+      search: search || undefined,
+      category: activeCategory || undefined,
+    },
+    sort: 'recent',
+  });
+
+  // Fetch user favorites and mine tabs (lazy)
+  const { data: myFavorites = [] } = api.community.getUserFavorites.useQuery(undefined, {
+    enabled: activeTab === 'favorites',
+  });
+  const { data: myTemplates = [] } = api.community.getUserTemplates.useQuery(undefined, {
+    enabled: activeTab === 'mine',
   });
 
   const utils = api.useUtils();
   const createProject = api.project.create.useMutation();
   const addTemplateMutation = api.generation.addTemplate.useMutation();
 
-  function toggleFavorite(id: string) {
+  const favoriteMutation = api.community.favoriteTemplate.useMutation({
+    onSuccess: async () => {
+      await Promise.all([
+        utils.community.listTemplates.invalidate(),
+        utils.community.getUserFavorites.invalidate(),
+      ]);
+    },
+  });
+  const unfavoriteMutation = api.community.unfavoriteTemplate.useMutation({
+    onSuccess: async () => {
+      await Promise.all([
+        utils.community.listTemplates.invalidate(),
+        utils.community.getUserFavorites.invalidate(),
+      ]);
+    },
+  });
+  function toggleFavorite(id: string, isHardcoded?: boolean) {
     setFavorites((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
+      const willFav = !next.has(id);
+      if (willFav) next.add(id); else next.delete(id);
       try { window.localStorage.setItem("community:favorites", JSON.stringify([...next])); } catch {}
       return next;
     });
+    // Persist only for community templates
+    if (!isHardcoded) {
+      // Optimistic counter update
+      const current = countOverrides[id]?.favoritesCount ?? (combinedTemplates.find(t => t.id === id)?.favoritesCount ?? 0);
+      const delta = favorites.has(id) ? -1 : 1; // if already favorited, we are unfavoriting
+      const nextCount = Math.max(0, current + delta);
+      setCountOverrides((prev) => ({
+        ...prev,
+        [id]: { ...(prev[id] || {}), favoritesCount: nextCount },
+      }));
+
+      if (!favorites.has(id)) favoriteMutation.mutate({ templateId: id });
+      else unfavoriteMutation.mutate({ templateId: id });
+    }
   }
 
-  async function handleRemix(templateId: string) {
+  const useTemplateMutation = api.community.useTemplate.useMutation({
+    onSuccess: async (_res, variables) => {
+      // Optimistic uses counter bump
+      const id = variables.templateId;
+      const current = countOverrides[id]?.usageCount ?? (combinedTemplates.find(t => t.id === id)?.usageCount ?? 0);
+      setCountOverrides((prev) => ({
+        ...prev,
+        [id]: { ...(prev[id] || {}), usageCount: current + 1 },
+      }));
+      await utils.community.listTemplates.invalidate();
+    }
+  });
+  async function handleRemix(templateId: string, isHardcoded?: boolean, template?: any) {
     // Require auth
     if (!session?.user) {
       window.location.href = "/login?callbackUrl=/community";
@@ -61,25 +138,25 @@ export default function CommunityPage() {
     }
     try {
       setRemixingId(templateId);
-      // Fetch full template data
-      const tpl = await utils.templates.getById.fetch(templateId);
-      if (!tpl) return;
-
-      // Create a new project (use first supported format or landscape)
-      const defaultFormat = (Array.isArray(tpl.supportedFormats) && tpl.supportedFormats[0]) || "landscape";
-      const project = await createProject.mutateAsync({ format: defaultFormat as any });
-
-      // Insert template as first scene
-      await addTemplateMutation.mutateAsync({
-        projectId: project.projectId,
-        templateId: tpl.id,
-        templateName: tpl.name,
-        templateCode: tpl.tsxCode,
-        templateDuration: tpl.duration,
-      });
-
-      // Navigate to generator
-      window.location.href = `/projects/${project.projectId}/generate`;
+      if (isHardcoded && template) {
+        // Legacy path for hardcoded templates
+        const project = await createProject.mutateAsync({ format: (template.supportedFormats?.[0] ?? 'landscape') as any });
+        await addTemplateMutation.mutateAsync({
+          projectId: project.projectId,
+          templateId: template.id,
+          templateName: template.name,
+          templateCode: template.tsxCode,
+          templateDuration: template.duration,
+        });
+        window.location.href = `/projects/${project.projectId}/generate`;
+      } else {
+        // Community template import flow
+        const tpl = await utils.community.getTemplate.fetch({ templateId });
+        const defaultFormat = (Array.isArray(tpl.template.supportedFormats) && (tpl.template.supportedFormats as any)[0]) || 'landscape';
+        const project = await createProject.mutateAsync({ format: defaultFormat as any });
+        await useTemplateMutation.mutateAsync({ templateId, projectId: project.projectId });
+        window.location.href = `/projects/${project.projectId}/generate`;
+      }
     } finally {
       setRemixingId(null);
     }
@@ -127,21 +204,26 @@ export default function CommunityPage() {
     category?: string | null;
     thumbnailUrl?: string | null;
     usageCount?: number;
+    favoritesCount?: number;
     creator?: { id: string; name: string | null } | null;
+    isHardcoded?: boolean;
   };
 
   const combinedTemplates: TemplateItem[] = useMemo(() => {
-    const fromDb: TemplateItem[] = dbTemplates.map(t => ({
+    const list = communityList?.items ?? [];
+    const fromCommunity: TemplateItem[] = list.map((t: any) => ({
       id: t.id,
-      name: t.name,
-      duration: t.duration,
-      tsxCode: t.tsxCode,
+      name: t.title,
+      duration: 150,
+      tsxCode: '',
       supportedFormats: t.supportedFormats as any,
-      isOfficial: t.isOfficial,
+      isOfficial: false,
       category: (t.category as any) ?? null,
       thumbnailUrl: (t.thumbnailUrl as any) ?? null,
-      usageCount: t.usageCount ?? 0,
-      creator: t.creator ?? null,
+      usageCount: (t.usesCount as any) ?? 0,
+      favoritesCount: (t.favoritesCount as any) ?? 0,
+      creator: null,
+      isHardcoded: false,
     }));
 
     const fromHardcoded: TemplateItem[] = TEMPLATES.map((t) => ({
@@ -154,11 +236,37 @@ export default function CommunityPage() {
       category: null,
       thumbnailUrl: null,
       usageCount: 0,
+      favoritesCount: 0,
       creator: null,
+      isHardcoded: true,
     }));
 
-    return [...fromHardcoded, ...fromDb];
-  }, [dbTemplates]);
+    // Tabs behavior
+    if (activeTab === 'favorites') {
+      // Build directly from server favorites to avoid relying on listTemplates filters
+      const favs: TemplateItem[] = (myFavorites as any[]).map((f: any) => ({
+        id: f.id,
+        name: f.title,
+        duration: 150,
+        tsxCode: '',
+        supportedFormats: f.supportedFormats as any,
+        isOfficial: false,
+        category: (f.category as any) ?? null,
+        thumbnailUrl: (f.thumbnailUrl as any) ?? null,
+        usageCount: (f.usesCount as any) ?? 0,
+        favoritesCount: (f.favoritesCount as any) ?? 0,
+        creator: null,
+        isHardcoded: false,
+      }));
+      return favs;
+    }
+    if (activeTab === 'mine') {
+      const mineIds = new Set(myTemplates.map((m: any) => m.id));
+      return fromCommunity.filter((t) => mineIds.has(t.id));
+    }
+    // Explore shows both hardcoded and community
+    return [...fromHardcoded, ...fromCommunity];
+  }, [communityList, TEMPLATES, activeTab, myFavorites, myTemplates]);
 
   const countFor = (name: string) =>
     combinedTemplates.filter(t => normalize(t.category) === normalize(name)).length;
@@ -168,17 +276,22 @@ export default function CommunityPage() {
 
   // Compute templates to display based on active category or subcategory
   const templates = useMemo(() => {
-    if (!activeCategory) return combinedTemplates;
+    // Filter by format first
+    const byFormat = combinedTemplates.filter(t => {
+      const list = (t.supportedFormats as any) as VideoFormat[] | undefined;
+      return !list || list.length === 0 ? true : list.includes(format);
+    });
+    if (!activeCategory) return byFormat;
     const target = normalize(activeCategory);
     // Group header: only filter if there are matches, otherwise show all to avoid empty state
     if (target === normalize("UI Components")) {
       const set = new Set(UI_SUBCATEGORIES.map(normalize));
-      const matches = combinedTemplates.filter(t => set.has(normalize(t.category)));
-      return matches.length > 0 ? matches : combinedTemplates;
+      const matches = byFormat.filter(t => set.has(normalize(t.category)));
+      return matches.length > 0 ? matches : byFormat;
     }
     // Exact category match
-    return combinedTemplates.filter(t => normalize(t.category) === target);
-  }, [activeCategory, combinedTemplates]);
+    return byFormat.filter(t => normalize(t.category) === target);
+  }, [activeCategory, combinedTemplates, format]);
 
   const handleCardClick = (id: string) => setSelectedTemplateId(id);
   const selectedTemplate = useMemo(() => {
@@ -286,8 +399,49 @@ export default function CommunityPage() {
 
       {/* Content */}
       <section className="flex-1 p-4">
-        <div className="mb-4 flex items-center justify-between">
-          <h1 className="text-xl font-semibold">Community Templates</h1>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-semibold">Community Templates</h1>
+            <div className="flex rounded-full border bg-white p-1">
+              {(["explore","favorites","mine"] as const).map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={cn(
+                    "px-3 py-1 text-sm rounded-full",
+                    activeTab === tab ? "bg-black text-white" : "text-gray-700 hover:bg-gray-50"
+                  )}
+                >
+                  {tab === 'explore' ? 'Explore' : tab === 'favorites' ? 'My Favorites' : 'My Templates'}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {(['landscape','square','portrait'] as VideoFormat[]).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFormat(f)}
+                className={cn(
+                  'px-3 py-1 rounded-full text-sm border',
+                  format === f ? 'bg-black text-white border-black' : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300'
+                )}
+                aria-pressed={format === f}
+              >
+                {f.charAt(0).toUpperCase() + f.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Search */}
+        <div className="mb-3">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search templates..."
+            className="w-full max-w-md rounded-md border px-3 py-2 text-sm"
+          />
         </div>
 
         {isLoading ? (
@@ -315,10 +469,12 @@ export default function CommunityPage() {
                 key={t.id}
                 template={t}
                 onOpen={() => handleCardClick(t.id)}
-                onRemix={() => handleRemix(t.id)}
+                onRemix={() => handleRemix(t.id, t.isHardcoded, t)}
                 remixing={remixingId === t.id}
                 isFavorited={favorites.has(t.id)}
-                onFavorite={() => toggleFavorite(t.id)}
+                onFavorite={() => toggleFavorite(t.id, t.isHardcoded)}
+                displayFormat={format}
+                overrides={countOverrides[t.id]}
               />
             ))}
           </div>
@@ -328,11 +484,12 @@ export default function CommunityPage() {
       <TemplateModal
         templateId={selectedTemplateId}
         onClose={handleCloseModal}
-        onRemix={() => selectedTemplateId && handleRemix(selectedTemplateId)}
+        onRemix={() => selectedTemplateId && handleRemix(selectedTemplateId, selectedTemplate?.isHardcoded, selectedTemplate)}
         remixing={!!remixingId && selectedTemplateId === remixingId}
         isFavorited={selectedTemplateId ? favorites.has(selectedTemplateId) : false}
-        onFavorite={() => selectedTemplateId && toggleFavorite(selectedTemplateId)}
+        onFavorite={() => selectedTemplateId && toggleFavorite(selectedTemplateId, selectedTemplate?.isHardcoded)}
         fallbackTemplate={selectedTemplate || undefined}
+        displayFormat={format}
       />
       </div>
     </div>
@@ -345,8 +502,9 @@ function initialsFromName(name?: string | null) {
   return n.charAt(0).toUpperCase();
 }
 
-function TemplateCard({ template, onOpen, onRemix, remixing, isFavorited, onFavorite }: { template: any; onOpen: () => void; onRemix?: () => void; remixing?: boolean; isFavorited?: boolean; onFavorite?: () => void }) {
+function TemplateCard({ template, onOpen, onRemix, remixing, isFavorited, onFavorite, displayFormat, overrides }: { template: any; onOpen: () => void; onRemix?: () => void; remixing?: boolean; isFavorited?: boolean; onFavorite?: () => void; displayFormat: VideoFormat; overrides?: { favoritesCount?: number; usageCount?: number } }) {
   const [hovered, setHovered] = useState(false);
+  const format = displayFormat;
 
   const avatar = useMemo(() => {
     const letter = initialsFromName(template.creator?.name);
@@ -355,9 +513,8 @@ function TemplateCard({ template, onOpen, onRemix, remixing, isFavorited, onFavo
     return { letter, color } as const;
   }, [template.creator?.name]);
 
-  const views = template.usageCount ?? 0; // reuse until dedicated metrics
-  const favorites = template.isOfficial ? 100 : Math.max(0, (template.usageCount ?? 0) - 3);
-  const uses = template.usageCount ?? 0;
+  const favorites = overrides?.favoritesCount ?? template.favoritesCount ?? 0;
+  const uses = overrides?.usageCount ?? template.usageCount ?? 0;
   const isBazaarTemplate = !template?.creator && template?.isOfficial;
 
   return (
@@ -367,14 +524,18 @@ function TemplateCard({ template, onOpen, onRemix, remixing, isFavorited, onFavo
       onMouseLeave={() => setHovered(false)}
       onClick={onOpen}
     >
-      <div className="aspect-video w-full bg-gray-100">
+      <div className={cn(
+        format === 'portrait' ? 'w-full bg-gray-100 aspect-[9/16]' :
+        format === 'square' ? 'w-full bg-gray-100 aspect-square' :
+        'w-full bg-gray-100 aspect-video'
+      )}>
         {hovered ? (
-          <TemplateHoverVideo tsxCode={template.tsxCode} duration={template.duration} />
+          <TemplateHoverVideo tsxCode={template.tsxCode} duration={template.duration} format={format} />
         ) : template.thumbnailUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={template.thumbnailUrl} alt={template.name} className="h-full w-full object-cover" />
         ) : (
-          <TemplateFrameThumbnail tsxCode={template.tsxCode} duration={template.duration} />
+          <TemplateFrameThumbnail tsxCode={template.tsxCode} duration={template.duration} format={format} />
         )}
 
         {/* Hover actions */}
@@ -409,8 +570,13 @@ function TemplateCard({ template, onOpen, onRemix, remixing, isFavorited, onFavo
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-medium text-gray-900">{template.name}</div>
         </div>
-        <div className="ml-2 shrink-0 text-xs text-gray-500">
-          {views} • {favorites} • {uses}
+        <div className="ml-2 shrink-0 flex items-center gap-3 text-xs text-gray-500">
+          <span className="inline-flex items-center gap-1">
+            <Heart className="h-3.5 w-3.5" aria-hidden /> {favorites}
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <Shuffle className="h-3.5 w-3.5" aria-hidden /> {uses}
+          </span>
         </div>
       </div>
     </div>
@@ -442,7 +608,7 @@ function SkeletonCard() {
   );
 }
 
-function TemplateFrameThumbnail({ tsxCode, duration }: { tsxCode?: string; duration?: number }) {
+function TemplateFrameThumbnail({ tsxCode, duration, format }: { tsxCode?: string; duration?: number; format: VideoFormat }) {
   const [component, setComponent] = useState<React.ComponentType | null>(null);
   const [errored, setErrored] = useState(false);
 
@@ -487,14 +653,15 @@ function TemplateFrameThumbnail({ tsxCode, duration }: { tsxCode?: string; durat
   }
 
   const safeInitialFrame = Math.min(15, Math.floor((duration ?? 150) / 2));
+  const dims = getFormatDims(format);
 
   return (
     <Player
       component={component}
       durationInFrames={duration ?? 150}
       fps={30}
-      compositionWidth={1920}
-      compositionHeight={1080}
+      compositionWidth={dims.width}
+      compositionHeight={dims.height}
       controls={false}
       showVolumeControls={false}
       autoPlay={false}
@@ -504,7 +671,7 @@ function TemplateFrameThumbnail({ tsxCode, duration }: { tsxCode?: string; durat
   );
 }
 
-function TemplateHoverVideo({ tsxCode, duration }: { tsxCode?: string; duration?: number }) {
+function TemplateHoverVideo({ tsxCode, duration, format }: { tsxCode?: string; duration?: number; format: VideoFormat }) {
   const [component, setComponent] = useState<React.ComponentType | null>(null);
   const [errored, setErrored] = useState(false);
 
@@ -542,13 +709,14 @@ function TemplateHoverVideo({ tsxCode, duration }: { tsxCode?: string; duration?
     return <div className="flex h-full w-full items-center justify-center text-gray-400">No preview</div>;
   }
 
+  const dims = getFormatDims(format);
   return (
     <Player
       component={component}
       durationInFrames={duration ?? 150}
       fps={30}
-      compositionWidth={1920}
-      compositionHeight={1080}
+      compositionWidth={dims.width}
+      compositionHeight={dims.height}
       controls={false}
       showVolumeControls={false}
       autoPlay
@@ -558,12 +726,16 @@ function TemplateHoverVideo({ tsxCode, duration }: { tsxCode?: string; duration?
   );
 }
 
-function TemplateModal({ templateId, onClose, onRemix, remixing, isFavorited, onFavorite, fallbackTemplate }: { templateId: string | null; onClose: () => void; onRemix?: () => void; remixing?: boolean; isFavorited?: boolean; onFavorite?: () => void; fallbackTemplate?: any }) {
+function TemplateModal({ templateId, onClose, onRemix, remixing, isFavorited, onFavorite, fallbackTemplate, displayFormat }: { templateId: string | null; onClose: () => void; onRemix?: () => void; remixing?: boolean; isFavorited?: boolean; onFavorite?: () => void; fallbackTemplate?: any; displayFormat: VideoFormat }) {
   const open = Boolean(templateId);
-  const { data: templateFromDb } = api.templates.getById.useQuery(templateId as string, {
-    enabled: open && !!templateId,
-  });
-  const template = templateFromDb ?? fallbackTemplate;
+  // Try to load community template details (scenes) to render preview
+  const { data: communityDetails } = api.community.getTemplate.useQuery(
+    { templateId: templateId as string },
+    { enabled: open && !!templateId }
+  );
+  const template = fallbackTemplate;
+  const firstSceneTsx = communityDetails?.scenes?.[0]?.tsxCode ?? (template as any)?.tsxCode;
+  const firstSceneDuration = communityDetails?.scenes?.[0]?.duration ?? (template as any)?.duration;
 
   return (
     <Dialog open={open} onOpenChange={(v) => (!v ? onClose() : undefined)}>
@@ -610,9 +782,13 @@ function TemplateModal({ templateId, onClose, onRemix, remixing, isFavorited, on
 
         {/* Full-width preview at 80vw */}
         <div className="w-full" style={{ maxHeight: '85vh' }}>
-          <div className="w-full aspect-video m-0">
+          <div className={cn(
+            displayFormat === 'portrait' ? 'w-full aspect-[9/16] m-0' :
+            displayFormat === 'square' ? 'w-full aspect-square m-0' :
+            'w-full aspect-video m-0'
+          )}>
             {template && (
-              <TemplateHoverVideo tsxCode={(template as any).tsxCode} duration={(template as any).duration} />
+              <TemplateHoverVideo tsxCode={firstSceneTsx} duration={firstSceneDuration} format={displayFormat} />
             )}
           </div>
         </div>
