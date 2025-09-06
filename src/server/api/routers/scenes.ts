@@ -283,6 +283,9 @@ export const scenesRouter = createTRPCRouter({
         jsCode: compilationResult.success ? compilationResult.jsCode : null,
         jsCompiledAt: compilationResult.success ? compilationResult.compiledAt : null,
         compilationError: compilationResult.success ? null : compilationResult.error,
+        // Phase 2 additive fields
+        compilationVersion: 1,
+        // compileMeta left null in this path (compile-scene util has no timings yet)
         updatedAt: new Date(),
       };
       if (input.overwriteDuration && extracted && extracted > 0) {

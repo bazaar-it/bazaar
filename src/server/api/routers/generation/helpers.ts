@@ -36,6 +36,9 @@ async function prepareSceneDataWithCompilation(
     jsCode: compilationResult.jsCode,    // Always has a value (compiled or fallback)
     jsCompiledAt: compilationResult.compiledAt,
     compilationError: compilationResult.compilationError || null,
+    // Phase 2 fields for callers that persist directly
+    compilationVersion: 1,
+    compileMeta: compilationResult.metadata?.compile_meta,
   };
 }
 

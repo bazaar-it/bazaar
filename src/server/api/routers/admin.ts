@@ -1387,86 +1387,49 @@ export default function GeneratedScene() {
         }
       }
 
-      // 🚨 COMPREHENSIVE USER ANALYTICS QUERY WITH ENHANCED FILTERING
-      const baseQuery = db
+      // 🚨 OPTIMIZED QUERY - Separate basic info from aggregates
+      // First get basic user info with simple joins
+      const usersQuery = db
         .select({
-          // Basic user info
           id: users.id,
           name: users.name,
           email: users.email,
           image: users.image,
           isAdmin: users.isAdmin,
           signupDate: users.createdAt,
-          
-          // OAuth provider info
           oauthProvider: accounts.provider,
-          
-          // Project metrics
-          totalProjects: sql<number>`COUNT(DISTINCT ${projects.id})`.as('total_projects'),
-          
-          // Scene metrics  
-          totalScenes: sql<number>`COUNT(DISTINCT ${scenes.id})`.as('total_scenes'),
-          
-          // Chat/prompt metrics
-          totalMessages: sql<number>`COUNT(DISTINCT ${messages.id})`.as('total_messages'),
-          totalUserPrompts: sql<number>`COUNT(DISTINCT CASE WHEN ${messages.role} = 'user' THEN ${messages.id} END)`.as('total_user_prompts'),
-          
-          // Error message tracking
-          totalErrorMessages: sql<number>`COUNT(DISTINCT CASE WHEN ${messages.status} = 'error' THEN ${messages.id} END)`.as('total_error_messages'),
-          
-          // Image usage metrics - simplified to avoid double-counting
-          promptsWithImages: sql<number>`COUNT(DISTINCT CASE WHEN ${messages.imageUrls} IS NOT NULL AND jsonb_array_length(${messages.imageUrls}) > 0 THEN ${messages.id} END)`.as('prompts_with_images'),
-          totalImagesUploaded: sql<number>`COALESCE(SUM(CASE WHEN ${messages.imageUrls} IS NOT NULL THEN jsonb_array_length(${messages.imageUrls}) ELSE 0 END), 0)`.as('total_images_uploaded'),
-          
-          // Activity metrics
-          firstActivity: sql<Date>`MIN(${messages.createdAt})`.as('first_activity'),
-          lastActivity: sql<Date>`MAX(${messages.createdAt})`.as('last_activity'),
-          
-          // Engagement metrics
-          totalSceneIterations: sql<number>`COUNT(DISTINCT ${sceneIterations.id})`.as('total_scene_iterations'),
-          
-          // Advanced behavior metrics
-          complexEdits: sql<number>`COUNT(DISTINCT CASE WHEN ${sceneIterations.editComplexity} = 'structural' THEN ${sceneIterations.id} END)`.as('complex_edits'),
-          creativeEdits: sql<number>`COUNT(DISTINCT CASE WHEN ${sceneIterations.editComplexity} = 'creative' THEN ${sceneIterations.id} END)`.as('creative_edits'),
-          surgicalEdits: sql<number>`COUNT(DISTINCT CASE WHEN ${sceneIterations.editComplexity} = 'surgical' THEN ${sceneIterations.id} END)`.as('surgical_edits'),
-          
-          // Project memory insights
-          userPreferences: sql<number>`COUNT(DISTINCT CASE WHEN ${projectMemory.memoryType} = 'user_preference' THEN ${projectMemory.id} END)`.as('user_preferences'),
         })
         .from(users)
         .leftJoin(accounts, eq(users.id, accounts.userId))
-        .leftJoin(projects, eq(users.id, projects.userId))
-        .leftJoin(scenes, eq(projects.id, scenes.projectId))
-        .leftJoin(messages, eq(projects.id, messages.projectId))
-        .leftJoin(sceneIterations, eq(projects.id, sceneIterations.projectId))
-        .leftJoin(projectMemory, eq(projects.id, projectMemory.projectId))
         .$dynamic();
 
-      // Execute the query with conditional WHERE clause, groupBy and ordering
-      let userAnalytics = await (whereConditions.length > 0 
-        ? baseQuery.where(and(...whereConditions))
-        : baseQuery
-      )
-        .groupBy(users.id, users.name, users.email, users.image, users.isAdmin, users.createdAt, accounts.provider)
+      // Apply WHERE conditions
+      const filteredUsersQuery = whereConditions.length > 0 
+        ? usersQuery.where(and(...whereConditions))
+        : usersQuery;
+
+      // Get total count for pagination
+      const countResult = await db
+        .select({ count: sql<number>`COUNT(DISTINCT ${users.id})` })
+        .from(users)
+        .leftJoin(accounts, eq(users.id, accounts.userId))
+        .where(whereConditions.length > 0 ? and(...whereConditions) : undefined);
+      
+      const totalCount = countResult[0]?.count || 0;
+
+      // Get paginated users
+      let baseUsers = await filteredUsersQuery
         .orderBy(
           sortOrder === 'desc' 
-            ? desc(
-                sortBy === 'signup_date' ? users.createdAt :
-                sortBy === 'last_activity' ? sql`MAX(${messages.createdAt})` :
-                sortBy === 'total_projects' ? sql`COUNT(DISTINCT ${projects.id})` :
-                sql`COUNT(DISTINCT CASE WHEN ${messages.role} = 'user' THEN ${messages.id} END)`
-              )
-            : asc(
-                sortBy === 'signup_date' ? users.createdAt :
-                sortBy === 'last_activity' ? sql`MAX(${messages.createdAt})` :
-                sortBy === 'total_projects' ? sql`COUNT(DISTINCT ${projects.id})` :
-                sql`COUNT(DISTINCT CASE WHEN ${messages.role} = 'user' THEN ${messages.id} END)`
-              )
-        );
+            ? desc(sortBy === 'signup_date' ? users.createdAt : users.createdAt)
+            : asc(sortBy === 'signup_date' ? users.createdAt : users.createdAt)
+        )
+        .limit(limit * 2) // Get extra to handle post-filters
+        .offset(offset);
 
-      // Apply post-query filtering (since Drizzle doesn't support complex HAVING clauses well)
+      // Filter by auth provider
       if (authProvider !== 'all') {
-        userAnalytics = userAnalytics.filter(user => {
+        baseUsers = baseUsers.filter(user => {
           if (authProvider === 'unknown') {
             return !user.oauthProvider;
           }
@@ -1474,8 +1437,80 @@ export default function GeneratedScene() {
         });
       }
 
+      // OPTIMIZED: Get stats only for visible users
+      const userIds = baseUsers.map(u => u.id).slice(0, limit);
+      
+      if (userIds.length === 0) {
+        return {
+          users: [],
+          totalCount: 0,
+          hasMore: false,
+          appliedFilters: input,
+        };
+      }
+
+      // Get project counts
+      const projectStats = await db
+        .select({
+          userId: projects.userId,
+          totalProjects: sql<number>`COUNT(DISTINCT ${projects.id})`.as('total_projects'),
+        })
+        .from(projects)
+        .where(inArray(projects.userId, userIds))
+        .groupBy(projects.userId);
+
+      // Get message stats and last activity
+      const messageStats = await db
+        .select({
+          userId: projects.userId,
+          totalUserPrompts: sql<number>`COUNT(DISTINCT CASE WHEN ${messages.role} = 'user' THEN ${messages.id} END)`.as('total_user_prompts'),
+          lastActivity: sql<Date>`MAX(${messages.createdAt})`.as('last_activity'),
+        })
+        .from(messages)
+        .innerJoin(projects, eq(messages.projectId, projects.id))
+        .where(inArray(projects.userId, userIds))
+        .groupBy(projects.userId);
+
+      // Get scene counts
+      const sceneStats = await db
+        .select({
+          userId: projects.userId,
+          totalScenes: sql<number>`COUNT(DISTINCT ${scenes.id})`.as('total_scenes'),
+        })
+        .from(scenes)
+        .innerJoin(projects, eq(scenes.projectId, projects.id))
+        .where(inArray(projects.userId, userIds))
+        .groupBy(projects.userId);
+
+      // Combine all data
+      const projectStatsMap = new Map(projectStats.map(s => [s.userId, s]));
+      const messageStatsMap = new Map(messageStats.map(s => [s.userId, s]));
+      const sceneStatsMap = new Map(sceneStats.map(s => [s.userId, s]));
+
+      const enrichedUsers = baseUsers.slice(0, limit).map(user => ({
+        ...user,
+        totalProjects: projectStatsMap.get(user.id)?.totalProjects || 0,
+        totalUserPrompts: messageStatsMap.get(user.id)?.totalUserPrompts || 0,
+        totalScenes: sceneStatsMap.get(user.id)?.totalScenes || 0,
+        lastActivity: messageStatsMap.get(user.id)?.lastActivity || null,
+        // Set defaults for unused fields to maintain compatibility
+        totalMessages: 0,
+        totalErrorMessages: 0,
+        promptsWithImages: 0,
+        totalImagesUploaded: 0,
+        firstActivity: null,
+        totalSceneIterations: 0,
+        complexEdits: 0,
+        creativeEdits: 0,
+        surgicalEdits: 0,
+        userPreferences: 0,
+      }));
+
+      // Apply post-filters
+      let filteredUsers = enrichedUsers;
+
       if (projectsFilter !== 'all') {
-        userAnalytics = userAnalytics.filter(user => {
+        filteredUsers = filteredUsers.filter(user => {
           const projectCount = user.totalProjects;
           switch (projectsFilter) {
             case 'none':
@@ -1494,7 +1529,7 @@ export default function GeneratedScene() {
 
       if (activityFilter !== 'all') {
         const now = new Date();
-        userAnalytics = userAnalytics.filter(user => {
+        filteredUsers = filteredUsers.filter(user => {
           if (activityFilter === 'never') {
             return !user.lastActivity;
           }
@@ -1520,9 +1555,24 @@ export default function GeneratedScene() {
         });
       }
 
-      // Apply pagination after filtering
-      const totalCount = userAnalytics.length;
-      const paginatedUsers = userAnalytics.slice(offset, offset + limit);
+      // Sort if needed (for activity/project sorting)
+      if (sortBy === 'last_activity') {
+        filteredUsers.sort((a, b) => {
+          const aTime = a.lastActivity ? new Date(a.lastActivity).getTime() : 0;
+          const bTime = b.lastActivity ? new Date(b.lastActivity).getTime() : 0;
+          return sortOrder === 'desc' ? bTime - aTime : aTime - bTime;
+        });
+      } else if (sortBy === 'total_projects') {
+        filteredUsers.sort((a, b) => {
+          return sortOrder === 'desc' ? b.totalProjects - a.totalProjects : a.totalProjects - b.totalProjects;
+        });
+      } else if (sortBy === 'total_prompts') {
+        filteredUsers.sort((a, b) => {
+          return sortOrder === 'desc' ? b.totalUserPrompts - a.totalUserPrompts : a.totalUserPrompts - b.totalUserPrompts;
+        });
+      }
+
+      const paginatedUsers = filteredUsers;
 
       return {
         users: paginatedUsers,

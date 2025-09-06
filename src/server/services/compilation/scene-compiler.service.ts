@@ -20,6 +20,18 @@ export interface CompilationResult {
   conflicts?: ConflictResolution[];
   requiresClientFallback: boolean;
   compiledAt: Date;
+  // Phase 2 metadata and aliases for downstream usage
+  metadata?: {
+    compilation_version: number;
+    compile_meta: {
+      timings: { ms: number };
+      tool: string;
+      timestamp: string;
+      [key: string]: any;
+    };
+  };
+  error?: string; // alias of compilationError
+  autoFixed?: boolean; // true when code was modified to resolve conflicts
 }
 
 export interface ConflictResolution {
@@ -34,6 +46,7 @@ export interface CompilationContext {
   sceneId: string;
   existingScenes?: Pick<Scene, 'id' | 'tsxCode' | 'name'>[];
   strictMode?: boolean;  // Only true for export
+  isBackfill?: boolean;  // Phase 2: indicate backfill run
 }
 
 /**
@@ -94,6 +107,17 @@ export class SceneCompilerService {
     }
 
     // Step 4: Always return a valid result
+    const duration = Date.now() - startTime;
+    const meta = {
+      compilation_version: 1,
+      compile_meta: {
+        timings: { ms: duration },
+        tool: 'scene-compiler-v1',
+        timestamp: new Date().toISOString(),
+        ...(context.isBackfill ? { backfilled: true } : {}),
+      },
+    } as const;
+
     const result: CompilationResult = {
       success: !compilationError,
       tsxCode: modifiedTsx,  // Return potentially auto-fixed code
@@ -101,10 +125,11 @@ export class SceneCompilerService {
       compilationError,
       conflicts: conflicts.length > 0 ? conflicts : undefined,
       requiresClientFallback: false,  // We always provide JS now
-      compiledAt: new Date()
+      compiledAt: new Date(),
+      metadata: meta,
+      error: compilationError,
+      autoFixed: conflicts.length > 0,
     };
-
-    const duration = Date.now() - startTime;
     console.log(`[SceneCompiler] Scene ${context.sceneId} processed in ${duration}ms - Success: ${result.success}`);
 
     return result;
@@ -223,6 +248,7 @@ export class SceneCompilerService {
     let jsCode = transformedCode
       .replace(/export\s+default\s+function\s+(\w+)/g, 'function $1')
       .replace(/export\s+default\s+/g, '')
+      .replace(/export\s+function\s+(\w+)\s*\(/g, 'function $1(')
       .replace(/export\s+const\s+(\w+)\s*=\s*/g, 'const $1 = ')
       .replace(/export\s+\{[^}]*\};?\s*/g, '');
 
@@ -268,6 +294,26 @@ export class SceneCompilerService {
     out = out
       .replace(/React\.createElement\(\s*IconifyIcon\s*,/g, 'React.createElement(window.IconifyIcon,')
       .replace(/React\.createElement\(\s*Icon\s*,/g, 'React.createElement(window.IconifyIcon,');
+    // Consolidate multiple top-level Remotion destructures into one at the top
+    try {
+      const remotionRegex = /(^|\n)\s*const\s*\{([^}]*)\}\s*=\s*window\.Remotion\s*;?/g;
+      const names = new Set<string>();
+      let match: RegExpExecArray | null;
+      while ((match = remotionRegex.exec(out)) !== null) {
+        const inner = match[2] || '';
+        inner.split(',').forEach((raw) => {
+          const name = raw.trim().split(/\s+/)[0];
+          if (name) names.add(name);
+        });
+      }
+      if (names.size > 0) {
+        // Remove all existing destructures
+        out = out.replace(remotionRegex, '\n');
+        const ordered = Array.from(names);
+        const single = `const { ${ordered.join(', ')} } = window.Remotion;\n`;
+        out = single + out.trimStart();
+      }
+    } catch {}
 
     return out;
   }

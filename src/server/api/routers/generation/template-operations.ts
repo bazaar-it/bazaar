@@ -94,6 +94,12 @@ export const addTemplate = protectedProcedure
         jsCode: compilationResult.jsCode,    // Always has a value (compiled or fallback)
         jsCompiledAt: compilationResult.compiledAt,
         compilationError: compilationResult.compilationError || null,
+        compilationVersion: 1,
+        compileMeta: compilationResult.metadata?.compile_meta || {
+          timings: { ms: 0 },
+          tool: 'scene-compiler-v1',
+          timestamp: new Date().toISOString(),
+        },
         duration: templateDuration,
         order: sceneOrder,
         props: {},

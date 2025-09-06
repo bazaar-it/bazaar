@@ -213,6 +213,9 @@ export const scenes = createTable(
     jsCode: d.text("js_code"), // Pre-compiled JavaScript for browser execution
     jsCompiledAt: d.timestamp("js_compiled_at", { withTimezone: true }), // When TSX was compiled to JS
     compilationError: d.text("compilation_error"), // Error message if compilation failed
+    // Phase 2: Versioned artifact + compile metadata (additive, safe)
+    compilationVersion: d.integer("compilation_version").default(1),
+    compileMeta: d.jsonb("compile_meta"),
   }),
   (t) => [
     index("scene_project_idx").on(t.projectId),
