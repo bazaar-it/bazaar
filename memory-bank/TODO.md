@@ -1,5 +1,9 @@
 # Main TODO List
 
+## Sprint 115 — Community (Docs & Planning)
+- Seeded sprint docs: data model, auth, UX, metrics, migration plan
+- Next: align with Sprint 93 admin templates for code reuse
+- Plan additive migrations for `community_*` tables (dev only first)
 
 1. test and poropely integrate the promo code functilaity. migrations are not pushed, neither to prod and dev db. 
 

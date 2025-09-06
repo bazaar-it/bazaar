@@ -1833,3 +1833,96 @@ export const autofixSessionsRelations = relations(autofixSessions, ({ one, many 
   }),
   metrics: many(autofixMetrics),
 }))
+
+// --- Community MVP (Templates shared by users) ---
+
+export const communityTemplates = createTable("community_template", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  slug: d.varchar("slug", { length: 255 }).notNull().unique(),
+  title: d.varchar("title", { length: 255 }).notNull(),
+  description: d.text("description"),
+  ownerUserId: d.varchar("owner_user_id", { length: 255 }).references(() => users.id),
+  sourceProjectId: d.uuid("source_project_id").references(() => projects.id),
+  thumbnailUrl: d.text("thumbnail_url"),
+  supportedFormats: d
+    .jsonb("supported_formats")
+    .$type<('landscape' | 'portrait' | 'square')[]>()
+    .default(["landscape", "portrait", "square"]),
+  tags: d.jsonb("tags").$type<string[]>().default([]),
+  category: d.varchar("category", { length: 100 }),
+  visibility: d.varchar("visibility", { length: 50 }).notNull().default("public"), // 'public' | 'unlisted'
+  status: d.varchar("status", { length: 50 }).notNull().default("active"), // 'active' | 'disabled'
+  viewsCount: d.bigint("views_count", { mode: "number" }).notNull().default(0),
+  favoritesCount: d.bigint("favorites_count", { mode: "number" }).notNull().default(0),
+  usesCount: d.bigint("uses_count", { mode: "number" }).notNull().default(0),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: d.timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}), (t) => [
+  index("community_templates_owner_idx").on(t.ownerUserId),
+  index("community_templates_visibility_idx").on(t.visibility, t.status),
+  index("community_templates_created_idx").on(t.createdAt),
+])
+
+export const communityTemplateScenes = createTable("community_template_scene", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  templateId: d
+    .uuid("template_id")
+    .notNull()
+    .references(() => communityTemplates.id, { onDelete: "cascade" }),
+  sceneIndex: d.integer("scene_index").notNull(),
+  title: d.varchar("title", { length: 255 }),
+  tsxCode: d.text("tsx_code").notNull(),
+  duration: d.integer("duration").notNull(),
+  previewFrame: d.integer("preview_frame").default(15),
+  codeHash: d.text("code_hash"),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}), (t) => [
+  index("community_template_scenes_template_idx").on(t.templateId),
+  unique("community_template_scenes_unique_idx").on(t.templateId, t.sceneIndex),
+])
+
+export const communityFavorites = createTable("community_favorite", (d) => ({
+  userId: d
+    .varchar("user_id", { length: 255 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  templateId: d
+    .uuid("template_id")
+    .notNull()
+    .references(() => communityTemplates.id, { onDelete: "cascade" }),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}), (t) => [
+  primaryKey({ name: "community_favorite_pk", columns: [t.userId, t.templateId] }),
+  index("community_favorites_template_idx").on(t.templateId),
+])
+
+export const communityEvents = createTable("community_event", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  templateId: d
+    .uuid("template_id")
+    .notNull()
+    .references(() => communityTemplates.id, { onDelete: "cascade" }),
+  userId: d.varchar("user_id", { length: 255 }),
+  eventType: d.varchar("event_type", { length: 50 }).notNull(), // 'view','favorite','unfavorite','use','mix','prompt','click'
+  source: d.varchar("source", { length: 50 }), // 'in_app_panel','community_site','direct'
+  projectId: d.uuid("project_id"),
+  sceneCount: d.integer("scene_count"),
+  referrer: d.text("referrer"),
+  userAgent: d.text("user_agent"),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}), (t) => [
+  index("community_events_template_idx").on(t.templateId, t.createdAt),
+  index("community_events_type_idx").on(t.eventType, t.createdAt),
+])
+
+export const communityMetricsDaily = createTable("community_metrics_daily", (d) => ({
+  templateId: d
+    .uuid("template_id")
+    .notNull()
+    .references(() => communityTemplates.id, { onDelete: "cascade" }),
+  day: d.date("day").notNull(),
+  eventType: d.varchar("event_type", { length: 50 }).notNull(), // 'view','favorite','use'
+  count: d.bigint("count", { mode: "number" }).notNull().default(0),
+}), (t) => [
+  primaryKey({ name: "community_metrics_daily_pk", columns: [t.templateId, t.day, t.eventType] }),
+])
