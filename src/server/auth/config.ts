@@ -127,6 +127,25 @@ export const authConfig = {
         console.error(`[Auth] Failed to create credits for user ${user.email}:`, error);
         // Don't throw - let signup continue even if credits fail
       }
+
+      // Send email notification to admin about new user
+      try {
+        // Import the notification function
+        const { sendNewUserNotification } = await import('~/server/services/email/notifications');
+        
+        // Try to determine the provider from recent account entries
+        // Fixed: accounts table doesn't have createdAt column, just get the first account
+        const recentAccount = await db.query.accounts.findFirst({
+          where: eq(accounts.userId, user.id),
+        });
+        const provider = recentAccount?.provider || 'Unknown';
+        
+        // Send notification email
+        await sendNewUserNotification(user, provider);
+      } catch (error) {
+        console.error(`[Auth] Failed to send new user notification:`, error);
+        // Don't throw - notifications should not break signup
+      }
     }
   },
   // secret: env.AUTH_SECRET, // Implicitly uses AUTH_SECRET env var in v5
