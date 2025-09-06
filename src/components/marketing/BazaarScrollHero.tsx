@@ -1,5 +1,8 @@
 "use client";
 import { useEffect, useRef, useLayoutEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { api } from "~/trpc/react";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import ParticleEffect from "~/components/marketing/ParticleEffect";
@@ -27,6 +30,28 @@ export default function BazaarScrollHero() {
   const marketingPlayerRef = useRef<HTMLDivElement>(null);
   const showcaseRef = useRef<HTMLDivElement>(null);
   const otherPlayersRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  const { data: session, status } = useSession();
+  const createProject = api.project.create.useMutation({
+    onSuccess: (result) => router.push(`/projects/${result.projectId}/generate`),
+  });
+  const { data: projects } = api.project.list.useQuery(undefined, {
+    enabled: status === "authenticated" && !!session?.user,
+  });
+
+  const handleGoToDesign = () => {
+    if (status !== "authenticated" || !session?.user) {
+      router.push("/login?redirect=/projects/quick-create");
+      return;
+    }
+    if (projects && projects.length > 0) {
+      router.push(`/projects/${projects[0].id}/generate`);
+      return;
+    }
+    if (!createProject.isPending) {
+      createProject.mutate({});
+    }
+  };
 
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
@@ -180,7 +205,7 @@ export default function BazaarScrollHero() {
           {/* CTA Button */}
           <div ref={ctaRef} className="mb-8">
             <div className="inline-block p-[2px] bg-gradient-to-r from-pink-500 to-orange-500 rounded-lg">
-              <button className="bg-white px-6 md:px-8 py-3 md:py-4 rounded-lg text-base md:text-lg font-semibold hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white transition-colors">
+              <button onClick={handleGoToDesign} className="bg-white px-6 md:px-8 py-3 md:py-4 rounded-lg text-base md:text-lg font-semibold hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white transition-colors">
                 Start Creating Now
               </button>
             </div>
@@ -238,7 +263,7 @@ export default function BazaarScrollHero() {
             {/* CTA */}
             <div className="text-center mt-12">
               <div className="inline-block p-[2px] bg-gradient-to-r from-pink-500 to-orange-500 rounded-lg">
-                <button className="bg-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white transition-colors pointer-events-auto">
+                <button onClick={handleGoToDesign} className="bg-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white transition-colors pointer-events-auto">
                   Create Your Own Video Now
                 </button>
               </div>

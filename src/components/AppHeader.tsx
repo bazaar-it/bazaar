@@ -3,6 +3,9 @@
 import Image from "next/image";
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
+import { useSession } from "next-auth/react";
+import { usePathname } from "next/navigation";
+import { api } from "~/trpc/react";
 import { Input } from "~/components/ui/input";
 import { DownloadIcon, LogOutIcon, CheckIcon, XIcon, ShareIcon, Copy, Loader2, Layers } from "lucide-react";
 import { signOut } from "next-auth/react";
@@ -14,7 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
-import { api } from "~/trpc/react";
+// (removed duplicate api import)
 import { toast } from "sonner";
 import { PromptUsageDropdown } from "~/components/usage/PromptUsageDropdown";
 import { generateCleanFilename } from "~/lib/utils/filename";
@@ -71,6 +74,17 @@ export default function AppHeader({
   projectId,
   onCreateTemplate,
 }: AppHeaderProps) {
+  const { data: session } = useSession();
+  const pathname = usePathname();
+  const showCreateButton = pathname?.startsWith('/community');
+  const listProjects = api.project.list.useQuery(undefined, { enabled: false });
+  const createProjectQuick = api.project.create.useMutation({
+    onSuccess: (res) => {
+      if (res?.projectId) {
+        window.location.href = `/projects/${res.projectId}/generate`;
+      }
+    }
+  });
   const [isEditingName, setIsEditingName] = useState(false);
   const [newTitle, setNewTitle] = useState(projectTitle || "");
   const [isSharing, setIsSharing] = useState(false);
@@ -277,7 +291,7 @@ export default function AppHeader({
   };
 
   return (
-    <header className="flex items-center px-6 py-3 w-full bg-background z-10" style={{ height: 68 }}>
+    <header className="flex items-center px-6 py-3 w-full bg-background z-10 border-b border-gray-200/70" style={{ height: 68 }}>
       {/* Left: Logo */}
       <div className="flex items-center flex-shrink-0 gap-3">
         <a href="/" className="flex items-center" aria-label="Go to homepage">
@@ -361,8 +375,35 @@ export default function AppHeader({
         ) : null}
       </div>
 
-      {/* Right: Share button and User info */}
+      {/* Right: Share button, Create, and User info */}
       <div className="flex items-center gap-2 flex-shrink-0">
+        {/* Create button - always visible; routes to quick-create */}
+        {showCreateButton && (
+        <Button
+          variant="default"
+          size="sm"
+          className="gap-2 rounded-[15px] shadow-sm bg-black hover:bg-gray-800 text-white"
+          onClick={async () => {
+            // If not logged in, go to login; on return, middleware routes to quick create
+            if (!session?.user) {
+              window.location.href = "/login?redirect=/projects/quick-create";
+              return;
+            }
+            // Try to open most recent project; fallback to create
+            const result = await listProjects.refetch();
+            const projects = result.data || [];
+            if (Array.isArray(projects) && projects.length > 0 && typeof projects[0]?.id === 'string') {
+              const mostRecentId = projects[0].id as string;
+              window.location.href = `/projects/${mostRecentId}/generate`;
+            } else if (!createProjectQuick.isPending) {
+              createProjectQuick.mutate({});
+            }
+          }}
+        >
+          Create
+        </Button>
+        )}
+
         {/* Share button - simplified auto-copy functionality */}
         {projectId && (
           <>

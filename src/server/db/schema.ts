@@ -1878,7 +1878,7 @@ export const communityTemplateScenes = createTable("community_template_scene", (
   createdAt: d.timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }), (t) => [
   index("community_template_scenes_template_idx").on(t.templateId),
-  unique("community_template_scenes_unique_idx").on(t.templateId, t.sceneIndex),
+  uniqueIndex("community_template_scenes_unique_idx").on(t.templateId, t.sceneIndex),
 ])
 
 export const communityFavorites = createTable("community_favorite", (d) => ({
