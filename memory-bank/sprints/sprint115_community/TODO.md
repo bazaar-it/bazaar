@@ -198,4 +198,12 @@
 - Sprint 93: Admin Templates
 - Current template implementation
 - Authentication documentation
+
+## 🔗 External Lineage (Prod IDs)
+
+- [ ] Add `external_scene_id` (text) to `community_template_scene` (additive migration; FK‑safe in dev).
+- [ ] Update dev→dev seed to set `external_scene_id = sourceSceneId` for redundancy.
+- [ ] Update prod→dev seed to set `external_scene_id = prod scene id` and keep `sourceSceneId = null`.
+- [ ] Trending: if no `sourceSceneId` but `external_scene_id` present and `PROD_DATABASE_URL` configured, fetch iteration counts from prod and sum per template; else depth=0.
+- [ ] Re‑run prod seeding (21 days, limit 200–500) and verify non‑zero “Prompts n” for prod‑sourced templates.
 - Vercel subdomain guide

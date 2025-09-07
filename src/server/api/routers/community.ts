@@ -11,6 +11,7 @@ import {
   scenes,
   users,
   communityAdminRatings,
+  sceneIterations,
 } from "~/server/db/schema";
 import { and, desc, eq, ilike, inArray, sql } from "drizzle-orm";
 
@@ -195,6 +196,30 @@ export const communityRouter = createTRPCRouter({
         ? items.filter((t) => (t.supportedFormats as string[] | null)?.includes(input.filter!.format!))
         : items;
 
+      // Helper: attach ownerName and scenesCount for display
+      async function attachOwnerMeta(list: typeof filtered) {
+        const ownerIds = Array.from(new Set(list.map((t) => t.ownerUserId).filter(Boolean))) as string[];
+        const owners = ownerIds.length
+          ? await db.execute<{ id: string; name: string | null }>(sql`SELECT ${users.id} as id, ${users.name} as name FROM ${users} WHERE ${users.id} IN (${sql.join(ownerIds, sql`,`)})`)
+          : { rows: [] } as any;
+        const map = new Map<string, string | null>();
+        for (const r of ((owners as any).rows ?? [])) map.set(r.id, r.name);
+        const ids = list.map((t) => t.id);
+        const countRows = ids.length ? await db.execute<{ template_id: string; n: number }>(sql`
+          SELECT ${communityTemplateScenes.templateId} as template_id, COUNT(*)::int as n
+          FROM ${communityTemplateScenes}
+          WHERE ${communityTemplateScenes.templateId} IN (${sql.join(ids, sql`,`)})
+          GROUP BY ${communityTemplateScenes.templateId}
+        `) : { rows: [] } as any;
+        const cnt = new Map<string, number>();
+        for (const r of ((countRows as any).rows ?? [])) cnt.set(r.template_id, Number(r.n));
+        return list.map((t) => ({
+          ...t,
+          ownerName: t.ownerUserId ? map.get(t.ownerUserId) ?? null : null,
+          scenesCount: cnt.get(t.id) ?? 1,
+        }));
+      }
+
       if (input.sort === "trending" && filtered.length > 0) {
         const ids = filtered.map((t) => t.id);
         // Admin rating averages
@@ -209,11 +234,13 @@ export const communityRouter = createTRPCRouter({
 
         // Iteration depth: count scene_iterations per source_scene_id and sum per template
         const iterRows = await db.execute<{ template_id: string; depth: number }>(sql`
-          SELECT cts.${communityTemplateScenes.templateId} as template_id, COALESCE(COUNT(si.id),0)::int as depth
-          FROM ${communityTemplateScenes} cts
-          LEFT JOIN ${sceneIterations} si ON si.${sceneIterations.sceneId} = cts.${communityTemplateScenes.sourceSceneId}
-          WHERE cts.${communityTemplateScenes.templateId} IN (${sql.join(ids, sql`,`)})
-          GROUP BY cts.${communityTemplateScenes.templateId}
+          SELECT ${communityTemplateScenes.templateId} as template_id,
+                 COALESCE(COUNT(${sceneIterations.id}), 0)::int as depth
+          FROM ${communityTemplateScenes}
+          LEFT JOIN ${sceneIterations}
+            ON ${sceneIterations.sceneId} = ${communityTemplateScenes.sourceSceneId}
+          WHERE ${communityTemplateScenes.templateId} IN (${sql.join(ids, sql`,`)})
+          GROUP BY ${communityTemplateScenes.templateId}
         `);
         const iterDepth = new Map<string, number>();
         for (const r of ((iterRows as any).rows ?? [])) iterDepth.set(r.template_id, Number(r.depth));
@@ -238,10 +265,12 @@ export const communityRouter = createTRPCRouter({
           return { t, score };
         });
         scored.sort((a, b) => b.score - a.score);
-        return { items: scored.map((s) => s.t), nextCursor: undefined };
+        const enriched = await attachOwnerMeta(scored.map((s) => s.t));
+        const enrichedWithDepth = enriched.map((t) => ({ ...t, iterationDepth: iterDepth.get(t.id) ?? 0 }));
+        return { items: enrichedWithDepth, nextCursor: undefined };
       }
-
-      return { items: filtered, nextCursor: undefined };
+      const enriched = await attachOwnerMeta(filtered);
+      return { items: enriched, nextCursor: undefined };
     }),
 
   // Get full template with scenes
@@ -361,6 +390,18 @@ export const communityRouter = createTRPCRouter({
         orderBy: [desc(communityTemplates.createdAt)],
       });
       return items;
+    }),
+
+  // Admin: disable a community template (soft-delete)
+  disableTemplate: protectedProcedure
+    .input(z.object({ templateId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const me = await db.query.users.findFirst({ where: eq(users.id, ctx.session.user.id) });
+      if (!me?.isAdmin) throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin only' });
+      await db.update(communityTemplates)
+        .set({ status: 'disabled' as any, updatedAt: new Date() })
+        .where(eq(communityTemplates.id, input.templateId));
+      return { ok: true };
     }),
 
   // Use template: copy scenes into user's project

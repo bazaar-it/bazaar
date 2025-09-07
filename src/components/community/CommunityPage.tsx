@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { api } from "~/trpc/react";
 import { Heart, Plus, ChevronDown, ChevronRight, ChevronLeft, Shuffle } from "lucide-react";
@@ -71,15 +71,23 @@ export default function CommunityPage() {
 
   // Fetch templates from community router (server filters format + search + category)
   const [sortBy, setSortBy] = useState<'trending'|'most-used'|'popular'|'recent'>('trending');
+  const [creatorFilterId, setCreatorFilterId] = useState<string | undefined>(undefined);
   const { data: communityList, isLoading } = api.community.listTemplates.useQuery({
     limit: 100,
     filter: {
       format,
       search: search || undefined,
       category: activeCategory || undefined,
+      creatorId: creatorFilterId || undefined,
     },
     sort: sortBy === 'most-used' ? 'most-used' : sortBy === 'popular' ? 'popular' : sortBy === 'recent' ? 'recent' : 'trending',
   });
+
+  // Set creator filter (used by TemplateCard)
+  const handleCreatorClick = useCallback((creatorId: string) => {
+    setActiveTab('explore');
+    setCreatorFilterId(creatorId);
+  }, []);
 
   // Fetch user favorites and mine tabs (lazy)
   const { data: myFavorites = [] } = api.community.getUserFavorites.useQuery(undefined, {
@@ -240,6 +248,8 @@ export default function CommunityPage() {
     favoritesCount?: number;
     creator?: { id: string; name: string | null } | null;
     isHardcoded?: boolean;
+    iterationDepth?: number;
+    scenesCount?: number;
   };
 
   const combinedTemplates: TemplateItem[] = useMemo(() => {
@@ -255,7 +265,9 @@ export default function CommunityPage() {
       thumbnailUrl: (t.thumbnailUrl as any) ?? null,
       usageCount: (t.usesCount as any) ?? 0,
       favoritesCount: (t.favoritesCount as any) ?? 0,
-      creator: null,
+      creator: t.ownerUserId ? { id: t.ownerUserId as any, name: (t as any).ownerName ?? null } : null,
+      iterationDepth: (t as any).iterationDepth ?? 0,
+      scenesCount: (t as any).scenesCount ?? 1,
       isHardcoded: false,
     }));
 
@@ -435,6 +447,15 @@ export default function CommunityPage() {
         <div className="mb-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-semibold">Community Templates</h1>
+            {creatorFilterId && (
+              <button
+                className="ml-2 rounded-full border px-2 py-0.5 text-xs text-gray-700 hover:bg-gray-50"
+                onClick={() => setCreatorFilterId(undefined)}
+                title="Clear creator filter"
+              >
+                Creator: {communityList?.items?.find((i:any)=>i.ownerUserId===creatorFilterId)?.ownerName || creatorFilterId} ✕
+              </button>
+            )}
             <div className="flex rounded-full border bg-white p-1">
               {(["explore","favorites","mine"] as const).map(tab => (
                 <button
@@ -534,6 +555,7 @@ export default function CommunityPage() {
                 onFavorite={() => toggleFavorite(t.id, t.isHardcoded)}
                 displayFormat={format}
                 overrides={countOverrides[t.id]}
+                onCreatorClick={(id: string) => handleCreatorClick(id)}
               />
             ))}
           </div>
@@ -561,7 +583,7 @@ function initialsFromName(name?: string | null) {
   return n.charAt(0).toUpperCase();
 }
 
-function TemplateCard({ template, onOpen, onRemix, remixing, isFavorited, onFavorite, displayFormat, overrides }: { template: any; onOpen: () => void; onRemix?: () => void; remixing?: boolean; isFavorited?: boolean; onFavorite?: () => void; displayFormat: VideoFormat; overrides?: { favoritesCount?: number; usageCount?: number } }) {
+function TemplateCard({ template, onOpen, onRemix, remixing, isFavorited, onFavorite, displayFormat, overrides, onCreatorClick }: { template: any; onOpen: () => void; onRemix?: () => void; remixing?: boolean; isFavorited?: boolean; onFavorite?: () => void; displayFormat: VideoFormat; overrides?: { favoritesCount?: number; usageCount?: number }; onCreatorClick?: (id: string) => void }) {
   const [hovered, setHovered] = useState(false);
   const format = displayFormat;
 
@@ -633,19 +655,38 @@ function TemplateCard({ template, onOpen, onRemix, remixing, isFavorited, onFavo
               : cn(avatar.color, "text-white")
           )}
           style={isBazaarTemplate ? { fontFamily: 'Inter, ui-sans-serif, system-ui' } : undefined}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (template?.creator?.id && onCreatorClick) onCreatorClick(template.creator.id);
+          }}
         >
-          <span className="text-sm font-medium">{isBazaarTemplate ? "B" : avatar.letter}</span>
+          <span className="text-sm font-medium" title={template?.creator?.name || (isBazaarTemplate ? 'Bazaar' : 'User')}>
+            {isBazaarTemplate ? "B" : avatar.letter}
+          </span>
         </div>
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-medium text-gray-900">{template.name}</div>
+          {template?.creator?.name && (
+            <div className="truncate text-[11px] text-gray-500">by {template.creator.name}</div>
+          )}
         </div>
         <div className="ml-2 shrink-0 flex items-center gap-3 text-xs text-gray-500">
+          {typeof template.scenesCount === 'number' && (
+            <span className="inline-flex items-center gap-1" title="Number of scenes in this project">
+              {template.scenesCount} scenes
+            </span>
+          )}
           <span className="inline-flex items-center gap-1">
             <Heart className="h-3.5 w-3.5" aria-hidden /> {favorites}
           </span>
           <span className="inline-flex items-center gap-1">
             <Shuffle className="h-3.5 w-3.5" aria-hidden /> {uses}
           </span>
+          {typeof (template as any).iterationDepth === 'number' && (
+            <span className="inline-flex items-center gap-1" title="Prompt iterations">
+              Prompts {(template as any).iterationDepth}
+            </span>
+          )}
         </div>
       </div>
     </div>
@@ -807,9 +848,19 @@ function TemplateModal({ templateId, onClose, onRemix, remixing, isFavorited, on
     onSuccess: () => toast.success('Rating saved'),
     onError: (e) => toast.error(`Failed to rate: ${e.message}`),
   });
+  const disableTemplate = api.community.disableTemplate.useMutation({
+    onSuccess: async () => {
+      toast.success('Template hidden');
+      await utils.community.listTemplates.invalidate();
+      onClose();
+    },
+    onError: (e) => toast.error(`Failed to hide: ${e.message}`),
+  });
   const template = fallbackTemplate;
-  const firstSceneTsx = communityDetails?.scenes?.[0]?.tsxCode ?? (template as any)?.tsxCode;
-  const firstSceneDuration = communityDetails?.scenes?.[0]?.duration ?? (template as any)?.duration;
+  const scenesList = (communityDetails?.scenes as any[]) || (template ? [{ tsxCode: (template as any)?.tsxCode, duration: (template as any)?.duration }] : []);
+  const [selectedSceneIdx, setSelectedSceneIdx] = useState(0);
+  const currentTsx = scenesList[selectedSceneIdx]?.tsxCode;
+  const currentDuration = scenesList[selectedSceneIdx]?.duration;
 
   return (
     <Dialog open={open} onOpenChange={(v) => (!v ? onClose() : undefined)}>
@@ -843,7 +894,7 @@ function TemplateModal({ templateId, onClose, onRemix, remixing, isFavorited, on
               </div>
             </div>
           </div>
-          {/* Right: Buttons + Admin rating */}
+          {/* Right: Buttons + Admin controls */}
           <div className="flex items-center gap-4 shrink-0">
             {session?.user && (session.user as any).isAdmin && !template?.isHardcoded && (
               <div className="flex items-center gap-2">
@@ -862,6 +913,11 @@ function TemplateModal({ templateId, onClose, onRemix, remixing, isFavorited, on
                 </div>
               </div>
             )}
+            {session?.user && (session.user as any).isAdmin && !template?.isHardcoded && (
+              <Button size="sm" variant="outline" onClick={() => templateId && disableTemplate.mutate({ templateId })}>
+                Hide
+              </Button>
+            )}
             <Button size="sm" onClick={onRemix} disabled={remixing}>
               <Plus className="mr-1 h-4 w-4" /> {remixing ? "Remixing…" : "Remix"}
             </Button>
@@ -879,10 +935,35 @@ function TemplateModal({ templateId, onClose, onRemix, remixing, isFavorited, on
             'w-full aspect-video m-0'
           )}>
             {template && (
-              <TemplateHoverVideo tsxCode={firstSceneTsx} duration={firstSceneDuration} format={displayFormat} />
+              <TemplateHoverVideo tsxCode={currentTsx} duration={currentDuration} format={displayFormat} />
             )}
           </div>
         </div>
+        {/* Scene selector */}
+        {scenesList.length > 1 && (
+          <div className="border-t bg-white p-3">
+            <div className="text-xs text-gray-500 mb-2">Scenes ({scenesList.length})</div>
+            <div className="flex gap-8 overflow-x-auto">
+              {scenesList.map((s, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setSelectedSceneIdx(idx)}
+                  className={cn('min-w-[160px] rounded-md border p-1', selectedSceneIdx === idx ? 'border-black' : 'border-gray-200 hover:border-gray-300')}
+                  title={s.title || `Scene ${idx + 1}`}
+                >
+                  <div className={cn(
+                    displayFormat === 'portrait' ? 'w-[160px] aspect-[9/16]' :
+                    displayFormat === 'square' ? 'w-[160px] aspect-square' :
+                    'w-[160px] aspect-video'
+                  )}>
+                    <TemplateFrameThumbnail tsxCode={s.tsxCode} duration={s.duration} format={displayFormat} />
+                  </div>
+                  <div className="mt-1 text-[11px] text-gray-700 truncate text-left">{s.title || `Scene ${idx + 1}`}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

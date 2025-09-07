@@ -1,7 +1,7 @@
 # 🏆 Bazaar-Vid Progress Summary
 
-## 📝 Latest Update (Sep 06, 2025)
-- Sprint 115: Community system kickoff — created new sprint docs, defined data model, cross‑subdomain auth plan, publish/browse/import flows, and metrics aggregation. See `/memory-bank/sprints/sprint115_community/`.
+## 📝 Latest Update (Sep 07, 2025)
+- Sprint 115: Community seeding grouped by project; added prod→dev seeding script, owner metadata, scenes count, iteration depth in trending, admin hide, and creator filter + multi‑scene modal. Details in `/memory-bank/sprints/sprint115_community/progress.md`.
 
 ## 📝 Latest Update (Sep 01, 2025)
 - Sprint 98: Fixed preview namespacing collisions causing new scenes to break with `Identifier 'SceneNS_*' has already been declared`. Changed namespace wrapper to `var` and made error-boundary helper names redeclaration‑safe. See `/memory-bank/sprints/sprint98_autofix_analysis/preview-namespacing-followups.md`.

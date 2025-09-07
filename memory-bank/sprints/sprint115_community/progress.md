@@ -3,7 +3,7 @@
 ## Current Status: 🟢 In Progress
 **Sprint Start**: 2025-09-05  
 **Target Completion**: TBD  
-**Last Updated**: 2025-09-06
+**Last Updated**: 2025-09-07
 
 ## Progress Overview
 
@@ -115,3 +115,13 @@
  - Implemented Favorites tab using server data; added optimistic favorite/use counters with cache invalidation
  - Removed hardcoded favorite counts; icons added (heart/shuffle) beside dynamic numbers
  - Generated dev migration snapshot including community tables (push pending until DATABASE_URL configured)
+
+### 2025-09-07
+- Dev community seeding now groups by project (multi‑scene templates), avoids partial duplicates, ensures stable slug uniqueness.
+- Added dev‑only prod→dev seeding script (`scripts/seed/seed-community-from-prod.ts`) and npm task `seed:community:from-prod`.
+- Prod→dev seed reads recent prod scenes, groups by project, creates templates with `sourceSceneId=null` to keep dev FK‑safe.
+- Community router: added owner metadata (name) + scenesCount, trending now includes iteration depth (dev lineage via `sceneIterations`).
+- New admin mutation `disableTemplate` to hide templates (soft‑disable) and UI button in modal.
+- Community UI: creator click filter, creator name, scenes count, “Prompts n” badge, and multi‑scene preview selector in modal.
+- Dev DB snapshot check: templates=244, scenes=330; most prod‑sourced show “Prompts 0” (expected without external lineage).
+- Next: add `external_scene_id` to `community_template_scene`, populate in seeds, and extend trending to use prod counts when dev lineage is missing.
