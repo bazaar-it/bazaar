@@ -72,6 +72,7 @@
     "log:raw:mcp": "tsx src/scripts/log-tools/log-raw.ts",
     "analyze:errors": "tsx scripts/analyze-production-errors.ts",
     "seed:community:from-registry": "tsx scripts/seed/seed-community-from-registry.ts",
+    "seed:community:from-scenes": "tsx scripts/seed/seed-community-from-scenes.ts",
     "postinstall": "npm rebuild lightningcss @tailwindcss/oxide || true && npx playwright install chromium || true"
   },
   "dependencies": {
