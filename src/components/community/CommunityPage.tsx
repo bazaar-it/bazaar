@@ -40,24 +40,28 @@ export default function CommunityPage() {
   const [format, setFormat] = useState<VideoFormat>('landscape');
   const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'mine'>("explore");
   const [search, setSearch] = useState("");
-  const [favorites, setFavorites] = useState<Set<string>>(() => {
-    if (typeof window === "undefined") return new Set();
-    try {
-      const raw = window.localStorage.getItem("community:favorites");
-      return new Set<string>(raw ? JSON.parse(raw) : []);
-    } catch {
-      return new Set();
-    }
-  });
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
   const { data: session } = useSession();
   const [uiOpen, setUiOpen] = useState(true);
   // Local optimistic overrides for counters
   const [countOverrides, setCountOverrides] = useState<Record<string, { favoritesCount?: number; usageCount?: number }>>({});
 
+  // Load favorites from localStorage after mount
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem("community:favorites");
+      if (raw) {
+        setFavorites(new Set<string>(JSON.parse(raw)));
+      }
+    } catch {
+      // Ignore errors
+    }
+  }, []);
+
   // Fetch templates from community router (server filters format + search + category)
   const { data: communityList, isLoading } = api.community.listTemplates.useQuery({
-    limit: 200,
+    limit: 100,
     filter: {
       format,
       search: search || undefined,

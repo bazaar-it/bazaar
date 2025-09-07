@@ -1,6 +1,8 @@
 // src/app/community/page.tsx
 import CommunityPage from "~/components/community/CommunityPage";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Community Templates",
   description: "Discover and share Bazaar community templates",

@@ -9,7 +9,7 @@ import {
 } from 'remotion';
 
 // @ts-ignore - Window globals from Remotion Player
-const IconifyIcon = (window as any).IconifyIcon;
+const IconifyIcon = typeof window !== 'undefined' ? (window as any).IconifyIcon : null;
 
 const ChatMessage = ({ text, isUser, delay }: { text: string; isUser: boolean; delay: number }) => {
   const frame = useCurrentFrame();
