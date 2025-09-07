@@ -7,6 +7,8 @@ import { Heart, Plus, ChevronDown, ChevronRight, ChevronLeft, Shuffle } from "lu
 import { cn } from "~/lib/cn";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "~/components/ui/dialog";
+import { Slider } from "~/components/ui/slider";
+import { toast } from "sonner";
 import AppHeader from "~/components/AppHeader";
 import { Player } from "@remotion/player";
 import { transform } from "sucrase";
@@ -755,6 +757,11 @@ function TemplateModal({ templateId, onClose, onRemix, remixing, isFavorited, on
     { templateId: templateId as string },
     { enabled: open && !!templateId }
   );
+  const { data: session } = useSession();
+  const setRating = api.community.setAdminRating.useMutation({
+    onSuccess: () => toast.success('Rating saved'),
+    onError: (e) => toast.error(`Failed to rate: ${e.message}`),
+  });
   const template = fallbackTemplate;
   const firstSceneTsx = communityDetails?.scenes?.[0]?.tsxCode ?? (template as any)?.tsxCode;
   const firstSceneDuration = communityDetails?.scenes?.[0]?.duration ?? (template as any)?.duration;
@@ -791,8 +798,25 @@ function TemplateModal({ templateId, onClose, onRemix, remixing, isFavorited, on
               </div>
             </div>
           </div>
-          {/* Right: Buttons only */}
-          <div className="flex gap-2 shrink-0">
+          {/* Right: Buttons + Admin rating */}
+          <div className="flex items-center gap-4 shrink-0">
+            {session?.user && (session.user as any).isAdmin && !template?.isHardcoded && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">Admin score</span>
+                <div className="w-24">
+                  <Slider
+                    min={0}
+                    max={10}
+                    step={1}
+                    defaultValue={[0]}
+                    onValueCommit={(val) => {
+                      const v = Array.isArray(val) ? val[0] : (val as any);
+                      if (templateId && typeof v === 'number') setRating.mutate({ templateId, score: v });
+                    }}
+                  />
+                </div>
+              </div>
+            )}
             <Button size="sm" onClick={onRemix} disabled={remixing}>
               <Plus className="mr-1 h-4 w-4" /> {remixing ? "Remixing…" : "Remix"}
             </Button>
@@ -818,4 +842,3 @@ function TemplateModal({ templateId, onClose, onRemix, remixing, isFavorited, on
     </Dialog>
   );
 }
-
