@@ -2,6 +2,9 @@
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Button } from "~/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "~/components/ui/dialog";
+import { Checkbox } from "~/components/ui/checkbox";
+import { Textarea } from "~/components/ui/textarea";
 import { Input } from "~/components/ui/input";
 import { Card } from "~/components/ui/card";
 import { SearchIcon, Loader2 } from "lucide-react";
@@ -283,6 +286,13 @@ const useCompiledTemplate = (template: TemplateDefinition, format: string = 'lan
 export default function TemplatesPanelG({ projectId, onSceneGenerated }: TemplatesPanelGProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [loadingTemplateId, setLoadingTemplateId] = useState<string | null>(null);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [selectedSceneIds, setSelectedSceneIds] = useState<Set<string>>(new Set());
+  const [pubTitle, setPubTitle] = useState("");
+  const [pubDescription, setPubDescription] = useState("");
+  const [pubCategory, setPubCategory] = useState<string>("");
+  const [pubFormats, setPubFormats] = useState<Array<'landscape'|'portrait'|'square'>>(['landscape','portrait','square']);
+  const [isPublishing, setIsPublishing] = useState(false);
   
   // Get tRPC utils for cache invalidation
   const utils = api.useUtils();
@@ -292,6 +302,25 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
   
   // Get current project format
   const currentFormat = getCurrentProps()?.meta?.format ?? 'landscape';
+
+  // Load project scenes for publishing
+  const { data: fullProject } = api.project.getFullProject.useQuery({ id: projectId, include: ['scenes'] });
+  const projectScenes = (fullProject?.scenes ?? []) as Array<{ id: string; name?: string | null; duration: number }>;
+
+  const createCommunityTemplate = api.community.createTemplateFromScenes.useMutation({
+    onSuccess: ({ slug }) => {
+      toast.success('Published to Community');
+      setPublishOpen(false);
+      setSelectedSceneIds(new Set());
+      setPubTitle("");
+      setPubDescription("");
+      setPubCategory("");
+      setPubFormats(['landscape','portrait','square']);
+    },
+    onError: (err) => {
+      toast.error(`Publish failed: ${err.message}`);
+    },
+  });
   
   // Fetch database templates
   const { data: databaseTemplates = [], isLoading: isLoadingDbTemplates } = api.templates.getAll.useQuery({
@@ -436,9 +465,9 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
   
   return (
     <div className="flex flex-col h-full bg-white">
-      {/* Search */}
-      <div className="flex-none p-2 border-b">
-        <div className="relative">
+      {/* Header: Search + Share to Community */}
+      <div className="flex-none p-2 border-b flex items-center gap-2">
+        <div className="relative flex-1">
           <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
             placeholder="Search templates..."
@@ -447,6 +476,7 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
             className="pl-10"
           />
         </div>
+        <Button variant="secondary" onClick={() => setPublishOpen(true)}>Share to Community</Button>
       </div>
 
       {/* Templates Grid - Mobile-responsive grid with format-aware columns */}
@@ -488,6 +518,99 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
           </div>
         )}
       </div>
+
+      {/* Publish Modal */}
+      <Dialog open={publishOpen} onOpenChange={setPublishOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Share to Community</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Scene selector */}
+            <div>
+              <div className="text-sm font-medium mb-2">Select scenes</div>
+              <div className="max-h-48 overflow-auto border rounded">
+                {projectScenes.map((s) => (
+                  <label key={s.id} className="flex items-center gap-2 p-2 border-b last:border-b-0">
+                    <Checkbox
+                      checked={selectedSceneIds.has(s.id)}
+                      onCheckedChange={(checked) => {
+                        setSelectedSceneIds((prev) => {
+                          const next = new Set(prev);
+                          if (checked) next.add(s.id); else next.delete(s.id);
+                          return next;
+                        })
+                      }}
+                    />
+                    <span className="text-sm flex-1 truncate">{s.name || 'Untitled'} • {s.duration} frames</span>
+                  </label>
+                ))}
+                {projectScenes.length === 0 && (
+                  <div className="p-3 text-sm text-gray-500">No scenes in this project yet.</div>
+                )}
+              </div>
+            </div>
+
+            {/* Metadata */}
+            <div className="grid grid-cols-1 gap-3">
+              <Input placeholder="Title" value={pubTitle} onChange={(e) => setPubTitle(e.target.value)} />
+              <Textarea placeholder="Description (optional)" value={pubDescription} onChange={(e) => setPubDescription(e.target.value)} />
+              <Input placeholder="Category (optional)" value={pubCategory} onChange={(e) => setPubCategory(e.target.value)} />
+              {/* Formats simple toggles */}
+              <div className="flex items-center gap-3 text-sm">
+                <span className="text-gray-600">Formats:</span>
+                {(['landscape','portrait','square'] as const).map((f) => (
+                  <label key={f} className="flex items-center gap-1">
+                    <Checkbox
+                      checked={pubFormats.includes(f)}
+                      onCheckedChange={(checked) => {
+                        setPubFormats((prev) => {
+                          const set = new Set(prev);
+                          if (checked) set.add(f); else set.delete(f);
+                          return Array.from(set) as Array<'landscape'|'portrait'|'square'>;
+                        });
+                      }}
+                    />
+                    <span className="capitalize">{f}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setPublishOpen(false)}>Cancel</Button>
+              <Button
+                onClick={async () => {
+                  if (selectedSceneIds.size === 0) {
+                    toast.error('Select at least one scene');
+                    return;
+                  }
+                  if (!pubTitle.trim()) {
+                    toast.error('Title is required');
+                    return;
+                  }
+                  try {
+                    setIsPublishing(true);
+                    await createCommunityTemplate.mutateAsync({
+                      projectId,
+                      sceneIds: Array.from(selectedSceneIds),
+                      title: pubTitle.trim(),
+                      description: pubDescription.trim() || undefined,
+                      category: pubCategory.trim() || undefined,
+                      supportedFormats: pubFormats,
+                    });
+                  } finally {
+                    setIsPublishing(false);
+                  }
+                }}
+                disabled={isPublishing}
+              >
+                {isPublishing ? 'Publishing…' : 'Publish'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

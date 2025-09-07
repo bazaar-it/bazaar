@@ -1875,6 +1875,8 @@ export const communityTemplateScenes = createTable("community_template_scene", (
   duration: d.integer("duration").notNull(),
   previewFrame: d.integer("preview_frame").default(15),
   codeHash: d.text("code_hash"),
+  // Lineage pointer to original scene for analytics and attribution
+  sourceSceneId: d.uuid("source_scene_id").references(() => scenes.id, { onDelete: "set null" }),
   createdAt: d.timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }), (t) => [
   index("community_template_scenes_template_idx").on(t.templateId),
@@ -1925,4 +1927,21 @@ export const communityMetricsDaily = createTable("community_metrics_daily", (d) 
   count: d.bigint("count", { mode: "number" }).notNull().default(0),
 }), (t) => [
   primaryKey({ name: "community_metrics_daily_pk", columns: [t.templateId, t.day, t.eventType] }),
+])
+
+// Admin ratings to influence ranking (0-10)
+export const communityAdminRatings = createTable("community_admin_rating", (d) => ({
+  templateId: d
+    .uuid("template_id")
+    .notNull()
+    .references(() => communityTemplates.id, { onDelete: "cascade" }),
+  adminUserId: d
+    .varchar("admin_user_id", { length: 255 })
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  score: d.smallint("score").notNull(), // 0..10 enforced at app layer
+  createdAt: d.timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}), (t) => [
+  primaryKey({ name: "community_admin_rating_pk", columns: [t.templateId, t.adminUserId] }),
+  index("community_admin_rating_tpl_idx").on(t.templateId),
 ])

@@ -9,12 +9,126 @@ import {
   communityEvents,
   projects,
   scenes,
+  users,
+  communityAdminRatings,
 } from "~/server/db/schema";
 import { and, desc, eq, ilike, inArray, sql } from "drizzle-orm";
 
 const SupportedFormatEnum = z.enum(["landscape", "portrait", "square"]);
 
 export const communityRouter = createTRPCRouter({
+  // Admin: set editorial rating (0-10)
+  setAdminRating: protectedProcedure
+    .input(z.object({ templateId: z.string().uuid(), score: z.number().int().min(0).max(10) }))
+    .mutation(async ({ ctx, input }) => {
+      // Verify admin
+      const me = await db.query.users.findFirst({ where: eq(users.id, ctx.session.user.id) });
+      if (!me?.isAdmin) throw new TRPCError({ code: "FORBIDDEN", message: "Admin only" });
+
+      await db
+        .insert(communityAdminRatings)
+        .values({ templateId: input.templateId, adminUserId: ctx.session.user.id, score: input.score })
+        .onConflictDoUpdate({
+          target: [communityAdminRatings.templateId, communityAdminRatings.adminUserId],
+          set: { score: input.score, createdAt: new Date() },
+        });
+
+      return { ok: true };
+    }),
+  // Create a community template from selected project scenes
+  createTemplateFromScenes: protectedProcedure
+    .input(z.object({
+      projectId: z.string().uuid(),
+      sceneIds: z.array(z.string().uuid()).min(1),
+      title: z.string().min(1).max(255),
+      description: z.string().optional(),
+      tags: z.array(z.string()).optional(),
+      category: z.string().max(100).optional(),
+      supportedFormats: z.array(SupportedFormatEnum).default(["landscape", "portrait", "square"]).optional(),
+      thumbnailUrl: z.string().url().optional(),
+      visibility: z.enum(["public", "unlisted"]).default("public").optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Verify ownership of project
+      const project = await db.query.projects.findFirst({
+        where: and(eq(projects.id, input.projectId), eq(projects.userId, ctx.session.user.id)),
+      });
+      if (!project) throw new TRPCError({ code: "FORBIDDEN", message: "Project not found or access denied" });
+
+      // Fetch scenes and ensure they belong to project
+      const rows = await db
+        .select({ id: scenes.id, name: scenes.name, tsxCode: scenes.tsxCode, duration: scenes.duration })
+        .from(scenes)
+        .where(and(eq(scenes.projectId, input.projectId), inArray(scenes.id, input.sceneIds)));
+
+      if (rows.length !== input.sceneIds.length) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "One or more scenes not found in project" });
+      }
+
+      // Generate unique slug
+      const baseSlug = input.title
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, "")
+        .trim()
+        .replace(/\s+/g, "-")
+        .replace(/-+/g, "-");
+
+      let slug = baseSlug || `template-${Date.now()}`;
+      let suffix = 1;
+      // ensure unique slug by checking existing
+      while (
+        await db.query.communityTemplates.findFirst({ where: eq(communityTemplates.slug, slug) })
+      ) {
+        slug = `${baseSlug}-${suffix++}`;
+      }
+
+      // Insert template
+      const [template] = await db
+        .insert(communityTemplates)
+        .values({
+          slug,
+          title: input.title,
+          description: input.description,
+          ownerUserId: ctx.session.user.id,
+          sourceProjectId: input.projectId,
+          thumbnailUrl: input.thumbnailUrl,
+          supportedFormats: input.supportedFormats ?? ["landscape", "portrait", "square"],
+          tags: input.tags ?? [],
+          category: input.category,
+          visibility: input.visibility ?? "public",
+          status: "active",
+        })
+        .returning();
+
+      // Insert scenes in the order provided by sceneIds
+      const sceneIdOrder = new Map(input.sceneIds.map((id, idx) => [id, idx] as const));
+      const ordered = [...rows].sort((a, b) => (sceneIdOrder.get(a.id)! - sceneIdOrder.get(b.id)!));
+
+      if (ordered.length) {
+        await db.insert(communityTemplateScenes).values(
+          ordered.map((s) => ({
+            templateId: template.id,
+            sceneIndex: sceneIdOrder.get(s.id)!,
+            title: s.name ?? undefined,
+            tsxCode: s.tsxCode,
+            duration: s.duration,
+            previewFrame: 15,
+            codeHash: null,
+            sourceSceneId: s.id,
+          }))
+        );
+      }
+
+      // Emit initial event (optional)
+      await db.insert(communityEvents).values({
+        templateId: template.id,
+        userId: ctx.session.user.id,
+        eventType: "click",
+        source: "in_app_panel",
+      });
+
+      return { templateId: template.id, slug: template.slug };
+    }),
   // Browse templates
   listTemplates: publicProcedure
     .input(z.object({
@@ -57,8 +171,13 @@ export const communityRouter = createTRPCRouter({
           orderBy = [desc(communityTemplates.favoritesCount), desc(communityTemplates.createdAt)];
           break;
         case "trending":
-          // For MVP, use viewsCount as proxy
-          orderBy = [desc(communityTemplates.viewsCount), desc(communityTemplates.createdAt)];
+          // For MVP, prioritize uses, then favorites, then views
+          orderBy = [
+            desc(communityTemplates.usesCount),
+            desc(communityTemplates.favoritesCount),
+            desc(communityTemplates.viewsCount),
+            desc(communityTemplates.createdAt),
+          ];
           break;
         case "recent":
         default:
@@ -260,5 +379,3 @@ export const communityRouter = createTRPCRouter({
       return { sceneIds: insertedIds };
     }),
 });
-
-

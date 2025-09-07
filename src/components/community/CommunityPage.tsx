@@ -89,6 +89,10 @@ export default function CommunityPage() {
         utils.community.getUserFavorites.invalidate(),
       ]);
     },
+    onError: () => {
+      // Revert optimistic override on error
+      toast.error('Failed to favorite');
+    },
   });
   const unfavoriteMutation = api.community.unfavoriteTemplate.useMutation({
     onSuccess: async () => {
@@ -96,6 +100,9 @@ export default function CommunityPage() {
         utils.community.listTemplates.invalidate(),
         utils.community.getUserFavorites.invalidate(),
       ]);
+    },
+    onError: () => {
+      toast.error('Failed to unfavorite');
     },
   });
   function toggleFavorite(id: string, isHardcoded?: boolean) {
@@ -106,7 +113,7 @@ export default function CommunityPage() {
       try { window.localStorage.setItem("community:favorites", JSON.stringify([...next])); } catch {}
       return next;
     });
-    // Persist only for community templates
+    // Persist to server for community templates
     if (!isHardcoded) {
       // Optimistic counter update
       const current = countOverrides[id]?.favoritesCount ?? (combinedTemplates.find(t => t.id === id)?.favoritesCount ?? 0);
@@ -117,8 +124,11 @@ export default function CommunityPage() {
         [id]: { ...(prev[id] || {}), favoritesCount: nextCount },
       }));
 
-      if (!favorites.has(id)) favoriteMutation.mutate({ templateId: id });
-      else unfavoriteMutation.mutate({ templateId: id });
+      if (!favorites.has(id)) {
+        favoriteMutation.mutate({ templateId: id });
+      } else {
+        unfavoriteMutation.mutate({ templateId: id });
+      }
     }
   }
 
@@ -144,22 +154,30 @@ export default function CommunityPage() {
       setRemixingId(templateId);
       if (isHardcoded && template) {
         // Legacy path for hardcoded templates
-        const project = await createProject.mutateAsync({ format: (template.supportedFormats?.[0] ?? 'landscape') as any });
-        await addTemplateMutation.mutateAsync({
-          projectId: project.projectId,
-          templateId: template.id,
-          templateName: template.name,
-          templateCode: template.tsxCode,
-          templateDuration: template.duration,
-        });
-        window.location.href = `/projects/${project.projectId}/generate`;
+        try {
+          const project = await createProject.mutateAsync({ format: (template.supportedFormats?.[0] ?? 'landscape') as any });
+          await addTemplateMutation.mutateAsync({
+            projectId: project.projectId,
+            templateId: template.id,
+            templateName: template.name,
+            templateCode: template.tsxCode,
+            templateDuration: template.duration,
+          });
+          window.location.href = `/projects/${project.projectId}/generate`;
+        } catch (e: any) {
+          toast.error(`Remix failed: ${e?.message || 'Unknown error'}`);
+        }
       } else {
         // Community template import flow
-        const tpl = await utils.community.getTemplate.fetch({ templateId });
-        const defaultFormat = (Array.isArray(tpl.template.supportedFormats) && (tpl.template.supportedFormats as any)[0]) || 'landscape';
-        const project = await createProject.mutateAsync({ format: defaultFormat as any });
-        await useTemplateMutation.mutateAsync({ templateId, projectId: project.projectId });
-        window.location.href = `/projects/${project.projectId}/generate`;
+        try {
+          const tpl = await utils.community.getTemplate.fetch({ templateId });
+          const defaultFormat = (Array.isArray(tpl.template.supportedFormats) && (tpl.template.supportedFormats as any)[0]) || 'landscape';
+          const project = await createProject.mutateAsync({ format: defaultFormat as any });
+          await useTemplateMutation.mutateAsync({ templateId, projectId: project.projectId });
+          window.location.href = `/projects/${project.projectId}/generate`;
+        } catch (e: any) {
+          toast.error(`Remix failed: ${e?.message || 'Unknown error'}`);
+        }
       }
     } finally {
       setRemixingId(null);
@@ -800,5 +818,4 @@ function TemplateModal({ templateId, onClose, onRemix, remixing, isFavorited, on
     </Dialog>
   );
 }
-
 
