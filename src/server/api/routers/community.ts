@@ -141,7 +141,7 @@ export const communityRouter = createTRPCRouter({
         search: z.string().optional(),
         creatorId: z.string().optional(),
       }).optional(),
-      sort: z.enum(["recent", "popular", "trending", "most-used"]).default("recent"),
+      sort: z.enum(["recent", "popular", "trending", "most-used"]).default("trending"),
     }))
     .query(async ({ input }) => {
       const whereClauses = [
@@ -194,6 +194,52 @@ export const communityRouter = createTRPCRouter({
       const filtered = input.filter?.format
         ? items.filter((t) => (t.supportedFormats as string[] | null)?.includes(input.filter!.format!))
         : items;
+
+      if (input.sort === "trending" && filtered.length > 0) {
+        const ids = filtered.map((t) => t.id);
+        // Admin rating averages
+        const adminRows = await db.execute<{ template_id: string; avg: number }>(sql`
+          SELECT ${communityAdminRatings.templateId} as template_id, AVG(${communityAdminRatings.score})::float as avg
+          FROM ${communityAdminRatings}
+          WHERE ${communityAdminRatings.templateId} IN (${sql.join(ids, sql`,`)})
+          GROUP BY ${communityAdminRatings.templateId}
+        `);
+        const adminAvg = new Map<string, number>();
+        for (const r of ((adminRows as any).rows ?? [])) adminAvg.set(r.template_id, Number(r.avg));
+
+        // Iteration depth: count scene_iterations per source_scene_id and sum per template
+        const iterRows = await db.execute<{ template_id: string; depth: number }>(sql`
+          SELECT cts.${communityTemplateScenes.templateId} as template_id, COALESCE(COUNT(si.id),0)::int as depth
+          FROM ${communityTemplateScenes} cts
+          LEFT JOIN ${sceneIterations} si ON si.${sceneIterations.sceneId} = cts.${communityTemplateScenes.sourceSceneId}
+          WHERE cts.${communityTemplateScenes.templateId} IN (${sql.join(ids, sql`,`)})
+          GROUP BY cts.${communityTemplateScenes.templateId}
+        `);
+        const iterDepth = new Map<string, number>();
+        for (const r of ((iterRows as any).rows ?? [])) iterDepth.set(r.template_id, Number(r.depth));
+
+        const now = Date.now();
+        const scored = filtered.map((t) => {
+          const uses = Number((t.usesCount as any) ?? 0);
+          const favs = Number((t.favoritesCount as any) ?? 0);
+          const views = Number((t.viewsCount as any) ?? 0);
+          const admin = adminAvg.get(t.id) ?? 0;
+          const depth = iterDepth.get(t.id) ?? 0;
+          const depthNorm = depth / (depth + 10);
+          const ageDays = Math.max(0, (now - new Date(t.createdAt as any).getTime()) / (1000 * 60 * 60 * 24));
+          const timeDecay = 1 / (1 + ageDays / 14);
+          const score = (
+            3 * Math.log1p(uses) +
+            2 * Math.sqrt(favs) +
+            1 * Math.log1p(views) +
+            4 * admin +
+            1 * depthNorm
+          ) * timeDecay;
+          return { t, score };
+        });
+        scored.sort((a, b) => b.score - a.score);
+        return { items: scored.map((s) => s.t), nextCursor: undefined };
+      }
 
       return { items: filtered, nextCursor: undefined };
     }),

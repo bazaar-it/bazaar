@@ -70,6 +70,7 @@ export default function CommunityPage() {
   }, [showHardcoded]);
 
   // Fetch templates from community router (server filters format + search + category)
+  const [sortBy, setSortBy] = useState<'trending'|'most-used'|'popular'|'recent'>('trending');
   const { data: communityList, isLoading } = api.community.listTemplates.useQuery({
     limit: 100,
     filter: {
@@ -77,7 +78,7 @@ export default function CommunityPage() {
       search: search || undefined,
       category: activeCategory || undefined,
     },
-    sort: 'recent',
+    sort: sortBy === 'most-used' ? 'most-used' : sortBy === 'popular' ? 'popular' : sortBy === 'recent' ? 'recent' : 'trending',
   });
 
   // Fetch user favorites and mine tabs (lazy)
@@ -463,6 +464,20 @@ export default function CommunityPage() {
                 {f.charAt(0).toUpperCase() + f.slice(1)}
               </button>
             ))}
+            {/* Sort control */}
+            {(['trending','most-used','popular','recent'] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setSortBy(s)}
+                className={cn(
+                  'px-3 py-1 rounded-full text-sm border',
+                  sortBy === s ? 'bg-black text-white border-black' : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300'
+                )}
+                aria-pressed={sortBy === s}
+              >
+                {s === 'trending' ? 'Trending' : s === 'most-used' ? 'Most Used' : s === 'popular' ? 'Popular' : 'Recent'}
+              </button>
+            ))}
             {/* Toggle to include/exclude hardcoded (official) templates */}
             <button
               onClick={() => setShowHardcoded((v) => !v)}
@@ -550,6 +565,14 @@ function TemplateCard({ template, onOpen, onRemix, remixing, isFavorited, onFavo
   const [hovered, setHovered] = useState(false);
   const format = displayFormat;
 
+  // For DB templates, lazily load first scene code on hover to enable previews
+  const previewQuery = api.community.getTemplate.useQuery(
+    { templateId: template.id },
+    { enabled: hovered && !template.isHardcoded }
+  );
+  const dbFirstSceneTsx: string | undefined = (previewQuery.data as any)?.scenes?.[0]?.tsxCode;
+  const dbFirstSceneDuration: number | undefined = (previewQuery.data as any)?.scenes?.[0]?.duration;
+
   const avatar = useMemo(() => {
     const letter = initialsFromName(template.creator?.name);
     const colors = ["bg-indigo-500", "bg-rose-500", "bg-amber-500", "bg-emerald-500", "bg-sky-500"];
@@ -573,13 +596,15 @@ function TemplateCard({ template, onOpen, onRemix, remixing, isFavorited, onFavo
         format === 'square' ? 'w-full bg-gray-100 aspect-square' :
         'w-full bg-gray-100 aspect-video'
       )}>
-        {hovered ? (
-          <TemplateHoverVideo tsxCode={template.tsxCode} duration={template.duration} format={format} />
-        ) : template.thumbnailUrl ? (
+        {template.thumbnailUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={template.thumbnailUrl} alt={template.name} className="h-full w-full object-cover" />
         ) : (
-          <TemplateFrameThumbnail tsxCode={template.tsxCode} duration={template.duration} format={format} />
+          <TemplateFrameThumbnail
+            tsxCode={template.isHardcoded ? template.tsxCode : (dbFirstSceneTsx ?? '')}
+            duration={template.isHardcoded ? template.duration : (dbFirstSceneDuration ?? template.duration)}
+            format={format}
+          />
         )}
 
         {/* Hover actions */}
