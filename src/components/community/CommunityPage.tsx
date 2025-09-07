@@ -42,6 +42,7 @@ export default function CommunityPage() {
   const [format, setFormat] = useState<VideoFormat>('landscape');
   const [activeTab, setActiveTab] = useState<'explore' | 'favorites' | 'mine'>("explore");
   const [search, setSearch] = useState("");
+  const [showHardcoded, setShowHardcoded] = useState<boolean>(true);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
   const { data: session } = useSession();
@@ -49,17 +50,24 @@ export default function CommunityPage() {
   // Local optimistic overrides for counters
   const [countOverrides, setCountOverrides] = useState<Record<string, { favoritesCount?: number; usageCount?: number }>>({});
 
-  // Load favorites from localStorage after mount
+  // Load favorites and UI prefs from localStorage after mount
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem("community:favorites");
       if (raw) {
         setFavorites(new Set<string>(JSON.parse(raw)));
       }
+      const rawShow = window.localStorage.getItem("community:showHardcoded");
+      if (rawShow != null) setShowHardcoded(rawShow === 'true');
     } catch {
       // Ignore errors
     }
   }, []);
+
+  // Persist UI pref
+  useEffect(() => {
+    try { window.localStorage.setItem("community:showHardcoded", String(showHardcoded)); } catch {}
+  }, [showHardcoded]);
 
   // Fetch templates from community router (server filters format + search + category)
   const { data: communityList, isLoading } = api.community.listTemplates.useQuery({
@@ -288,9 +296,9 @@ export default function CommunityPage() {
       const mineIds = new Set(myTemplates.map((m: any) => m.id));
       return fromCommunity.filter((t) => mineIds.has(t.id));
     }
-    // Explore shows both hardcoded and community
-    return [...fromHardcoded, ...fromCommunity];
-  }, [communityList, TEMPLATES, activeTab, myFavorites, myTemplates]);
+    // Explore: optionally include hardcoded (official) templates
+    return showHardcoded ? [...fromHardcoded, ...fromCommunity] : [...fromCommunity];
+  }, [communityList, TEMPLATES, activeTab, myFavorites, myTemplates, showHardcoded]);
 
   const countFor = (name: string) =>
     combinedTemplates.filter(t => normalize(t.category) === normalize(name)).length;
@@ -455,6 +463,18 @@ export default function CommunityPage() {
                 {f.charAt(0).toUpperCase() + f.slice(1)}
               </button>
             ))}
+            {/* Toggle to include/exclude hardcoded (official) templates */}
+            <button
+              onClick={() => setShowHardcoded((v) => !v)}
+              className={cn(
+                'px-3 py-1 rounded-full text-sm border',
+                showHardcoded ? 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300' : 'bg-black text-white border-black'
+              )}
+              title="Toggle official (hardcoded) templates"
+              aria-pressed={showHardcoded}
+            >
+              {showHardcoded ? 'Hide Official' : 'Show Official'}
+            </button>
           </div>
         </div>
 

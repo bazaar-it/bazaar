@@ -2,9 +2,14 @@
 // Usage: npm run seed:community:from-registry
 
 import 'dotenv/config';
-import { db } from '~/server/db';
-import { communityTemplates, communityTemplateScenes, users } from '~/server/db/schema';
-import { TEMPLATES } from '~/templates/registry';
+// Polyfill fetch for Neon serverless client in Node
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+import fetch from 'node-fetch';
+(globalThis as any).fetch = fetch;
+import { db } from '../../src/server/db';
+import { communityTemplates, communityTemplateScenes, users } from '../../src/server/db/schema';
+import { TEMPLATES } from '../../src/templates/registry';
 import { eq, sql } from 'drizzle-orm';
 
 async function main() {
@@ -61,4 +66,3 @@ async function main() {
 }
 
 main().then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); });
-

@@ -40,6 +40,11 @@
 - [ ] Nightly rollups into community_metrics_daily
 - [x] Display counters on template cards
 
+## 🔄 Alignment With Sprint 106 (Optional, Post-MVP)
+- [ ] Add optional `js_code`, `js_compiled_at`, `compilation_error` to `community_template_scene`
+- [ ] On publish: copy `js_code` from source scene when available
+- [ ] Community preview prefers `js_code` (fallback to TSX)
+
 ## 🟡 Important (Should Have)
 
 ### Enhanced Discovery
