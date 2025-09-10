@@ -2166,8 +2166,8 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   
   return (
     <div className="flex flex-col bg-white dark:bg-gray-950 rounded-[15px] border border-gray-200 shadow-sm select-none" style={{ height: `${timelineHeight}px`, overflow: 'hidden' }}>
-      {/* Timeline Controls - Modern design */}
-      <div className="flex items-center justify-between px-4 py-3 bg-gray-50/70 dark:bg-gray-900/50 backdrop-blur-sm">
+      {/* Timeline Controls - Consistent solid header (no translucency) */}
+      <div className="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
         {/* Left cluster: frame/time display */}
         <div className="flex items-center gap-3 min-w-[220px]">
           {/* Frame/Time Counter - Minimal with switch indicator */}
