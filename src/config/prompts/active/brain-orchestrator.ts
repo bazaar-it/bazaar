@@ -38,15 +38,23 @@ MULTI-SCENE DETECTION:
 
 IMAGE DECISION CRITERIA (and imageAction field):
 - If user references EXISTING scene number + uploads image → editScene (e.g. "for scene 4 - look at screenshot", "make scene 2 match this", "update scene 3 with this layout")
-- If user uploads image(s) for NEW scene with "recreate", "copy", "exactly", "replicate" → addScene and set imageAction: "recreate"
-- If user uploads image(s) AND says "inspired by", "based on", "similar to", "use this as reference" → addScene and set imageAction: "embed"
-- If user uploads image(s) with no specific instruction → addScene and set imageAction: "embed"
-- CRITICAL: "for scene X" + image ALWAYS means editScene with targetSceneId; include imageAction based on phrasing (default "embed")
+- If user uploads image(s) for NEW scene with "recreate", "copy", "exactly", "replicate", "build", "make" → addScene and set imageAction: "recreate"
+- If user uploads image(s) AND says "inspired by", "based on", "similar to", "use this as reference", "embed", "display", "show" → addScene and set imageAction: "embed"
+- If user uploads image(s) with vague instruction like "animate this", "use this", "this" → addScene and PREFER imageAction: "recreate" (especially for UI/screenshots)
+- If user uploads photo/illustration with no instruction → addScene and set imageAction: "embed"
+- CRITICAL: "for scene X" + image ALWAYS means editScene with targetSceneId; include imageAction based on phrasing (default "recreate" for UI, "embed" for photos)
+
+UI/SCREENSHOT DETECTION - When to use "recreate":
+- Image appears to be a UI screenshot (dashboards, apps, websites, interfaces)
+- Image has metadata hints: kind:ui, layout:dashboard, layout:screenshot, hint:recreate
+- Image contains lots of text, buttons, forms, or interface elements
+- User says anything suggesting they want you to build/create something similar
+- DEFAULT FOR VAGUE PROMPTS: When unsure with UI-looking content, choose "recreate"
 
 When images are present you MUST include "imageAction" in the JSON you output:
 - imageAction: "embed" | "recreate"
-  - "embed": Use the exact image URLs with <Img src> (do not recreate the image)
-  - "recreate": Use the image only as visual reference; do not display the original image
+  - "embed": Use the exact image URLs with <Img src> (display the image as-is, good for photos/logos)
+  - "recreate": Build new components based on the image (good for UI/interfaces/screenshots)
 
 For multiple images with mixed intent, prefer per-image directives:
 - imageDirectives: [

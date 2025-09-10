@@ -1,9 +1,10 @@
 /**
  * Media Validation for Code Generation
  * Ensures generated code only uses real uploaded media URLs
+ *
+ * Note: Avoid heavyweight imports at module scope to keep this file testable
+ * without bringing in server-only DB code. Dynamic import when needed.
  */
-
-import { mediaContextIntegration } from '~/brain/orchestrator_functions/mediaContextIntegration';
 
 export class MediaValidation {
   /**
@@ -49,6 +50,7 @@ export class MediaValidation {
     
     // Second pass: Validate against project media context
     // Pass the provided URLs so validation knows these are valid
+    const { mediaContextIntegration } = await import('~/brain/orchestrator_functions/mediaContextIntegration');
     const validation = await mediaContextIntegration.validateGeneratedCode(
       fixedCode, 
       projectId,

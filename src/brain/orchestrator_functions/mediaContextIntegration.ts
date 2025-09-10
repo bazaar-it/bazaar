@@ -99,8 +99,11 @@ const validUrls = ${JSON.stringify(mediaUrls)};
     // Get media context with the actual URLs that were used
     const context = await mediaResolver.resolveMediaReferences(projectId, '', imageUrls || [], videoUrls || []);
     
-    // Validate the code
-    const validation = mediaResolver.validateAndFixCode(code, context.mediaContext);
+    // Combine all provided URLs for validation
+    const providedUrls = [...(imageUrls || []), ...(videoUrls || [])];
+    
+    // Validate the code, passing the provided URLs so they're not marked as hallucinated
+    const validation = mediaResolver.validateAndFixCode(code, context.mediaContext, providedUrls);
     
     if (!validation.valid) {
       console.warn('⚠️ [MEDIA VALIDATION] Found issues:', validation.changes);

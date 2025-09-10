@@ -144,9 +144,14 @@ export async function POST(request: NextRequest) {
 
       // Fire-and-forget: analyze media and tag asset for richer Brain context
       try {
+        console.log('🎯 [Upload] Starting metadata analysis for asset:', asset.id);
         const { mediaMetadataService } = await import('~/server/services/media/media-metadata.service');
         // run without blocking response
-        void mediaMetadataService.analyzeAndTag(asset.id, publicUrl);
+        void mediaMetadataService.analyzeAndTag(asset.id, publicUrl).then(() => {
+          console.log('✅ [Upload] Metadata analysis complete for asset:', asset.id);
+        }).catch((err) => {
+          console.error('❌ [Upload] Metadata analysis failed for asset:', asset.id, err);
+        });
       } catch (e) {
         console.warn('[Upload] Media metadata service not available:', e);
       }

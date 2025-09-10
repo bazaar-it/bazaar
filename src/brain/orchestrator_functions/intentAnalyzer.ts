@@ -117,10 +117,43 @@ export class IntentAnalyzer {
 NOTE: All tools are multimodal. When images are referenced, include them in the tool's imageUrls parameter.`;
     }
     
-    // Check if current prompt has images  
+    // Check if current prompt has images and add metadata hints
     const currentImageUrls = (input.userContext?.imageUrls as string[]) || [];
     if (currentImageUrls.length > 0) {
       imageInfo += `\n\nCURRENT MESSAGE: Includes ${currentImageUrls.length} image(s) uploaded with this request.`;
+      
+      // Check if we have metadata hints for these images
+      console.log('🔍 [INTENT] Looking for metadata hints for', currentImageUrls.length, 'images');
+      if (contextPacket.assetContext && (contextPacket.assetContext as any).allAssets) {
+        const assets = (contextPacket.assetContext as any).allAssets || [];
+        console.log('🔍 [INTENT] Found', assets.length, 'assets in context');
+        
+        currentImageUrls.forEach((url, index) => {
+          console.log('🔍 [INTENT] Searching for metadata for URL:', url);
+          const asset = assets.find((a: any) => a.url === url);
+          
+          if (asset) {
+            console.log('🔍 [INTENT] Found asset with tags:', asset.tags);
+            if (asset.tags?.length > 0) {
+              const relevantTags = asset.tags.filter((t: string) => 
+                t.startsWith('kind:') || t.startsWith('layout:') || t.startsWith('hint:')
+              );
+              if (relevantTags.length > 0) {
+                imageInfo += `\nImage ${index + 1} metadata hints: ${relevantTags.join(', ')}`;
+                console.log('✅ [INTENT] Added metadata hints to prompt:', relevantTags);
+              } else {
+                console.log('⚠️ [INTENT] Asset has tags but none are relevant:', asset.tags);
+              }
+            } else {
+              console.log('⚠️ [INTENT] Asset found but has no tags');
+            }
+          } else {
+            console.log('❌ [INTENT] No asset found for URL:', url);
+          }
+        });
+      } else {
+        console.log('❌ [INTENT] No asset context available');
+      }
     }
     
     // Add conversation context with recent action detection
@@ -156,9 +189,9 @@ The AI has access to visual screenshots of this website and can reference them f
       const logos = (contextPacket.assetContext as any).logos || [];
       assetInfo = `\n\nPROJECT ASSETS (Previously uploaded): ${assets.length} asset(s)`;
 
-      assets.slice(0, 5).forEach((asset: any, idx: number) => {
+      assets.slice(0, 5).forEach((asset: any, index: number) => {
         const tags = Array.isArray(asset.tags) && asset.tags.length ? ` [tags: ${asset.tags.slice(0,5).join(', ')}]` : '';
-        assetInfo += `\n${idx + 1}. ${asset.originalName} (${asset.type})${tags}`;
+        assetInfo += `\n${index + 1}. ${asset.originalName} (${asset.type})${tags}`;
       });
       if (logos.length > 0) {
         assetInfo += `\nLOGOS: ${logos.length} logo(s) available`;

@@ -254,13 +254,14 @@ export class MediaResolver {
   
   /**
    * Validate and fix generated code
+   * @param providedUrls - URLs that were explicitly provided and should be considered valid
    */
-  validateAndFixCode(code: string, context: MediaContext): {
+  validateAndFixCode(code: string, context: MediaContext, providedUrls?: string[]): {
     valid: boolean;
     fixedCode: string;
     changes: string[];
   } {
-    const validation = mediaContext.validateGeneratedCode(code, context);
+    const validation = mediaContext.validateGeneratedCode(code, context, providedUrls);
     
     if (validation.valid) {
       return {
