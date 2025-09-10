@@ -349,7 +349,14 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         try { (useVideoState.getState().projects as any)[projectId].revision = res.newRevision; } catch {}
       }
     },
-    onError: (error) => {
+    onError: (error: any, vars: any) => {
+      if (error?.data?.code === 'CONFLICT' && vars && vars.clientRevision !== undefined) {
+        console.warn('[Timeline] Duration write conflict; retrying without clientRevision');
+        const retryVars = { ...vars };
+        delete retryVars.clientRevision;
+        updateSceneDurationMutation.mutate(retryVars);
+        return;
+      }
       console.error('[Timeline] Failed to persist scene duration:', error);
       toast.error('Failed to save duration changes');
     }
@@ -364,7 +371,14 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         try { (useVideoState.getState().projects as any)[projectId].revision = res.newRevision; } catch {}
       }
     },
-    onError: (error) => {
+    onError: (error: any, vars: any) => {
+      if (error?.data?.code === 'CONFLICT' && vars && vars.clientRevision !== undefined) {
+        console.warn('[Timeline] Rename conflict; retrying without clientRevision');
+        const retryVars = { ...vars };
+        delete retryVars.clientRevision;
+        updateSceneNameMutation.mutate(retryVars);
+        return;
+      }
       console.error('[Timeline] Failed to persist scene name:', error);
       toast.error('Failed to save scene name');
     }
@@ -398,7 +412,14 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         try { (useVideoState.getState().projects as any)[projectId].revision = res.data.newRevision; } catch {}
       }
     },
-    onError: (error) => {
+    onError: (error: any, vars: any) => {
+      if (error?.data?.code === 'CONFLICT' && vars && vars.clientRevision !== undefined) {
+        console.warn('[Timeline] Delete conflict; retrying without clientRevision');
+        const retryVars = { ...vars };
+        delete retryVars.clientRevision;
+        removeSceneMutation.mutate(retryVars as any);
+        return;
+      }
       console.error('[Timeline] Failed to delete scene:', error);
       setPendingDeleteSceneId(null); // Clear pending state on error
       toast.error('Failed to delete scene');
@@ -415,7 +436,14 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         try { (useVideoState.getState().projects as any)[projectId].revision = res.newRevision; } catch {}
       }
     },
-    onError: (error) => {
+    onError: (error: any, vars: any) => {
+      if (error?.data?.code === 'CONFLICT' && vars && vars.clientRevision !== undefined) {
+        console.warn('[Timeline] Reorder conflict; retrying without clientRevision');
+        const retryVars = { ...vars };
+        delete retryVars.clientRevision;
+        reorderScenesMutation.mutate(retryVars);
+        return;
+      }
       console.error('[Timeline] Failed to persist scene order:', error);
       toast.error('Failed to save scene order');
     }
@@ -446,7 +474,14 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       await utils.generation.getProjectScenes.invalidate({ projectId });
       toast.success('Scene split');
     },
-    onError: (error) => {
+    onError: (error: any, vars: any) => {
+      if (error?.data?.code === 'CONFLICT' && vars && vars.clientRevision !== undefined) {
+        console.warn('[Timeline] Split conflict; retrying without clientRevision');
+        const retryVars = { ...vars };
+        delete retryVars.clientRevision;
+        splitSceneMutation.mutate(retryVars as any);
+        return;
+      }
       console.error('[Timeline] Failed to split scene:', error);
       toast.error('Failed to split scene');
     }
@@ -1884,8 +1919,15 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       }
       toast.success('Trimmed from start');
     },
-    onError: (err) => {
-      console.error('[Timeline] Trim-left failed:', err);
+    onError: (error: any, vars: any) => {
+      if (error?.data?.code === 'CONFLICT' && vars && vars.clientRevision !== undefined) {
+        console.warn('[Timeline] Trim-left conflict; retrying without clientRevision');
+        const retryVars = { ...vars };
+        delete retryVars.clientRevision;
+        trimLeftMutation.mutate(retryVars);
+        return;
+      }
+      console.error('[Timeline] Trim-left failed:', error);
       toast.error('Failed to trim from start');
     }
   });
