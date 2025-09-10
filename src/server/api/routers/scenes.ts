@@ -283,6 +283,16 @@ export const scenesRouter = createTRPCRouter({
         .set({ duration: leftDuration, updatedAt: new Date() })
         .where(eq(scenes.id, existingScene.id));
 
+      // Normalize orders 0..n-1 (belt-and-suspenders)
+      const orderedAfterSplit = await ctx.db.query.scenes.findMany({
+        where: eq(scenes.projectId, input.projectId),
+      });
+      orderedAfterSplit
+        .sort((a: any, b: any) => ((a.order ?? 0) - (b.order ?? 0)) || (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()))
+        .forEach(async (s, idx) => {
+          await ctx.db.update(scenes).set({ order: idx, updatedAt: new Date() }).where(eq(scenes.id, s.id));
+        });
+
       // Message
       await messageService.createMessage({
         projectId: input.projectId,
@@ -376,6 +386,16 @@ export const scenesRouter = createTRPCRouter({
       );
 
       await Promise.all(updatePromises);
+
+      // Normalize orders 0..n-1 for safety
+      const orderedAfterReorder = await ctx.db.query.scenes.findMany({
+        where: eq(scenes.projectId, input.projectId),
+      });
+      orderedAfterReorder
+        .sort((a: any, b: any) => ((a.order ?? 0) - (b.order ?? 0)) || (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()))
+        .forEach(async (s, idx) => {
+          await ctx.db.update(scenes).set({ order: idx, updatedAt: new Date() }).where(eq(scenes.id, s.id));
+        });
 
       console.log(`[scenes.reorderScenes] ✅ Successfully reordered ${input.sceneIds.length} scenes`);
       
@@ -563,6 +583,16 @@ export const scenesRouter = createTRPCRouter({
         })
         .where(eq(scenes.id, input.sceneId))
         .returning();
+
+      // Normalize orders 0..n-1 (defensive, even though duration change shouldn't affect order)
+      const orderedAfterDuration = await ctx.db.query.scenes.findMany({
+        where: eq(scenes.projectId, input.projectId),
+      });
+      orderedAfterDuration
+        .sort((a: any, b: any) => ((a.order ?? 0) - (b.order ?? 0)) || (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()))
+        .forEach(async (s, idx) => {
+          await ctx.db.update(scenes).set({ order: idx, updatedAt: new Date() }).where(eq(scenes.id, s.id));
+        });
 
       // Create a descriptive message for the duration change
       const sceneName = existingScene.name || `Scene ${existingScene.order + 1}`;

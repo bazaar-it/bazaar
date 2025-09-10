@@ -197,6 +197,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   const DELETE_FADE_MS = 320; // Smooth fade duration for scene removal
   // Smooth delete UX: mark scenes as "deleting" to fade them out before removal
   const [deletingScenes, setDeletingScenes] = useState<Set<string>>(new Set());
+  const [mergingScenes, setMergingScenes] = useState<Set<string>>(new Set());
   const markDeleting = useCallback((id: string) => {
     setDeletingScenes(prev => {
       const next = new Set(prev);
@@ -212,6 +213,21 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       return next;
     });
   }, []);
+  const markMerging = useCallback((ids: string[]) => {
+    setMergingScenes(prev => {
+      const next = new Set(prev);
+      ids.forEach(id => id && next.add(id));
+      return next;
+    });
+    // Clear after animation
+    window.setTimeout(() => {
+      setMergingScenes(prev => {
+        const next = new Set(prev);
+        ids.forEach(id => next.delete(id));
+        return next;
+      });
+    }, DELETE_FADE_MS + 120);
+  }, [DELETE_FADE_MS]);
   
   const updateScene = useVideoState(state => state.updateScene);
   const deleteScene = useVideoState(state => state.deleteScene);
@@ -1749,6 +1765,15 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     markDeleting(sceneId);
     try { addPendingDelete(projectId, sceneId); } catch {}
 
+    // Pulse neighbors to accentuate merge
+    try {
+      const idx = scenes.findIndex((s: any) => s.id === sceneId);
+      const neighborIds: string[] = [];
+      if (idx > 0) neighborIds.push(scenes[idx - 1]?.id);
+      if (idx < scenes.length - 1) neighborIds.push(scenes[idx + 1]?.id);
+      markMerging(neighborIds.filter(Boolean) as string[]);
+    } catch {}
+
     // Push undo snapshot prior to removal
     const sceneIndex = scenes.findIndex((s: any) => s.id === sceneId);
     const scenePayload = sceneIndex >= 0 ? scenes[sceneIndex] : undefined;
@@ -2627,6 +2652,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                 const isBeingDragged = isDragging && dragInfo?.sceneId === scene.id && dragInfo?.action === 'reorder';
                 const isHoverTarget = isDragging && dragInfo?.action === 'reorder' && reorderHoverIndex === index && dragInfo.sceneIndex !== index;
                 const isDeleting = deletingScenes.has(scene.id);
+                const isMerging = mergingScenes.has(scene.id);
                 const displayName = cleanSceneName(scene.name || scene.data?.name) || `Scene ${index + 1}`;
                 
                 return (
@@ -2636,6 +2662,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                     className={cn(
                       "absolute flex items-center rounded-lg text-sm font-medium transition-all cursor-move",
                       isBeingDragged ? "opacity-50 z-40 scale-105" : "z-10 hover:scale-102 hover:z-15",
+                      isMerging && !isDeleting ? "ring-2 ring-amber-400/60" : "",
                       isHoverTarget && "ring-2 ring-blue-400/70",
                       isDeleting && "pointer-events-none"
                     )}
@@ -2644,12 +2671,13 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                       width: `${width}%`,
                       height: TIMELINE_ITEM_HEIGHT,
                       top: '50%',
-                      transform: `translateY(-50%) ${isDeleting ? 'scale(0.96)' : ''}`,
+                      transform: `translateY(-50%) ${isDeleting ? 'scale(0.96)' : (isMerging ? 'scale(1.04)' : '')}`,
                       minWidth: '40px',
                       ...getSceneStyles(scene),
                       transition: `left ${DELETE_FADE_MS}ms cubic-bezier(0.22,1,0.36,1), width ${DELETE_FADE_MS}ms cubic-bezier(0.22,1,0.36,1), opacity ${DELETE_FADE_MS}ms cubic-bezier(0.22,1,0.36,1), transform ${DELETE_FADE_MS}ms cubic-bezier(0.22,1,0.36,1)`,
                       willChange: 'left, width, transform, opacity',
                       opacity: isDeleting ? 0 : 1,
+                      boxShadow: isMerging && !isDeleting ? '0 0 0 8px rgba(251, 191, 36, 0.20)' : undefined,
                     }}
                     draggable
                     onDragStartCapture={(e) => {
