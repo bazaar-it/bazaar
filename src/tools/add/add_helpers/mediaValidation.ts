@@ -33,10 +33,11 @@ export class MediaValidation {
     
     // If we have provided URLs, use them to replace placeholders
     if (providedUrls && providedUrls.length > 0) {
-      placeholderPatterns.forEach(pattern => {
+      const urls = providedUrls as string[];
+      placeholderPatterns.forEach((pattern) => {
         let matchIndex = 0;
-        fixedCode = fixedCode.replace(pattern, (match) => {
-          const replacement = providedUrls[matchIndex % providedUrls.length];
+        fixedCode = fixedCode.replace(pattern, (match: string) => {
+          const replacement = urls[matchIndex % urls.length]!;
           if (match !== replacement) {
             fixes.push(`Replaced placeholder "${match}" with real URL`);
           }
@@ -140,7 +141,7 @@ export class MediaValidation {
     while ((match = srcPattern.exec(code)) !== null) {
       const url = match[1];
       // Only include HTTP(S) URLs, not data: or relative paths
-      if (url.startsWith('http://') || url.startsWith('https://')) {
+      if (typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
         urls.push(url);
       }
     }
@@ -149,7 +150,7 @@ export class MediaValidation {
     const styleUrlPattern = /url\(["']?([^"')]+)["']?\)/g;
     while ((match = styleUrlPattern.exec(code)) !== null) {
       const url = match[1];
-      if (url.startsWith('http://') || url.startsWith('https://')) {
+      if (typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
         urls.push(url);
       }
     }

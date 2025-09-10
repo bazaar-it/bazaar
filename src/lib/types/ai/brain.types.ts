@@ -10,7 +10,7 @@
 // TOOL NAMES - Original 4 tools plus 3 new multi-scene tools
 // ============================================================================
 
-export type ToolName = 'addScene' | 'editScene' | 'deleteScene' | 'trimScene' | 'imageRecreatorScene' | 'addAudio' | 'websiteToVideo'; // | 'scenePlanner'; [DISABLED]
+export type ToolName = 'addScene' | 'editScene' | 'deleteScene' | 'trimScene' | 'addAudio' | 'websiteToVideo'; // | 'scenePlanner' [DISABLED]
 
 // ============================================================================
 // TOOL TO OPERATION MAPPING - Single source of truth
@@ -21,7 +21,6 @@ export const TOOL_OPERATION_MAP = {
   editScene: 'scene.update',
   trimScene: 'scene.update',
   deleteScene: 'scene.delete',
-  imageRecreatorScene: 'scene.create',
   addAudio: 'audio.add',
   websiteToVideo: 'scene.create',
   // scenePlanner: 'multi-scene.create' [DISABLED]
@@ -42,6 +41,13 @@ export interface BrainDecision {
   // Context for the selected tool
   toolContext?: {
     userPrompt: string;
+    // Image handling intent decided by the Brain when images are present
+    imageAction?: 'embed' | 'recreate';
+    imageDirectives?: Array<{
+      url: string;
+      action: 'embed' | 'recreate';
+      target?: 'newScene' | { sceneId: string; selector?: string };
+    }>;
     targetSceneId?: string;
     targetDuration?: number; // For trim operations
     requestedDurationFrames?: number; // Explicit duration from user prompt (e.g. "5 seconds" = 150)
@@ -227,6 +233,12 @@ export interface ToolSelectionResult {
   targetDuration?: number; // For trim operations - exact frame count
   referencedSceneIds?: string[]; // For cross-scene style/color matching
   websiteUrl?: string; // For websiteToVideo tool
+  imageAction?: 'embed' | 'recreate';
+  imageDirectives?: Array<{
+    url: string;
+    action: 'embed' | 'recreate';
+    target?: 'newScene' | { sceneId: string; selector?: string };
+  }>;
   reasoning?: string;
   error?: string;
   needsClarification?: boolean;
@@ -241,5 +253,5 @@ export interface ToolSelectionResult {
 // ============================================================================
 
 export function isValidToolName(value: string): value is ToolName {
-  return ['addScene', 'editScene', 'deleteScene', 'trimScene', 'imageRecreatorScene', 'addAudio', 'websiteToVideo'].includes(value); // , 'scenePlanner' [DISABLED]
+  return ['addScene', 'editScene', 'deleteScene', 'trimScene', 'addAudio', 'websiteToVideo'].includes(value); // , 'scenePlanner' [DISABLED]
 }

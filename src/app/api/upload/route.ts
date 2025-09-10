@@ -141,6 +141,15 @@ export async function POST(request: NextRequest) {
         type: asset.type,
         projectId
       });
+
+      // Fire-and-forget: analyze media and tag asset for richer Brain context
+      try {
+        const { mediaMetadataService } = await import('~/server/services/media/media-metadata.service');
+        // run without blocking response
+        void mediaMetadataService.analyzeAndTag(asset.id, publicUrl);
+      } catch (e) {
+        console.warn('[Upload] Media metadata service not available:', e);
+      }
     } catch (contextError) {
       // Don't fail the upload if context save fails
       console.error('[Upload] Failed to save asset context:', contextError);

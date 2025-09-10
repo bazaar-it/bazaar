@@ -149,22 +149,21 @@ Analyzed: ${new Date(web.analyzedAt).toLocaleString()}
 The AI has access to visual screenshots of this website and can reference them for brand matching, design inspiration, and style consistency.`;
     }
     
-    // Add project assets context
+    // Add project assets context (with tags/hints if available)
     let assetInfo = "";
     if (contextPacket.assetContext && contextPacket.assetContext.assetUrls.length > 0) {
-      assetInfo = `\n\nPROJECT ASSETS (Previously uploaded):
-${contextPacket.assetContext.assetUrls.length} assets available in this project:`;
-      
-      // Show first few assets as examples
-      contextPacket.assetContext.allAssets.slice(0, 5).forEach((asset, idx) => {
-        assetInfo += `\n${idx + 1}. ${asset.originalName} (${asset.type})`;
+      const assets = (contextPacket.assetContext as any).allAssets || [];
+      const logos = (contextPacket.assetContext as any).logos || [];
+      assetInfo = `\n\nPROJECT ASSETS (Previously uploaded): ${assets.length} asset(s)`;
+
+      assets.slice(0, 5).forEach((asset: any, idx: number) => {
+        const tags = Array.isArray(asset.tags) && asset.tags.length ? ` [tags: ${asset.tags.slice(0,5).join(', ')}]` : '';
+        assetInfo += `\n${idx + 1}. ${asset.originalName} (${asset.type})${tags}`;
       });
-      
-      if (contextPacket.assetContext.logos.length > 0) {
-        assetInfo += `\n\nLOGOS: ${contextPacket.assetContext.logos.length} logo(s) detected in project`;
+      if (logos.length > 0) {
+        assetInfo += `\nLOGOS: ${logos.length} logo(s) available`;
       }
-      
-      assetInfo += `\n\nWhen user references "the logo", "my image", "that file from before", they likely mean one of these project assets.`;
+      assetInfo += `\nHint tags may include kind:logo/ui, layout:*, color:#xxxxxx, hasText, hint:embed/hint:recreate.`;
     }
 
     return `USER: "${prompt}"
@@ -239,6 +238,8 @@ Respond with JSON only.`;
       targetDuration: parsed.targetDuration, // Pass through targetDuration for trim
       referencedSceneIds: parsed.referencedSceneIds, // Pass through referenced scenes
       websiteUrl: parsed.websiteUrl, // Pass through website URL for websiteToVideo tool
+      imageAction: parsed.imageAction, // Brain-driven image intent
+      imageDirectives: parsed.imageDirectives, // Optional per-image actions
       userFeedback: parsed.userFeedback,
     };
 

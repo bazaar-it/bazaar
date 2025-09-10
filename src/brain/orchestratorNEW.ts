@@ -247,7 +247,9 @@ export class Orchestrator {
             // Add YouTube analysis flag
             isYouTubeAnalysis: hasYouTube && hasTimeSpec,
             // Include template context for better first-scene generation
-            templateContext: contextPacket.templateContext
+            templateContext: contextPacket.templateContext,
+            imageAction: toolSelection.imageAction,
+            imageDirectives: toolSelection.imageDirectives
           },
           workflow: toolSelection.workflow,
         }
