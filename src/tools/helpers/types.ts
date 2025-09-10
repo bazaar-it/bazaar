@@ -116,6 +116,7 @@ export interface AddToolOutput extends BaseToolOutput {
 export interface EditToolInput extends BaseToolInput {
   sceneId: string;       // Just for reference
   tsxCode: string;       // ✓ FIXED: Was existingCode
+  sceneName?: string;    // Current scene name to preserve
   currentDuration?: number;
   imageUrls?: string[];
   videoUrls?: string[];
@@ -153,6 +154,7 @@ export interface EditToolInput extends BaseToolInput {
 
 export interface EditToolOutput extends BaseToolOutput {
   tsxCode: string;       // Updated code
+  name?: string;         // Scene name (preserved from input)
   duration?: number;     // Only if changed
   props?: Record<string, any>;
   changesApplied?: string[];
