@@ -71,6 +71,15 @@ BRAND MATCHING INSTRUCTIONS:
       
       if (input.imageUrls?.length) {
         context += `\n\nIMAGE CONTEXT: User provided ${input.imageUrls.length} image(s)`;
+        // Add clarity about which image is "this image" or "the image"
+        if (input.imageUrls.length > 1) {
+          context += `\nWhen user says "this image" or "the image", they mean the LAST image in the list (most recently uploaded).`;
+          context += `\nImage order (oldest to newest):`;
+          input.imageUrls.forEach((url, i) => {
+            const label = i === input.imageUrls!.length - 1 ? ' <- THIS IMAGE (most recent)' : '';
+            context += `\n  ${i + 1}. ${url.split('/').pop()}${label}`;
+          });
+        }
       }
       
       if (input.videoUrls?.length) {
@@ -130,7 +139,15 @@ BRAND MATCHING INSTRUCTIONS:
           ? 'The first two images are website screenshots for brand matching. Use them to understand the brand\'s visual identity, colors, and design patterns.'
           : 'Look at the provided image(s) for visual guidance.';
         const selectorHint = input.targetSelector ? `TARGET SELECTOR: ${input.targetSelector} — place/embed or modify within that element.` : '';
-        const contextInstructions = `${brandingHint} ${modeHint} ${selectorHint}`.trim();
+        
+        // Add image reference clarification when multiple images
+        let imageReferenceHint = '';
+        if (input.imageUrls && input.imageUrls.length > 1) {
+          const lastImageUrl = input.imageUrls[input.imageUrls.length - 1];
+          imageReferenceHint = `\n\nIMPORTANT: When the user says "this image" or "the image", they are referring to the LAST user-provided image (${lastImageUrl.split('/').pop()}), not earlier images or website screenshots.`;
+        }
+        
+        const contextInstructions = `${brandingHint} ${modeHint} ${selectorHint}${imageReferenceHint}`.trim();
         
         messageContent = [
           { 

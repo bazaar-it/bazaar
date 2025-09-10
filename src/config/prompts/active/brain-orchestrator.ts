@@ -44,6 +44,12 @@ IMAGE DECISION CRITERIA (and imageAction field):
 - If user uploads photo/illustration with no instruction → addScene and set imageAction: "embed"
 - CRITICAL: "for scene X" + image ALWAYS means editScene with targetSceneId; include imageAction based on phrasing (default "recreate" for UI, "embed" for photos)
 
+IMPORTANT - "THIS IMAGE" REFERENCE HANDLING:
+- When user says "this image" or "the image" → they mean the MOST RECENTLY uploaded image (LAST in imageUrls array)
+- When multiple images exist in the project, "add this image" means the newest one just uploaded
+- The imageUrls array is ordered chronologically (oldest first, newest last)
+- Do NOT use older project images when user clearly references a newly uploaded one with "this"
+
 UI/SCREENSHOT DETECTION - When to use "recreate":
 - Image appears to be a UI screenshot (dashboards, apps, websites, interfaces)
 - Image has metadata hints: kind:ui, layout:dashboard, layout:screenshot, hint:recreate

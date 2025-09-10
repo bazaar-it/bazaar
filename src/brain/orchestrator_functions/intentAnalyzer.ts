@@ -122,6 +122,16 @@ NOTE: All tools are multimodal. When images are referenced, include them in the 
     if (currentImageUrls.length > 0) {
       imageInfo += `\n\nCURRENT MESSAGE: Includes ${currentImageUrls.length} image(s) uploaded with this request.`;
       
+      // Be explicit about which image is "this image"
+      if (currentImageUrls.length > 1) {
+        imageInfo += `\nIMPORTANT: When user says "this image" or "the image" without specifics, they mean the LAST image in the list (most recently uploaded):`;
+        currentImageUrls.forEach((url, index) => {
+          const isLast = index === currentImageUrls.length - 1;
+          const label = isLast ? ' <- THIS IMAGE (most recent upload)' : '';
+          imageInfo += `\n  ${index + 1}. ${url.split('/').pop()?.substring(0, 50)}${label}`;
+        });
+      }
+      
       // Check if we have metadata hints for these images
       console.log('🔍 [INTENT] Looking for metadata hints for', currentImageUrls.length, 'images');
       if (contextPacket.assetContext && (contextPacket.assetContext as any).allAssets) {
