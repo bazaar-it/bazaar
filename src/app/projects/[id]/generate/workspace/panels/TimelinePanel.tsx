@@ -114,6 +114,9 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   const [audioMenu, setAudioMenu] = useState<{ x: number; y: number } | null>(null);
   const [isAudioSelected, setIsAudioSelected] = useState(false);
   const [audioPulse, setAudioPulse] = useState(false);
+  // Long-press-to-reorder support (for less sensitive reordering)
+  const longPressTimerRef = useRef<number | null>(null);
+  const longPressStartRef = useRef<{ x: number; y: number; sceneId: string; sceneStart: number; sceneDuration: number; sceneIndex: number } | null>(null);
   const audioLastUrlRef = useRef<string | null>(null);
   const audioHadRef = useRef<boolean>(false);
   // Peaks cache and refs
@@ -1357,11 +1360,12 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         if (mouseFrame >= cumulativeFrames && mouseFrame < sceneEnd) {
           // We're dropping on scene at index i
           if (dragInfo.sceneIndex !== undefined && i !== dragInfo.sceneIndex) {
-            // Require 30% overlap (drop near the center of the target scene) to commit reorder
+            // Require center overlap (drop near the center of the target scene) to commit reorder
             const targetDur = scene.duration || 150;
             const localPos = mouseFrame - cumulativeFrames;
-            const minCenter = Math.floor(targetDur * 0.3);
-            const maxCenter = Math.ceil(targetDur * 0.7);
+            // Slightly widened center band but still strict enough to avoid accidental reorders
+            const minCenter = Math.floor(targetDur * 0.25);
+            const maxCenter = Math.ceil(targetDur * 0.75);
             if (localPos < minCenter || localPos > maxCenter) {
               setDragInfo(null);
               setIsDragging(false);
@@ -2450,7 +2454,28 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                       transition: 'all 0.2s ease'
                     }}
                     draggable
+                    onDragStartCapture={(e) => {
+                      // If we're initiating a reorder interaction, block native HTML5 drag entirely
+                      if (isDragging && dragInfo?.action === 'reorder') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return false as any;
+                      }
+                      return undefined as any;
+                    }}
                     onDragStart={(e) => {
+                      // Guard: prevent native drag when reordering via grip/long-press
+                      if (isDragging && dragInfo?.action === 'reorder') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return;
+                      }
+                      // If a long-press reorder is pending, cancel it so chat-drag wins
+                      if (longPressTimerRef.current) {
+                        try { window.clearTimeout(longPressTimerRef.current); } catch {}
+                        longPressTimerRef.current = null;
+                        longPressStartRef.current = null;
+                      }
                       try {
                         const payload = {
                           type: 'timeline-scene',
@@ -2464,6 +2489,14 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                         e.dataTransfer.effectAllowed = 'copy';
                       } catch {}
                     }}
+                    onDragEnd={() => {
+                      // Cleanup any stale long-press timers
+                      if (longPressTimerRef.current) {
+                        try { window.clearTimeout(longPressTimerRef.current); } catch {}
+                        longPressTimerRef.current = null;
+                      }
+                      longPressStartRef.current = null;
+                    }}
                     onMouseDown={(e) => {
                       // Check if we're clicking on a resize handle
                       const rect = e.currentTarget.getBoundingClientRect();
@@ -2476,8 +2509,80 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                       } else if (isRightEdge) {
                         handleResizeDragStart(e, scene.id, 'resize-end');
                       } else {
-                        // Do not start reorder from the block body; reserved for drag-to-chat.
+                        // Gentle behavior: allow press-and-hold on the block body to initiate reorder
+                        // without making it too sensitive or conflicting with drag-to-chat.
+                        // If the user moves quickly, native drag-to-chat will take precedence.
+                        try { if (longPressTimerRef.current) window.clearTimeout(longPressTimerRef.current); } catch {}
+                        const startX = e.clientX;
+                        const startY = e.clientY;
+                        // Remember context so timer can promote to reorder
+                        longPressStartRef.current = {
+                          x: startX,
+                          y: startY,
+                          sceneId: scene.id,
+                          sceneStart: sceneStart,
+                          sceneDuration: scene.duration,
+                          sceneIndex: index,
+                        };
+                        // After a short hold, if the pointer hasn't moved much, switch to reorder mode
+                        longPressTimerRef.current = window.setTimeout(() => {
+                          const info = longPressStartRef.current;
+                          if (!info) return;
+                          const MOVE_THRESHOLD_PX = 6;
+                          const dx = Math.abs((window as any).__lastMouseX ?? info.x) - info.x;
+                          const dy = Math.abs((window as any).__lastMouseY ?? info.y) - info.y;
+                          const movedTooMuch = (Math.abs(dx) > MOVE_THRESHOLD_PX) || (Math.abs(dy) > MOVE_THRESHOLD_PX);
+                          if (movedTooMuch) return;
+                          // Activate reorder drag
+                          setDragInfo({
+                            action: 'reorder',
+                            sceneId: info.sceneId,
+                            startX: info.x,
+                            startPosition: info.sceneStart,
+                            startDuration: info.sceneDuration,
+                            sceneIndex: info.sceneIndex,
+                          });
+                          setIsDragging(true);
+                          setSelectedSceneId(info.sceneId);
+                          try {
+                            const ev = new CustomEvent('timeline-select-scene', { detail: { sceneId: info.sceneId } });
+                            window.dispatchEvent(ev);
+                          } catch {}
+                        }, 250); // 250ms press to activate reorder
                       }
+                    }}
+                    onMouseMove={(e) => {
+                      // Track last mouse for long-press movement threshold
+                      (window as any).__lastMouseX = e.clientX;
+                      (window as any).__lastMouseY = e.clientY;
+                      // If pointer moves too far before long-press fires, cancel long-press
+                      const info = longPressStartRef.current;
+                      if (info && longPressTimerRef.current) {
+                        const dx = Math.abs(e.clientX - info.x);
+                        const dy = Math.abs(e.clientY - info.y);
+                        const MOVE_CANCEL_PX = 6;
+                        if (dx > MOVE_CANCEL_PX || dy > MOVE_CANCEL_PX) {
+                          try { window.clearTimeout(longPressTimerRef.current); } catch {}
+                          longPressTimerRef.current = null;
+                          longPressStartRef.current = null;
+                        }
+                      }
+                    }}
+                    onMouseUp={() => {
+                      // Cancel any pending long-press
+                      if (longPressTimerRef.current) {
+                        try { window.clearTimeout(longPressTimerRef.current); } catch {}
+                        longPressTimerRef.current = null;
+                      }
+                      longPressStartRef.current = null;
+                    }}
+                    onMouseLeave={() => {
+                      // Cancel pending long-press when leaving the block
+                      if (longPressTimerRef.current) {
+                        try { window.clearTimeout(longPressTimerRef.current); } catch {}
+                        longPressTimerRef.current = null;
+                      }
+                      longPressStartRef.current = null;
                     }}
                     onContextMenu={(e) => handleContextMenu(e, scene.id)}
                     onClick={(e) => {
