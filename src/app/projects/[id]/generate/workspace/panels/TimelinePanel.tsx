@@ -37,7 +37,7 @@ const TIMELINE_ITEM_HEIGHT = 40;
 const FPS = 30;
 // Extra visual space to allow trimming/extending the rightmost scene comfortably.
 // Spacer is positioned outside the percent-based content to avoid width drift.
-const END_SPACER_PX = 240;
+const TIMELINE_END_SPACER_PX = 240; // Configure spacer to allow trim handles at the end
 
 // Define Scene type based on Bazaar-Vid structure
 interface Scene {
@@ -107,6 +107,8 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     console.log('[TimelinePanel] Mounted for project:', projectId, 'ID:', timelineId.current);
     return () => {
       console.log('[TimelinePanel] Unmounted for project:', projectId, 'ID:', timelineId.current);
+      decodedAudioDurationRef.current = null;
+      isAudioDraggingRef.current = false;
     };
   }, [projectId]);
   const [zoomScale, setZoomScale] = useState(1);
@@ -269,11 +271,11 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       });
       
       // Return context for rollback
-      return { previous, previousAppliedAt } as { previous: any, previousAppliedAt: number };
+      return { previous, previousAppliedAt, appliedAt } as { previous: any, previousAppliedAt: number, appliedAt: number };
     },
-    onSuccess: (data) => {
-      // Update with server's timestamp
-      if (data?.audioUpdatedAt) {
+    onSuccess: (data, vars, ctx) => {
+      // Update with server's timestamp, only if this success corresponds to last onMutate
+      if (data?.audioUpdatedAt && ctx?.appliedAt && ctx.appliedAt === audioAppliedAtRef.current) {
         audioAppliedAtRef.current = data.audioUpdatedAt;
       }
     },
@@ -1301,7 +1303,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       if (!scene) return;
 
       // Compute content width and the pixel width of this scene block
-      const contentWidth = (innerContentRef.current?.scrollWidth || rect.width * zoomScale) - END_SPACER_PX;
+      const contentWidth = (innerContentRef.current?.scrollWidth || rect.width * zoomScale) - TIMELINE_END_SPACER_PX;
       const sceneStartFrames = dragInfo.startPosition; // start position in frames captured at drag start
       const sceneLeftPx = (sceneStartFrames / totalDuration) * contentWidth;
       const sceneWidthPx = Math.max(1, (scene.duration / totalDuration) * contentWidth);
@@ -1561,7 +1563,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         return;
       }
       const mouseX = e.clientX - rect.left + timelineRef.current.scrollLeft;
-      const contentScrollWidth2 = (innerContentRef.current?.scrollWidth || rect.width * zoomScale) - END_SPACER_PX;
+      const contentScrollWidth2 = (innerContentRef.current?.scrollWidth || rect.width * zoomScale) - TIMELINE_END_SPACER_PX;
       const relativeX = contentScrollWidth2 > 0 ? mouseX / contentScrollWidth2 : 0;
       const mouseFrame = Math.round(relativeX * totalDuration);
       
@@ -2520,7 +2522,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
               
               // Account for scroll and use true content width (exclude spacer)
               const actualClickX = clickX + scrollLeft;
-              const contentScrollWidth = (innerContentRef.current?.scrollWidth || rect.width * zoomScale) - END_SPACER_PX;
+    const contentScrollWidth = (innerContentRef.current?.scrollWidth || rect.width * zoomScale) - TIMELINE_END_SPACER_PX;
               const actualWidth = Math.max(1, contentScrollWidth);
               
               // Calculate percentage and frame

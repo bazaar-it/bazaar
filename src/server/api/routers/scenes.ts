@@ -10,10 +10,12 @@ import { extractDurationFromCode } from "~/server/services/code/duration-extract
 
 // Helpers (module-scope): Not router entries. Avoid placing these inside createTRPCRouter.
 // Inject a frame offset into TSX code so that frame 0 maps to original `offset`.
-const applyFrameOffset = (code: string, offset: number): string => {
+export const applyFrameOffset = (code: string, offset: number): string => {
   try {
-    if (!code || offset === 0) return code;
-    const OFFSET = Math.max(0, Math.floor(offset));
+    if (typeof code !== 'string' || code.length === 0) return code;
+    if (!Number.isFinite(offset)) return code;
+    const OFFSET = Math.max(0, Math.min(999999, Math.floor(offset)));
+    if (OFFSET === 0) return code;
 
     // Case 1: const frame = useCurrentFrame()
     const reFrameDecl = /(const\s+frame\s*=\s*)useCurrentFrame\s*\(\s*\)\s*;?/;
@@ -29,10 +31,9 @@ const applyFrameOffset = (code: string, offset: number): string => {
 
     // Case 3: if code uses variable `frame` elsewhere but not defined, inject one
     const usesFrame = /\bframe\b/.test(code);
-    const hasRemotionHeader = /window\.Remotion/.test(code);
     if (usesFrame) {
       // Prepend a safe header after any Remotion destructuring if present
-      const header = `\n// Applied frame offset\nconst frame = (typeof useCurrentFrame === 'function' ? useCurrentFrame() : (window.Remotion?.useCurrentFrame?.() ?? 0)) + ${OFFSET};\n`;
+      const header = `\n// Applied frame offset (auto)\nconst frame = (typeof useCurrentFrame === 'function' ? useCurrentFrame() : (window.Remotion?.useCurrentFrame?.() ?? 0)) + ${OFFSET};\n`;
       const remotionDecl = /const\s*\{[^}]*\}\s*=\s*window\.Remotion\s*;?/;
       if (remotionDecl.test(code)) {
         return code.replace(remotionDecl, (m) => `${m}${header}`);
@@ -42,7 +43,8 @@ const applyFrameOffset = (code: string, offset: number): string => {
 
     // No known patterns; return original
     return code;
-  } catch {
+  } catch (err) {
+    console.warn('[applyFrameOffset] Failed to apply frame offset:', err);
     return code;
   }
 };
