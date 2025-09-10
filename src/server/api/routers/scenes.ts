@@ -2,7 +2,8 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { eq, and, sql } from "drizzle-orm";
-import { scenes, sceneIterations, messages } from "~/server/db/schema";
+import { scenes, sceneIterations, messages, projects, sceneOperations } from "~/server/db/schema";
+import { TRPCError } from "@trpc/server";
 import { messageService } from "~/server/services/data/message.service";
 import { formatManualEditMessage } from "~/lib/utils/scene-message-formatter";
 import { extractDurationFromCode } from "~/server/services/code/duration-extractor";
@@ -79,6 +80,107 @@ const renameSceneSuffix = (code: string): { code: string; newSuffix?: string; ol
 };
 
 export const scenesRouter = createTRPCRouter({
+  duplicateScene: protectedProcedure
+    .input(z.object({
+      projectId: z.string(),
+      sceneId: z.string(),
+      position: z.enum(['after', 'end']).optional().default('after'),
+      name: z.string().optional(),
+      clientRevision: z.number().optional(),
+      idempotencyKey: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      console.log(`[scenes.duplicateScene] Duplicating scene ${input.sceneId} (${input.position})`);
+
+      // Verify source scene + ownership
+      const src = await ctx.db.query.scenes.findFirst({
+        where: and(eq(scenes.id, input.sceneId), eq(scenes.projectId, input.projectId)),
+        with: { project: true },
+      });
+      if (!src) throw new Error('Scene not found');
+      if (src.project.userId !== ctx.session.user.id) throw new Error("Unauthorized: You don't own this project");
+
+      // Optional revision/idempotency checks
+      if (input.clientRevision !== undefined) {
+        const proj = await ctx.db.query.projects.findFirst({ where: eq(projects.id, input.projectId) });
+        if (proj && proj.revision !== input.clientRevision) {
+          throw new TRPCError({ code: 'CONFLICT', message: 'Stale client revision' });
+        }
+      }
+      if (input.idempotencyKey) {
+        const existingOp = await ctx.db.query.sceneOperations.findFirst({
+          where: and(eq(sceneOperations.projectId, input.projectId), eq(sceneOperations.idempotencyKey, input.idempotencyKey)),
+        });
+        if (existingOp) {
+          const proj = await ctx.db.query.projects.findFirst({ where: eq(projects.id, input.projectId) });
+          return { success: true, newScene: null, newRevision: proj?.revision } as any;
+        }
+      }
+
+      // Compute insertion order
+      let newOrder = src.order + 1;
+      if (input.position === 'end') {
+        const last = await ctx.db.query.scenes.findMany({
+          where: eq(scenes.projectId, input.projectId),
+          orderBy: (s, { asc }) => [asc(s.order)],
+        });
+        newOrder = (last[last.length - 1]?.order ?? -1) + 1;
+      } else {
+        // Shift scenes after src.order
+        await ctx.db
+          .update(scenes)
+          .set({ order: sql`${scenes.order} + 1`, updatedAt: new Date() })
+          .where(and(eq(scenes.projectId, input.projectId), sql`${scenes.order} > ${src.order}`));
+      }
+
+      // Name strategy
+      const baseName = input.name?.trim() || src.name || 'Scene';
+      const name = baseName.match(/\(Copy\)$/) ? baseName : `${baseName} (Copy)`;
+
+      // Insert duplicate
+      const [dup] = await ctx.db
+        .insert(scenes)
+        .values({
+          projectId: input.projectId,
+          order: newOrder,
+          name,
+          tsxCode: src.tsxCode,
+          props: src.props,
+          duration: src.duration,
+          layoutJson: src.layoutJson,
+          slug: src.slug,
+          dominantColors: src.dominantColors as any,
+          firstH1Text: src.firstH1Text,
+        })
+        .returning();
+
+      await messageService.createMessage({
+        projectId: input.projectId,
+        content: `Duplicated scene "${src.name ?? 'Scene'}"`,
+        role: 'assistant',
+        kind: 'message',
+        status: 'success',
+      });
+
+      const updatedProj = await ctx.db
+        .update(projects)
+        .set({ revision: sql`${projects.revision} + 1` })
+        .where(eq(projects.id, input.projectId))
+        .returning();
+
+      if (input.idempotencyKey) {
+        await ctx.db.insert(sceneOperations).values({
+          projectId: input.projectId,
+          idempotencyKey: input.idempotencyKey,
+          operationType: 'duplicate',
+          payload: { sceneId: input.sceneId, position: input.position },
+          result: { newSceneId: dup?.id },
+        });
+      }
+
+      console.log(`[scenes.duplicateScene] ✅ Duplicated ${src.id} -> ${dup?.id}`);
+      return { success: true, newScene: dup, newRevision: updatedProj[0]?.revision };
+    }),
   splitScene: protectedProcedure
     .input(z.object({
       projectId: z.string(),
@@ -86,6 +188,8 @@ export const scenesRouter = createTRPCRouter({
       frame: z.number().min(1), // split point in frames relative to scene start
       // minFrames is deprecated; left here for backward-compatibility but unused
       minFrames: z.number().min(1).optional(),
+      clientRevision: z.number().optional(),
+      idempotencyKey: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       // No enforced minimum segment size beyond 1 frame
@@ -102,6 +206,23 @@ export const scenesRouter = createTRPCRouter({
       }
       if (existingScene.project.userId !== ctx.session.user.id) {
         throw new Error("Unauthorized: You don't own this project");
+      }
+
+      // Optional optimistic concurrency and idempotency
+      if (input.clientRevision !== undefined) {
+        const proj = await ctx.db.query.projects.findFirst({ where: eq(projects.id, input.projectId) });
+        if (proj && proj.revision !== input.clientRevision) {
+          throw new TRPCError({ code: 'CONFLICT', message: 'Stale client revision' });
+        }
+      }
+      if (input.idempotencyKey) {
+        const existingOp = await ctx.db.query.sceneOperations.findFirst({
+          where: and(eq(sceneOperations.projectId, input.projectId), eq(sceneOperations.idempotencyKey, input.idempotencyKey)),
+        });
+        if (existingOp) {
+          const proj = await ctx.db.query.projects.findFirst({ where: eq(projects.id, input.projectId) });
+          return { success: true, leftSceneId: undefined, rightSceneId: undefined, newRevision: proj?.revision } as any;
+        }
       }
 
       const total = existingScene.duration;
@@ -171,13 +292,32 @@ export const scenesRouter = createTRPCRouter({
         status: 'success',
       });
 
+      // Increment project revision and record operation
+      const updated = await ctx.db
+        .update(projects)
+        .set({ revision: sql`${projects.revision} + 1` })
+        .where(eq(projects.id, input.projectId))
+        .returning();
+
+      if (input.idempotencyKey) {
+        await ctx.db.insert(sceneOperations).values({
+          projectId: input.projectId,
+          idempotencyKey: input.idempotencyKey,
+          operationType: 'split',
+          payload: { sceneId: input.sceneId, frame: input.frame },
+          result: { leftSceneId: existingScene.id, rightSceneId: newScene?.id },
+        });
+      }
+
       console.log(`[scenes.splitScene] ✅ Split complete: ${existingScene.id} -> ${newScene?.id}`);
-      return { success: true, leftSceneId: existingScene.id, rightSceneId: newScene?.id };
+      return { success: true, leftSceneId: existingScene.id, rightSceneId: newScene?.id, newRevision: updated[0]?.revision };
     }),
   reorderScenes: protectedProcedure
     .input(z.object({
       projectId: z.string(),
       sceneIds: z.array(z.string()), // Array of scene IDs in new order
+      clientRevision: z.number().optional(),
+      idempotencyKey: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       console.log(`[scenes.reorderScenes] Reordering scenes for project ${input.projectId}`);
@@ -207,6 +347,23 @@ export const scenesRouter = createTRPCRouter({
         throw new Error("Invalid scene IDs provided");
       }
 
+      // Optional revision/idempotency checks
+      if (input.clientRevision !== undefined) {
+        const proj = await ctx.db.query.projects.findFirst({ where: eq(projects.id, input.projectId) });
+        if (proj && proj.revision !== input.clientRevision) {
+          throw new TRPCError({ code: 'CONFLICT', message: 'Stale client revision' });
+        }
+      }
+      if (input.idempotencyKey) {
+        const existingOp = await ctx.db.query.sceneOperations.findFirst({
+          where: and(eq(sceneOperations.projectId, input.projectId), eq(sceneOperations.idempotencyKey, input.idempotencyKey)),
+        });
+        if (existingOp) {
+          const proj = await ctx.db.query.projects.findFirst({ where: eq(projects.id, input.projectId) });
+          return { success: true, message: 'Scenes reordered successfully', newRevision: proj?.revision };
+        }
+      }
+
       // Update the order field for each scene
       const updatePromises = input.sceneIds.map((sceneId, index) => 
         ctx.db
@@ -231,9 +388,26 @@ export const scenesRouter = createTRPCRouter({
         status: 'success'
       });
       
+      const updated = await ctx.db
+        .update(projects)
+        .set({ revision: sql`${projects.revision} + 1` })
+        .where(eq(projects.id, input.projectId))
+        .returning();
+
+      if (input.idempotencyKey) {
+        await ctx.db.insert(sceneOperations).values({
+          projectId: input.projectId,
+          idempotencyKey: input.idempotencyKey,
+          operationType: 'reorder',
+          payload: { sceneIds: input.sceneIds },
+          result: {},
+        });
+      }
+
       return {
         success: true,
-        message: 'Scenes reordered successfully'
+        message: 'Scenes reordered successfully',
+        newRevision: updated[0]?.revision,
       };
     }),
 
@@ -339,6 +513,8 @@ export const scenesRouter = createTRPCRouter({
       projectId: z.string(),
       sceneId: z.string(),
       duration: z.number().min(1), // Allow very short clips; UI can enforce UX limits
+      clientRevision: z.number().optional(),
+      idempotencyKey: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       console.log(`[scenes.updateSceneDuration] Updating scene ${input.sceneId} duration to ${input.duration} frames`);
@@ -360,6 +536,22 @@ export const scenesRouter = createTRPCRouter({
 
       if (existingScene.project.userId !== ctx.session.user.id) {
         throw new Error("Unauthorized: You don't own this project");
+      }
+
+      if (input.clientRevision !== undefined) {
+        const proj = await ctx.db.query.projects.findFirst({ where: eq(projects.id, input.projectId) });
+        if (proj && proj.revision !== input.clientRevision) {
+          throw new TRPCError({ code: 'CONFLICT', message: 'Stale client revision' });
+        }
+      }
+      if (input.idempotencyKey) {
+        const existingOp = await ctx.db.query.sceneOperations.findFirst({
+          where: and(eq(sceneOperations.projectId, input.projectId), eq(sceneOperations.idempotencyKey, input.idempotencyKey)),
+        });
+        if (existingOp) {
+          const proj = await ctx.db.query.projects.findFirst({ where: eq(projects.id, input.projectId) });
+          return { success: true, scene: existingScene, newRevision: proj?.revision } as any;
+        }
       }
 
       // Update scene duration
@@ -405,11 +597,28 @@ export const scenesRouter = createTRPCRouter({
         messageId: message?.id, // Link to the message for restore functionality
       });
 
+      const updatedProj = await ctx.db
+        .update(projects)
+        .set({ revision: sql`${projects.revision} + 1` })
+        .where(eq(projects.id, input.projectId))
+        .returning();
+
+      if (input.idempotencyKey) {
+        await ctx.db.insert(sceneOperations).values({
+          projectId: input.projectId,
+          idempotencyKey: input.idempotencyKey,
+          operationType: 'updateDuration',
+          payload: { sceneId: input.sceneId, duration: input.duration },
+          result: {},
+        });
+      }
+
       console.log(`[scenes.updateSceneDuration] ✅ Scene duration updated, message created, and tracked`);
       
       return {
         success: true,
-        scene: updatedScenes[0]
+        scene: updatedScenes[0],
+        newRevision: updatedProj[0]?.revision,
       };
     }),
 });

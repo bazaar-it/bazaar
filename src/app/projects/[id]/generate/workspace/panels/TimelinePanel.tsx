@@ -19,9 +19,12 @@ import {
   X,
   Clock,
   Hash,
-  Scissors
+  Scissors,
+  RotateCcw,
+  RotateCw
 } from 'lucide-react';
 import { cn } from '~/lib/cn';
+import { nanoid } from 'nanoid';
 import { toast } from 'sonner';
 import { api } from '~/trpc/react';
 import { extractSceneColors } from '~/lib/utils/extract-scene-colors';
@@ -145,7 +148,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   const [isSplitBusy, setIsSplitBusy] = useState(false);
   // Deletion busy flag to prevent duplicate deletions
   const [isDeletionBusy, setIsDeletionBusy] = useState(false);
-  const [pendingDeleteSceneId, setPendingDeleteSceneId] = useState<string | null>(null);
+  const [pendingDeleteSceneId, setPendingDeleteSceneId] = useState<string | null>(null); // legacy; no longer used for inline confirm
   const deletionInProgressRef = useRef<Set<string>>(new Set());
   
   // Get video state from Zustand store
@@ -190,6 +193,24 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   // }, [scenes]);
   const [isUploadingAudio, setIsUploadingAudio] = useState(false);
   const [audioWaveform, setAudioWaveform] = useState<{peak: number[], rms: number[]}>();
+  const DELETE_FADE_MS = 320; // Smooth fade duration for scene removal
+  // Smooth delete UX: mark scenes as "deleting" to fade them out before removal
+  const [deletingScenes, setDeletingScenes] = useState<Set<string>>(new Set());
+  const markDeleting = useCallback((id: string) => {
+    setDeletingScenes(prev => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  }, []);
+  const unmarkDeleting = useCallback((id: string) => {
+    setDeletingScenes(prev => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }, []);
   
   const updateScene = useVideoState(state => state.updateScene);
   const deleteScene = useVideoState(state => state.deleteScene);
@@ -200,6 +221,11 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   const updateProjectAudio = useVideoState(state => state.updateProjectAudio);
   const reorderScenes = useVideoState(state => state.reorderScenes);
   const storeSetPlaybackSpeed = useVideoState(state => state.setPlaybackSpeed);
+  // Undo/Redo stack sizes for UI disabling
+  const undoSize = useVideoState(state => (state.undoStacks?.[projectId]?.length ?? 0));
+  const redoSize = useVideoState(state => (state.redoStacks?.[projectId]?.length ?? 0));
+
+  // Helper to perform Undo/Redo via buttons (declared later after mutations)
   
   // Persist audio changes with versioned reconciliation
   const updateAudioMutation = api.project.updateAudio.useMutation({
@@ -310,12 +336,15 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   
   // API mutation for persisting duration changes
   const updateSceneDurationMutation = api.scenes.updateSceneDuration.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (res: any) => {
       console.log('[Timeline] Scene duration persisted to database');
       // Invalidate iterations query to ensure restore button updates
       await utils.generation.getBatchMessageIterations.invalidate();
       // Invalidate project scenes so PreviewPanelG syncs latest durations
       await utils.generation.getProjectScenes.invalidate({ projectId });
+      if (res?.newRevision != null) {
+        try { (useVideoState.getState().projects as any)[projectId].revision = res.newRevision; } catch {}
+      }
     },
     onError: (error) => {
       console.error('[Timeline] Failed to persist scene duration:', error);
@@ -369,14 +398,37 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   
   // API mutation for reordering scenes
   const reorderScenesMutation = api.scenes.reorderScenes.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (res: any) => {
       console.log('[Timeline] Scene order persisted to database');
       // Ensure all panels see new order
       await utils.generation.getProjectScenes.invalidate({ projectId });
+      if (res?.newRevision != null) {
+        try { (useVideoState.getState().projects as any)[projectId].revision = res.newRevision; } catch {}
+      }
     },
     onError: (error) => {
       console.error('[Timeline] Failed to persist scene order:', error);
       toast.error('Failed to save scene order');
+    }
+  });
+  // API mutation for duplicating scenes (server-side authoritative)
+  const duplicateSceneMutation = api.scenes.duplicateScene.useMutation({
+    onSuccess: async (res: any) => {
+      try {
+        if (res?.newScene) {
+          // Record undo (delete the duplicate on undo)
+          pushAction(projectId, { type: 'duplicate', scene: res.newScene });
+        }
+      } catch {}
+      await utils.generation.getProjectScenes.invalidate({ projectId });
+      toast.success('Scene duplicated');
+      if (res?.newRevision != null) {
+        try { (useVideoState.getState().projects as any)[projectId].revision = res.newRevision; } catch {}
+      }
+    },
+    onError: (error) => {
+      console.error('[Timeline] Failed to duplicate scene:', error);
+      toast.error('Failed to duplicate scene');
     }
   });
   // API mutation for splitting scenes
@@ -390,6 +442,93 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       toast.error('Failed to split scene');
     }
   });
+
+  // Helper to perform Undo/Redo via buttons (after mutations are defined)
+  const performUndo = useCallback(() => {
+    const action = popUndo(projectId);
+    if (!action) return;
+    if (action.type === 'deleteScene') {
+      restoreSceneMutation.mutate({ projectId, scene: {
+        id: action.scene.id,
+        name: action.scene.name || action.scene.data?.name,
+        tsxCode: action.scene.data?.code || (action.scene as any).tsxCode,
+        duration: action.scene.duration || 150,
+        order: (action.scene as any).order ?? 0,
+        props: action.scene.data?.props,
+        layoutJson: (action.scene as any).layoutJson,
+      }});
+      pushRedo(projectId, { type: 'deleteScene', scene: action.scene });
+    } else if (action.type === 'reorder') {
+      reorderScenesMutation.mutate({ projectId, sceneIds: action.beforeOrder });
+      pushRedo(projectId, { type: 'reorder', beforeOrder: action.afterOrder, afterOrder: action.beforeOrder });
+    } else if (action.type === 'updateDuration') {
+      updateScene(projectId, action.sceneId, { duration: action.prevDuration });
+      updateSceneDurationMutation.mutate({ projectId, sceneId: action.sceneId, duration: action.prevDuration });
+      pushRedo(projectId, { type: 'updateDuration', sceneId: action.sceneId, prevDuration: action.newDuration, newDuration: action.prevDuration });
+    } else if (action.type === 'split') {
+      // Undo split: delete the right scene and restore left to previous duration
+      removeSceneMutation.mutate({ projectId, sceneId: action.rightSceneId });
+      updateScene(projectId, action.sceneId, { duration: action.leftBeforeDuration });
+      updateSceneDurationMutation.mutate({ projectId, sceneId: action.sceneId, duration: action.leftBeforeDuration });
+      pushRedo(projectId, action);
+    } else if (action.type === 'trimLeft') {
+      // Undo trim-left: restore original and delete right scene
+      restoreSceneMutation.mutate({ projectId, scene: {
+        id: action.originalScene.id,
+        name: action.originalScene.name || action.originalScene.data?.name,
+        tsxCode: action.originalScene.data?.code || (action.originalScene as any).tsxCode,
+        duration: action.originalScene.duration || 150,
+        order: (action.originalScene as any).order ?? 0,
+        props: action.originalScene.data?.props,
+        layoutJson: (action.originalScene as any).layoutJson,
+      }});
+      removeSceneMutation.mutate({ projectId, sceneId: action.rightSceneId });
+      pushRedo(projectId, action);
+    } else if (action.type === 'duplicate') {
+      // Undo duplicate: delete that scene
+      removeSceneMutation.mutate({ projectId, sceneId: action.scene.id });
+      pushRedo(projectId, action);
+    }
+  }, [projectId, popUndo, pushRedo, restoreSceneMutation, reorderScenesMutation, updateScene, updateSceneDurationMutation, removeSceneMutation]);
+
+  const performRedo = useCallback(async () => {
+    const action = popRedo(projectId);
+    if (!action) return;
+    if (action.type === 'deleteScene') {
+      removeSceneMutation.mutate({ projectId, sceneId: action.scene.id });
+      pushAction(projectId, { type: 'deleteScene', scene: action.scene });
+    } else if (action.type === 'reorder') {
+      reorderScenesMutation.mutate({ projectId, sceneIds: action.afterOrder });
+      pushAction(projectId, { type: 'reorder', beforeOrder: action.beforeOrder, afterOrder: action.afterOrder });
+    } else if (action.type === 'updateDuration') {
+      updateScene(projectId, action.sceneId, { duration: action.newDuration });
+      updateSceneDurationMutation.mutate({ projectId, sceneId: action.sceneId, duration: action.newDuration });
+      pushAction(projectId, { type: 'updateDuration', sceneId: action.sceneId, prevDuration: action.prevDuration, newDuration: action.newDuration });
+    } else if (action.type === 'split') {
+      try {
+        const res = await splitSceneMutation.mutateAsync({ projectId, sceneId: action.sceneId, frame: action.offset });
+        if (res?.rightSceneId) {
+          pushAction(projectId, { type: 'split', sceneId: action.sceneId, offset: action.offset, leftBeforeDuration: action.leftBeforeDuration, rightSceneId: res.rightSceneId });
+        }
+      } catch (e) {
+        console.error('[Timeline] Redo split failed:', e);
+      }
+    } else if (action.type === 'trimLeft') {
+      try {
+        const res = await splitSceneMutation.mutateAsync({ projectId, sceneId: action.originalScene.id, frame: action.offset });
+        if (res?.rightSceneId) {
+          removeSceneMutation.mutate({ projectId, sceneId: action.originalScene.id });
+          pushAction(projectId, { type: 'trimLeft', originalScene: action.originalScene, rightSceneId: res.rightSceneId, offset: action.offset });
+        }
+      } catch (e) {
+        console.error('[Timeline] Redo trim-left failed:', e);
+      }
+    } else if (action.type === 'duplicate') {
+      // Re-add duplicate via server duplicate endpoint after the source scene
+      duplicateSceneMutation.mutate({ projectId, sceneId: action.scene.id, position: 'end' });
+      pushAction(projectId, action);
+    }
+  }, [projectId, popRedo, pushAction, removeSceneMutation, reorderScenesMutation, updateScene, updateSceneDurationMutation, splitSceneMutation, duplicateSceneMutation]);
   
   // Versioned reconciliation: Sync DB audio to local state only if DB is newer
   useEffect(() => {
@@ -1398,9 +1537,13 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
             }
             
             // Persist to database
+            const idKey = `reorder-${nanoid(8)}`;
+            const clientRevision = (useVideoState.getState().projects[projectId] as any)?.revision;
             reorderScenesMutation.mutate({
               projectId,
-              sceneIds: newOrder.map((s: Scene) => s.id)
+              sceneIds: newOrder.map((s: Scene) => s.id),
+              idempotencyKey: idKey,
+              clientRevision,
             });
             try { pushAction(projectId, { type: 'reorder', beforeOrder, afterOrder: newOrder.map((s: Scene) => s.id) }); } catch {}
             
@@ -1472,6 +1615,9 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
           })();
         } else {
           // Right-edge: simple duration update
+          try {
+            pushAction(projectId, { type: 'updateDuration', sceneId: dragInfo.sceneId, prevDuration: dragInfo.startDuration, newDuration: scene.duration });
+          } catch {}
           updateSceneDurationMutation.mutate({
             projectId,
             sceneId: dragInfo.sceneId,
@@ -1537,67 +1683,47 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   }, [audioMenu]);
   
   // Handle scene operations
-  const handleDeleteScene = useCallback((sceneId: string, skipConfirmation: boolean = false) => {
+  const handleDeleteScene = useCallback((sceneId: string, _skipConfirmation: boolean = true) => {
     // Prevent duplicate deletions
     if (isDeletionBusy || deletionInProgressRef.current.has(sceneId)) {
       console.warn('[Timeline] Deletion already in progress for scene:', sceneId);
       return;
     }
     
-    // For keyboard shortcuts and first click, show inline confirmation
-    if (!skipConfirmation) {
-      setPendingDeleteSceneId(sceneId);
-      return;
-    }
+    // Inline confirmation removed; rely on Undo instead
     
-    // Mark deletion as in progress
+    // Mark deletion as in progress and animate fade-out
     setIsDeletionBusy(true);
     deletionInProgressRef.current.add(sceneId);
-    
-    // Update local state immediately for responsive UI
-    // Push undo: capture full scene payload with a reliable order
+    markDeleting(sceneId);
+
+    // Push undo snapshot prior to removal
     const sceneIndex = scenes.findIndex((s: any) => s.id === sceneId);
     const scenePayload = sceneIndex >= 0 ? scenes[sceneIndex] : undefined;
     if (scenePayload) {
-      const orderValue = (scenePayload as any).order ?? sceneIndex; // fallback to index if order missing
+      const orderValue = (scenePayload as any).order ?? sceneIndex;
       const sceneForUndo = { ...scenePayload, order: orderValue } as any;
-      pushAction(projectId, { type: 'deleteScene', scene: sceneForUndo });
+      try { pushAction(projectId, { type: 'deleteScene', scene: sceneForUndo }); } catch {}
     }
-    deleteScene(projectId, sceneId);
-    
-    // Persist to database
-    removeSceneMutation.mutate(
-      {
-        projectId,
-        sceneId
-      },
-      {
-        onSettled: () => {
-          // Clear deletion flag after operation completes
-          setIsDeletionBusy(false);
-          deletionInProgressRef.current.delete(sceneId);
-        }
-      }
-    );
-    
-    setContextMenu(null);
-  }, [deleteScene, projectId, removeSceneMutation, isDeletionBusy, scenes, pushAction, setPendingDeleteSceneId]);
 
-  // Clear pending delete on click outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (pendingDeleteSceneId) {
-        // Check if click is outside the timeline
-        const target = e.target as HTMLElement;
-        if (!target.closest('[data-timeline-scene]')) {
-          setPendingDeleteSceneId(null);
+    // Defer actual removal to allow fade-out
+    window.setTimeout(() => {
+      deleteScene(projectId, sceneId);
+      removeSceneMutation.mutate(
+        { projectId, sceneId },
+        {
+          onSettled: () => {
+            setIsDeletionBusy(false);
+            deletionInProgressRef.current.delete(sceneId);
+            unmarkDeleting(sceneId);
+          }
         }
-      }
-    };
-    
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [pendingDeleteSceneId]);
+      );
+    }, DELETE_FADE_MS);
+
+    setContextMenu(null);
+  }, [deleteScene, projectId, removeSceneMutation, isDeletionBusy, scenes, pushAction, markDeleting, unmarkDeleting]);
+
 
   // Keyboard: Cmd/Ctrl+Z undo, Shift+Cmd/Ctrl+Z redo
   useEffect(() => {
@@ -1609,49 +1735,15 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       if (isTyping) return;
       if (e.key.toLowerCase() === 'z' && !e.shiftKey) {
         e.preventDefault();
-        const action = popUndo(projectId);
-        if (!action) return;
-        if (action.type === 'deleteScene') {
-          // Restore via API using scene payload captured before delete
-          restoreSceneMutation.mutate({ projectId, scene: {
-            id: action.scene.id,
-            name: action.scene.name || action.scene.data?.name,
-            tsxCode: action.scene.data?.code || (action.scene as any).tsxCode,
-            duration: action.scene.duration || 150,
-            order: (action.scene as any).order ?? 0,
-            props: action.scene.data?.props,
-            layoutJson: (action.scene as any).layoutJson,
-          }});
-          pushRedo(projectId, { type: 'deleteScene', scene: action.scene });
-        } else if (action.type === 'reorder') {
-          reorderScenesMutation.mutate({ projectId, sceneIds: action.beforeOrder });
-          pushRedo(projectId, { type: 'reorder', beforeOrder: action.afterOrder, afterOrder: action.beforeOrder });
-        } else if (action.type === 'updateDuration') {
-          updateScene(projectId, action.sceneId, { duration: action.prevDuration });
-          updateSceneDurationMutation.mutate({ projectId, sceneId: action.sceneId, duration: action.prevDuration });
-          pushRedo(projectId, { type: 'updateDuration', sceneId: action.sceneId, prevDuration: action.newDuration, newDuration: action.prevDuration });
-        }
+        performUndo();
       } else if (e.key.toLowerCase() === 'z' && e.shiftKey) {
         e.preventDefault();
-        const action = popRedo(projectId);
-        if (!action) return;
-        if (action.type === 'deleteScene') {
-          // Re-delete the scene
-          removeSceneMutation.mutate({ projectId, sceneId: action.scene.id });
-          pushAction(projectId, { type: 'deleteScene', scene: action.scene });
-        } else if (action.type === 'reorder') {
-          reorderScenesMutation.mutate({ projectId, sceneIds: action.afterOrder });
-          pushAction(projectId, { type: 'reorder', beforeOrder: action.beforeOrder, afterOrder: action.afterOrder });
-        } else if (action.type === 'updateDuration') {
-          updateScene(projectId, action.sceneId, { duration: action.newDuration });
-          updateSceneDurationMutation.mutate({ projectId, sceneId: action.sceneId, duration: action.newDuration });
-          pushAction(projectId, { type: 'updateDuration', sceneId: action.sceneId, prevDuration: action.prevDuration, newDuration: action.newDuration });
-        }
+        void performRedo();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [projectId, popUndo, pushRedo, popRedo, restoreSceneMutation, reorderScenesMutation, updateScene, updateSceneDurationMutation, removeSceneMutation]);
+  }, [projectId, performUndo, performRedo]);
 
   // Keyboard: Delete/Backspace removes audio when hovering timeline (and not typing)
   useEffect(() => {
@@ -1705,15 +1797,22 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         return;
       }
       (async () => {
-        try {
-          setIsSplitBusy(true);
-          const res = await splitSceneMutation.mutateAsync({ projectId, sceneId, frame: offset });
-          if (res?.rightSceneId) {
-            setSelectedSceneId(res.rightSceneId);
-          }
-          // Force-fetch latest scenes and replace state to keep UI in sync immediately
-          await utils.generation.getProjectScenes.invalidate({ projectId });
           try {
+            setIsSplitBusy(true);
+            const idKey = `split-${nanoid(8)}`;
+            const clientRevision = (useVideoState.getState().projects[projectId] as any)?.revision;
+            const res = await splitSceneMutation.mutateAsync({ projectId, sceneId, frame: offset, idempotencyKey: idKey, clientRevision });
+            if (res?.rightSceneId) {
+              setSelectedSceneId(res.rightSceneId);
+              // Push undo for split-only (restore left duration and remove right)
+              const infoNow = getSceneStartById(sceneId);
+              if (infoNow) {
+              try { pushAction(projectId, { type: 'split', sceneId, offset, leftBeforeDuration: info.duration, rightSceneId: res.rightSceneId }); } catch {}
+              }
+            }
+            // Force-fetch latest scenes and replace state to keep UI in sync immediately
+            await utils.generation.getProjectScenes.invalidate({ projectId });
+            try {
             const latest = await (utils.generation.getProjectScenes as any).fetch({ projectId });
             if (latest && Array.isArray(latest)) {
               const currentProps = useVideoState.getState().getCurrentProps();
@@ -1754,6 +1853,8 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     if (!selectedSceneId) return;
     const info = getSceneStartById(selectedSceneId);
     if (!info) return;
+    // Capture original scene snapshot for undo
+    const original = scenes.find((s: any) => s.id === selectedSceneId);
     // Ask for freshest frame
     try { window.dispatchEvent(new Event('request-current-frame')); } catch {}
     setTimeout(async () => {
@@ -1764,7 +1865,9 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         return;
       }
       try {
-        const res = await splitSceneMutation.mutateAsync({ projectId, sceneId: selectedSceneId, frame: offset });
+        const idKey = `trimL-${nanoid(8)}`;
+        const clientRevision = (useVideoState.getState().projects[projectId] as any)?.revision;
+        const res = await splitSceneMutation.mutateAsync({ projectId, sceneId: selectedSceneId, frame: offset, idempotencyKey: idKey, clientRevision });
         if (res?.rightSceneId) {
           removeSceneMutation.mutate({ projectId, sceneId: selectedSceneId });
           setSelectedSceneId(res.rightSceneId);
@@ -1774,6 +1877,10 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
           toast.success('Trimmed from start');
           const ev = new CustomEvent('timeline-select-scene', { detail: { sceneId: res.rightSceneId } });
           window.dispatchEvent(ev);
+          // Push undo action (restore original + delete right)
+          if (original) {
+            try { pushAction(projectId, { type: 'trimLeft', originalScene: original, rightSceneId: res.rightSceneId, offset }); } catch {}
+          }
         }
       } catch (err) {
         console.error('Trim-left error', err);
@@ -1793,9 +1900,12 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       toast.info('Move playhead inside the scene to trim');
       return;
     }
-    // Update locally and persist
+    // Update locally and persist; push undo action
+    try { pushAction(projectId, { type: 'updateDuration', sceneId: selectedSceneId, prevDuration: info.duration, newDuration: offset }); } catch {}
     updateScene(projectId, selectedSceneId, { duration: offset });
-    updateSceneDurationMutation.mutate({ projectId, sceneId: selectedSceneId, duration: offset });
+    const idKey = `dur-${nanoid(8)}`;
+    const clientRevision = (useVideoState.getState().projects[projectId] as any)?.revision;
+    updateSceneDurationMutation.mutate({ projectId, sceneId: selectedSceneId, duration: offset, idempotencyKey: idKey, clientRevision });
   }, [selectedSceneId, getSceneStartById, currentFrame, projectId, updateScene, updateSceneDurationMutation]);
   
   // Handle scene name editing
@@ -1857,8 +1967,8 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       else if ((e.key === 'Backspace' || e.key === 'Delete') && !isTyping) {
         if (selectedSceneId && !isDeletionBusy) {
           e.preventDefault();
-          // Call with skipConfirmation=false for keyboard shortcuts
-          handleDeleteScene(selectedSceneId, false);
+          // Immediate delete; rely on Undo
+          handleDeleteScene(selectedSceneId, true);
         }
       }
     };
@@ -1975,34 +2085,11 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   }, [scenes, selectedSceneId, currentFrame, projectId, updateScene, updateSceneDurationMutation, isSplitBusy, splitSceneMutation.isPending]);
   
   const handleDuplicateScene = useCallback((sceneId: string) => {
-    const scene = scenes.find((s: Scene) => s.id === sceneId);
-    if (!scene) return;
-    
-    // Create duplicate with new ID
-    const duplicateScene = {
-      ...scene,
-      id: `${scene.id}-copy-${Date.now()}`,
-      data: {
-        ...scene.data,
-        name: `${scene.data?.name || 'Scene'} Copy`
-      }
-    };
-    
-    // Add to scenes array
-    const newScenes = [...scenes, duplicateScene];
-    const replace = useVideoState.getState().replace;
-    const currentProps = project?.props;
-    
-    if (currentProps) {
-      replace(projectId, {
-        ...currentProps,
-        scenes: newScenes
-      });
-    }
-    
-    toast.success('Scene duplicated');
+    const idKey = `dup-${nanoid(8)}`;
+    const clientRevision = (useVideoState.getState().projects[projectId] as any)?.revision;
+    duplicateSceneMutation.mutate({ projectId, sceneId, position: 'after', idempotencyKey: idKey, clientRevision });
     setContextMenu(null);
-  }, [scenes, project, projectId]);
+  }, [projectId, duplicateSceneMutation]);
   
   
   // Extract and cache scene colors
@@ -2078,7 +2165,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   }, []);
   
   return (
-    <div className="flex flex-col bg-white dark:bg-gray-950 rounded-xl shadow-sm select-none" style={{ height: `${timelineHeight}px`, overflow: 'hidden' }}>
+    <div className="flex flex-col bg-white dark:bg-gray-950 rounded-[15px] border border-gray-200 shadow-sm select-none" style={{ height: `${timelineHeight}px`, overflow: 'hidden' }}>
       {/* Timeline Controls - Modern design */}
       <div className="flex items-center justify-between px-4 py-3 bg-gray-50/70 dark:bg-gray-900/50 backdrop-blur-sm">
         {/* Left cluster: frame/time display */}
@@ -2240,6 +2327,30 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
 
           {/* Zoom Controls */}
           <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm">
+          {/* Undo/Redo */}
+          <button
+            onClick={performUndo}
+            disabled={undoSize === 0}
+            className={cn(
+              "p-2 rounded-md transition-colors",
+              undoSize === 0 ? "opacity-40 cursor-not-allowed" : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+            )}
+            title="Undo (⌘Z / Ctrl+Z)"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={performRedo}
+            disabled={redoSize === 0}
+            className={cn(
+              "p-2 rounded-md transition-colors",
+              redoSize === 0 ? "opacity-40 cursor-not-allowed" : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+            )}
+            title="Redo (⇧⌘Z / Shift+Ctrl+Z)"
+          >
+            <RotateCw className="w-3.5 h-3.5" />
+          </button>
+
           <button
             onClick={() => setZoomScale(prev => Math.max(0.25, Math.round((prev - 0.1) * 100) / 100))}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300 transition-colors"
@@ -2445,6 +2556,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                 const left = (sceneStart / totalDuration) * 100;
                 const width = (scene.duration / totalDuration) * 100;
                 const isBeingDragged = isDragging && dragInfo?.sceneId === scene.id && dragInfo?.action === 'reorder';
+                const isDeleting = deletingScenes.has(scene.id);
                 const displayName = cleanSceneName(scene.name || scene.data?.name) || `Scene ${index + 1}`;
                 
                 return (
@@ -2453,7 +2565,8 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                     data-timeline-scene={scene.id}
                     className={cn(
                       "absolute flex items-center rounded-lg text-sm font-medium transition-all cursor-move",
-                      isBeingDragged ? "opacity-50 z-40 scale-105" : "z-10 hover:scale-102 hover:z-15"
+                      isBeingDragged ? "opacity-50 z-40 scale-105" : "z-10 hover:scale-102 hover:z-15",
+                      isDeleting && "pointer-events-none"
                     )}
                     style={{ 
                       left: `${left}%`,
@@ -2463,7 +2576,9 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                       transform: 'translateY(-50%)',
                       minWidth: '40px',
                       ...getSceneStyles(scene),
-                      transition: 'all 0.2s ease'
+                      transition: `left ${DELETE_FADE_MS}ms cubic-bezier(0.22,1,0.36,1), width ${DELETE_FADE_MS}ms cubic-bezier(0.22,1,0.36,1), opacity ${DELETE_FADE_MS}ms cubic-bezier(0.22,1,0.36,1), transform ${DELETE_FADE_MS}ms cubic-bezier(0.22,1,0.36,1)`,
+                      willChange: 'left, width, transform, opacity',
+                      opacity: isDeleting ? 0 : 1,
                     }}
                     draggable
                     onDragStartCapture={(e) => {
@@ -2657,33 +2772,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                       title="Trim end (drag)"
                     />
                     
-                    {/* Inline Delete Confirmation */}
-                    {pendingDeleteSceneId === scene.id && (
-                      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm rounded-lg flex items-center justify-center z-50">
-                        <div className="text-white text-xs font-mono flex items-center gap-2">
-                          <span>Delete?</span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteScene(scene.id, true);
-                              setPendingDeleteSceneId(null);
-                            }}
-                            className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-[10px] font-bold"
-                          >
-                            Y
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPendingDeleteSceneId(null);
-                            }}
-                            className="px-2 py-1 bg-gray-600 hover:bg-gray-700 rounded text-[10px] font-bold"
-                          >
-                            N
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                    {/* Inline Delete Confirmation removed – rely on Undo */}
                   </div>
                 );
               })}

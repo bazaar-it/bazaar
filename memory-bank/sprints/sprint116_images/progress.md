@@ -33,4 +33,12 @@ Date: 2025-09-10 (bugfix: last scene deletion placeholder)
 - Fixes:
   - PreviewPanelG: trigger compilation even when `scenes.length === 0` (immediately compile placeholder component, no debounce).
   - DB→state sync: handle empty `dbScenes` by replacing VideoState scenes with `[]` and resetting duration, preventing stale scenes.
-  - Outcome: deleting the final scene now immediately shows the placeholder video without manual refresh.
+- Outcome: deleting the final scene now immediately shows the placeholder video without manual refresh.
+
+Date: 2025-09-10 (Timeline undo/redo)
+- Added reliable, single Undo/Redo controls in Timeline, mirroring CapCut behavior:
+  - Visible buttons in the controls bar + existing ⌘Z/⇧⌘Z shortcuts.
+  - Undo stack persists: delete, reorder, trim-right (duration), split, and duplicate.
+  - New TimelineAction types: `split`, `trimLeft`, `duplicate` with appropriate undo paths.
+  - Drag-resize end now records `updateDuration` to allow undo of trims.
+  - Duplicate action records snapshot to allow redo.
