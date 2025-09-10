@@ -113,6 +113,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
   const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [reorderHoverIndex, setReorderHoverIndex] = useState<number | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; sceneId: string } | null>(null);
   const [audioMenu, setAudioMenu] = useState<{ x: number; y: number } | null>(null);
   const [isAudioSelected, setIsAudioSelected] = useState(false);
@@ -1283,6 +1284,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       
       // Find which scene we're hovering over
       let cumulativeFrames = 0;
+      let found = false;
       for (let i = 0; i < scenes.length; i++) {
         const scene = scenes[i];
         if (!scene) continue;
@@ -1290,6 +1292,8 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         
         if (mouseFrame >= cumulativeFrames && mouseFrame < sceneEnd) {
           // We're hovering over scene at index i
+          found = true;
+          setReorderHoverIndex(i);
           if (dragInfo.sceneIndex !== undefined && i !== dragInfo.sceneIndex) {
             console.log('[Timeline] Would swap scenes:', dragInfo.sceneIndex, 'with', i);
             // Visual feedback only during drag - actual reorder happens on mouse up
@@ -1298,6 +1302,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         }
         cumulativeFrames = sceneEnd;
       }
+      if (!found) setReorderHoverIndex(null);
       return;
     }
     
@@ -1493,6 +1498,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         // Treat as a simple click/select; do not reorder
         setDragInfo(null);
         setIsDragging(false);
+        setReorderHoverIndex(null);
         return;
       }
       const rect = timelineRef.current.getBoundingClientRect();
@@ -1502,6 +1508,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         // Cancel reorder if user drags out (e.g., into chat) and releases
         setDragInfo(null);
         setIsDragging(false);
+        setReorderHoverIndex(null);
         return;
       }
       const mouseX = e.clientX - rect.left + timelineRef.current.scrollLeft;
@@ -1556,6 +1563,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
             try { pushAction(projectId, { type: 'reorder', beforeOrder, afterOrder: newOrder.map((s: Scene) => s.id) }); } catch {}
             
             toast.success('Scenes reordered');
+            setReorderHoverIndex(null);
           }
           break;
         }
@@ -1860,13 +1868,32 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     }, 30);
   }, [getSceneStartById, projectId, splitSceneMutation, utils, isSplitBusy]);
 
-  // Trim-left button: split at playhead and delete left part (keep right with offset)
+  // Trim-left button: atomic server-side split+delete-left
+  const trimLeftMutation = api.generation.trimLeft.useMutation({
+    onSuccess: async (res: any) => {
+      await utils.generation.getProjectScenes.invalidate({ projectId });
+      if (res?.rightSceneId) {
+        setSelectedSceneId(res.rightSceneId);
+        try {
+          const ev = new CustomEvent('timeline-select-scene', { detail: { sceneId: res.rightSceneId } });
+          window.dispatchEvent(ev);
+        } catch {}
+      }
+      if (res?.newRevision != null) {
+        try { (useVideoState.getState().projects as any)[projectId].revision = res.newRevision; } catch {}
+      }
+      toast.success('Trimmed from start');
+    },
+    onError: (err) => {
+      console.error('[Timeline] Trim-left failed:', err);
+      toast.error('Failed to trim from start');
+    }
+  });
+
   const handleTrimLeftClick = useCallback(() => {
     if (!selectedSceneId) return;
     const info = getSceneStartById(selectedSceneId);
     if (!info) return;
-    // Capture original scene snapshot for undo
-    const original = scenes.find((s: any) => s.id === selectedSceneId);
     // Ask for freshest frame
     try { window.dispatchEvent(new Event('request-current-frame')); } catch {}
     setTimeout(async () => {
@@ -1876,30 +1903,14 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         toast.info('Move playhead inside the scene to trim');
         return;
       }
-      try {
-        const idKey = `trimL-${nanoid(8)}`;
-        const clientRevision = (useVideoState.getState().projects[projectId] as any)?.revision;
-        const res = await splitSceneMutation.mutateAsync({ projectId, sceneId: selectedSceneId, frame: offset, idempotencyKey: idKey, clientRevision });
-        if (res?.rightSceneId) {
-          removeSceneMutation.mutate({ projectId, sceneId: selectedSceneId });
-          setSelectedSceneId(res.rightSceneId);
-          try {
-            await utils.generation.getProjectScenes.invalidate({ projectId });
-          } catch {}
-          toast.success('Trimmed from start');
-          const ev = new CustomEvent('timeline-select-scene', { detail: { sceneId: res.rightSceneId } });
-          window.dispatchEvent(ev);
-          // Push undo action (restore original + delete right)
-          if (original) {
-            try { pushAction(projectId, { type: 'trimLeft', originalScene: original, rightSceneId: res.rightSceneId, offset }); } catch {}
-          }
-        }
-      } catch (err) {
-        console.error('Trim-left error', err);
-        toast.error('Failed to trim from start');
-      }
+      // Capture original for undo and fire atomic trim-left
+      const original = scenes.find((s: any) => s.id === selectedSceneId);
+      const idKey = `trimL-${nanoid(8)}`;
+      const clientRevision = (useVideoState.getState().projects as any)[projectId]?.revision;
+      try { if (original) pushAction(projectId, { type: 'trimLeft', originalScene: original, rightSceneId: 'pending', offset }); } catch {}
+      trimLeftMutation.mutate({ projectId, sceneId: selectedSceneId, offset, idempotencyKey: idKey, clientRevision });
     }, 30);
-  }, [selectedSceneId, getSceneStartById, currentFrame, projectId, splitSceneMutation, removeSceneMutation, utils]);
+  }, [selectedSceneId, getSceneStartById, currentFrame, projectId, scenes, trimLeftMutation, pushAction, utils]);
 
   // Trim-right button: set duration to playhead offset (end at playhead)
   const handleTrimRightClick = useCallback(() => {
@@ -2572,6 +2583,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                 const left = (sceneStart / totalDuration) * 100;
                 const width = (scene.duration / totalDuration) * 100;
                 const isBeingDragged = isDragging && dragInfo?.sceneId === scene.id && dragInfo?.action === 'reorder';
+                const isHoverTarget = isDragging && dragInfo?.action === 'reorder' && reorderHoverIndex === index && dragInfo.sceneIndex !== index;
                 const isDeleting = deletingScenes.has(scene.id);
                 const displayName = cleanSceneName(scene.name || scene.data?.name) || `Scene ${index + 1}`;
                 
@@ -2582,6 +2594,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                     className={cn(
                       "absolute flex items-center rounded-lg text-sm font-medium transition-all cursor-move",
                       isBeingDragged ? "opacity-50 z-40 scale-105" : "z-10 hover:scale-102 hover:z-15",
+                      isHoverTarget && "ring-2 ring-blue-400/70",
                       isDeleting && "pointer-events-none"
                     )}
                     style={{ 
@@ -2589,7 +2602,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                       width: `${width}%`,
                       height: TIMELINE_ITEM_HEIGHT,
                       top: '50%',
-                      transform: 'translateY(-50%)',
+                      transform: `translateY(-50%) ${isDeleting ? 'scale(0.96)' : ''}`,
                       minWidth: '40px',
                       ...getSceneStyles(scene),
                       transition: `left ${DELETE_FADE_MS}ms cubic-bezier(0.22,1,0.36,1), width ${DELETE_FADE_MS}ms cubic-bezier(0.22,1,0.36,1), opacity ${DELETE_FADE_MS}ms cubic-bezier(0.22,1,0.36,1), transform ${DELETE_FADE_MS}ms cubic-bezier(0.22,1,0.36,1)`,

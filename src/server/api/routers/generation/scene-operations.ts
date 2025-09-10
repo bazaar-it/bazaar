@@ -849,3 +849,104 @@ export const updateSceneName = protectedProcedure
       throw error;
     }
   });
+
+/**
+ * TRIM LEFT (atomic split + delete-left)
+ * Keeps the right-hand part starting at offset; deletes original left part.
+ */
+export const trimLeft = protectedProcedure
+  .input(z.object({
+    projectId: z.string(),
+    sceneId: z.string(),
+    offset: z.number().min(1),
+    clientRevision: z.number().optional(),
+    idempotencyKey: z.string().optional(),
+  }))
+  .mutation(async ({ input, ctx }) => {
+    const { projectId, sceneId, offset } = input;
+    const userId = ctx.session.user.id;
+
+    // Idempotency
+    if (input.idempotencyKey) {
+      const existing = await db.query.sceneOperations.findFirst({
+        where: and(
+          eq(sceneOperations.projectId, input.projectId),
+          eq(sceneOperations.idempotencyKey, input.idempotencyKey)
+        ),
+      });
+      if (existing) {
+        const proj = await db.query.projects.findFirst({ where: eq(projects.id, input.projectId) });
+        const payload: any = existing.result || {};
+        return { success: true, rightSceneId: payload.rightSceneId || null, newRevision: proj?.revision } as any;
+      }
+    }
+
+    // Ownership and scene fetch
+    const scene = await db.query.scenes.findFirst({
+      where: eq(scenes.id, sceneId),
+      with: { project: true },
+    });
+    if (!scene || scene.project.userId !== userId) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Scene not found or access denied' });
+    }
+
+    // Revision check
+    if (input.clientRevision !== undefined) {
+      const proj = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });
+      if (proj && proj.revision !== input.clientRevision) {
+        throw new TRPCError({ code: 'CONFLICT', message: 'Stale client revision' });
+      }
+    }
+
+    const total = scene.duration;
+    const splitAt = Math.max(1, Math.min(total - 1, Math.floor(offset)));
+    const rightDuration = total - splitAt;
+    if (rightDuration <= 0) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Offset must be within scene duration' });
+    }
+
+    // Insert right-hand scene after current
+    const rightName = `${scene.name || 'Scene'} (Part 2)`;
+    const mergedProps: any = { ...(scene.props as any), startOffset: splitAt };
+    const [right] = await db.insert(scenes).values({
+      projectId,
+      order: scene.order + 1,
+      name: rightName,
+      tsxCode: scene.tsxCode, // safe since only right remains after delete
+      props: mergedProps,
+      duration: rightDuration,
+      layoutJson: scene.layoutJson,
+      slug: scene.slug,
+      dominantColors: scene.dominantColors as any,
+      firstH1Text: scene.firstH1Text,
+    }).returning();
+
+    // Delete original left scene
+    await db.delete(scenes).where(eq(scenes.id, sceneId));
+
+    // Normalize orders 0..n-1
+    const ordered = await db.query.scenes.findMany({
+      where: eq(scenes.projectId, projectId),
+      orderBy: [scenes.order],
+    });
+    await Promise.all(
+      ordered.map((s, idx) => db.update(scenes).set({ order: idx }).where(eq(scenes.id, s.id)))
+    );
+
+    const projUpdated = await db.update(projects)
+      .set({ revision: sql`${projects.revision} + 1` })
+      .where(eq(projects.id, projectId))
+      .returning();
+
+    if (input.idempotencyKey) {
+      await db.insert(sceneOperations).values({
+        projectId,
+        idempotencyKey: input.idempotencyKey,
+        operationType: 'trimLeft',
+        payload: { sceneId, offset },
+        result: { rightSceneId: right?.id },
+      });
+    }
+
+    return { success: true, rightSceneId: right?.id, newRevision: projUpdated[0]?.revision };
+  });
