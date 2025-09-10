@@ -387,6 +387,7 @@ export async function executeToolFromDecision(
         requestedDurationFrames: decision.toolContext.requestedDurationFrames, // ADD THIS
         sceneId: decision.toolContext.targetSceneId,
         tsxCode: sceneToEdit.tsxCode, // ✓ Fixed: Using correct field name
+        sceneName: sceneToEdit.name, // Pass current scene name to preserve it
         currentDuration: sceneToEdit.duration,
         imageUrls: decision.toolContext.imageUrls,
         videoUrls: decision.toolContext.videoUrls,
@@ -418,6 +419,7 @@ export async function executeToolFromDecision(
       // Preserve manual trims by default: ONLY change duration if explicitly requested
       const setFields: any = {
         tsxCode: editResult.data.tsxCode,
+        name: editResult.data.name || sceneToEdit.name, // Preserve scene name
         props: editResult.data.props || sceneToEdit.props,
         updatedAt: new Date(),
       };
