@@ -327,6 +327,7 @@ Please edit the code according to the user request. Return the complete modified
       return {
         success: true,
         tsxCode: parsed.code,
+        name: input.sceneName, // Preserve the scene name
         duration: parsed.newDurationFrames || undefined,
         reasoning: parsed.reasoning || `Applied edit: ${input.userPrompt}`,
         chatResponse: parsed.reasoning || `I've updated the scene as requested`,
