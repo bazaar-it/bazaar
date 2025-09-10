@@ -297,20 +297,18 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     }
   });
   
-  // Robust DB → Zustand audio sync
+  // Robust DB → Zustand audio sync (non-destructive)
   useEffect(() => {
     if (isAudioDraggingRef.current) return; // don't sync while user is editing
     const dbAudio = (dbProject as any)?.audio ?? null;
     const localAudio = (project as any)?.audio ?? null;
 
-    // When DB says no audio but local has one → clear local
-    if (!dbAudio && localAudio && !audioInitializedRef.current) {
-      console.log('[Timeline] Clearing local audio to match DB (deleted on server)');
-      updateProjectAudio(projectId, null);
-      audioHadRef.current = false;
-      audioLastUrlRef.current = null;
-      setAudioPulse(false);
-      return;
+    // Never clear local audio just because DB has null unless a newer server timestamp says so.
+    // If local audio exists and we haven't initialized, mark initialized and keep local.
+    if (localAudio && !audioInitializedRef.current) {
+      audioInitializedRef.current = true;
+      audioHadRef.current = true;
+      audioLastUrlRef.current = (localAudio as any).url || null;
     }
     // When DB has audio but local is missing → set local
     if (dbAudio && !localAudio) {
@@ -334,8 +332,8 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       const a = dbAudio;
       const b = localAudio;
       const differs = a.url !== b.url || a.startTime !== b.startTime || a.endTime !== b.endTime || a.volume !== b.volume || (a.playbackRate || 1) !== (b.playbackRate || 1) || (a.fadeInDuration || 0) !== (b.fadeInDuration || 0) || (a.fadeOutDuration || 0) !== (b.fadeOutDuration || 0);
-      // After first init, only adopt server when URL changed (source changed) to avoid overwriting in-flight local edits
-      if (differs && (!audioInitializedRef.current || a.url !== b.url)) {
+      // After first init, only adopt server when URL changed (source changed) to avoid overwriting local edits
+      if (differs && a.url !== b.url) {
         const audioWithId = { id: (a as any).id || a.url || 'default-id', ...a } as any;
         console.log('[Timeline] Updating local audio to match DB changes');
         updateProjectAudio(projectId, audioWithId);
@@ -2257,9 +2255,27 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       }
     }
   }, []);
+
+  // Prevent two-finger horizontal swipe from triggering browser Back/Forward
+  useEffect(() => {
+    const el = timelineRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      // Allow pinch-zoom or browser zoom shortcuts to pass through
+      if (e.ctrlKey || e.metaKey) return;
+      // If horizontal intent is stronger than vertical, treat as timeline scroll
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        try { e.preventDefault(); } catch {}
+        // Scroll timeline horizontally
+        el.scrollLeft += e.deltaX;
+      }
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel as any);
+  }, []);
   
   return (
-    <div className="flex flex-col bg-white dark:bg-gray-950 rounded-[15px] border border-gray-200 shadow-sm select-none" style={{ height: `${timelineHeight}px`, overflow: 'hidden' }}>
+    <div className="flex flex-col bg-white dark:bg-gray-950 rounded-[15px] border border-gray-200 shadow-sm select-none overscroll-x-contain overscroll-y-none" style={{ height: `${timelineHeight}px`, overflow: 'hidden' }}>
       {/* Timeline Controls - Consistent solid header (no translucency) */}
       <div className="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
         {/* Left cluster: frame/time display */}
