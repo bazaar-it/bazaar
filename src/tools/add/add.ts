@@ -60,7 +60,8 @@ export class AddTool extends BaseMCPTool<AddToolInput, AddToolOutput> {
       
       // Handle image-based scene creation
       if (input.imageUrls && input.imageUrls.length > 0) {
-        console.log('🔨 [ADD TOOL] Using image-based generation for', input.imageUrls.length, 'images');
+        const action = input.imageAction || 'embed';
+        console.log('🔨 [ADD TOOL] Using image-based generation for', input.imageUrls.length, 'images', 'mode=', action);
         return await this.generateFromImages(input);
       }
       
@@ -228,15 +229,24 @@ export const durationInFrames_ERROR = 180;`;
 
     const functionName = this.generateFunctionName();
 
-    // Generate code directly from images
-    const codeResult = await codeGenerator.generateCodeFromImage({
-      imageUrls: input.imageUrls,
-      userPrompt: input.userPrompt,
-      functionName: functionName,
-      projectId: input.projectId,
-      projectFormat: input.projectFormat,
-      assetUrls: input.assetUrls, // Pass all project assets
-    });
+    // Choose path based on imageAction: recreate => IMAGE_RECREATOR; embed => CODE_GENERATOR
+    const isRecreate = input.imageAction === 'recreate';
+    const codeResult = isRecreate
+      ? await codeGenerator.generateImageRecreationScene({
+          userPrompt: input.userPrompt,
+          functionName,
+          imageUrls: input.imageUrls,
+          projectId: input.projectId,
+          projectFormat: input.projectFormat,
+        })
+      : await codeGenerator.generateCodeFromImage({
+          imageUrls: input.imageUrls,
+          userPrompt: input.userPrompt,
+          functionName,
+          projectId: input.projectId,
+          projectFormat: input.projectFormat,
+          assetUrls: input.assetUrls,
+        });
 
     // Return generated content - NO DATABASE!
     const result = {

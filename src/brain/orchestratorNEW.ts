@@ -247,7 +247,9 @@ export class Orchestrator {
             // Add YouTube analysis flag
             isYouTubeAnalysis: hasYouTube && hasTimeSpec,
             // Include template context for better first-scene generation
-            templateContext: contextPacket.templateContext
+            templateContext: contextPacket.templateContext,
+            imageAction: toolSelection.imageAction,
+            imageDirectives: toolSelection.imageDirectives
           },
           workflow: toolSelection.workflow,
         }
@@ -262,6 +264,11 @@ export class Orchestrator {
         templateCount: contextPacket.templateContext?.examples?.length || 0,
         templateNames: contextPacket.templateContext?.examples?.map(t => t.name) || [],
       });
+      
+      // Log actual image URLs being passed to tools
+      if ((input.userContext?.imageUrls as string[])?.length) {
+        console.log('📸 [NEW ORCHESTRATOR] Image URLs being passed to tool:', input.userContext?.imageUrls);
+      }
       
       console.log('🧠 [NEW ORCHESTRATOR] === ORCHESTRATION COMPLETE ===\n');
       return result;

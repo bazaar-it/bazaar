@@ -7,13 +7,13 @@ import { addTool } from "~/tools/add/add";
 import { editTool } from "~/tools/edit/edit";
 import { deleteTool } from "~/tools/delete/delete";
 import { trimTool } from "~/tools/trim/trim";
-import { imageRecreatorTool } from "~/tools/image-recreator/image-recreator";
 import { scenePlannerTool } from "~/tools/scene-planner/scene-planner";
 import { AddAudioTool } from "~/tools/addAudio/addAudio";
 import { WebsiteToVideoHandler } from "~/tools/website/websiteToVideoHandler";
 import { SceneOrderBuffer } from "./scene-buffer";
 import type { BrainDecision } from "~/lib/types/ai/brain.types";
-import type { AddToolInput, EditToolInput, DeleteToolInput, TrimToolInput, ImageRecreatorToolInput, ScenePlannerToolInput, ScenePlan } from "~/tools/helpers/types";
+import { extractTargetSelectorFromDirectives } from "./util";
+import type { AddToolInput, EditToolInput, DeleteToolInput, TrimToolInput, ScenePlannerToolInput, ScenePlan } from "~/tools/helpers/types";
 import type { AddAudioInput } from "~/tools/addAudio/addAudio";
 import type { SceneEntity } from "~/generated/entities";
 import { formatSceneOperationMessage } from "~/lib/utils/scene-message-formatter";
@@ -28,6 +28,14 @@ export async function executeToolFromDecision(
   onSceneComplete?: (scene: SceneEntity) => void  // NEW: Callback for real-time delivery
 ): Promise<{ success: boolean; scene?: SceneEntity; scenes?: SceneEntity[]; partialFailures?: string[]; additionalMessageIds?: string[] }> {
   const startTime = Date.now(); // Track generation time
+
+  console.log('🧭 [HELPERS] Tool execution start:', {
+    tool: decision.toolName,
+    hasContext: !!decision.toolContext,
+    imageAction: (decision.toolContext as any)?.imageAction,
+    directives: (decision.toolContext as any)?.imageDirectives?.length || 0,
+    hasImages: !!decision.toolContext?.imageUrls?.length
+  });
   
   // Get project format for AI context
   const project = await db.query.projects.findFirst({
@@ -48,6 +56,7 @@ export async function executeToolFromDecision(
   let toolInput: AddToolInput | EditToolInput | DeleteToolInput | TrimToolInput;
 
   // Prepare tool input based on tool type
+
   switch (decision.toolName) {
     case 'addScene':
       // SAFETY OVERRIDE: If audio URLs are present, this is an audio add request.
@@ -84,7 +93,7 @@ export async function executeToolFromDecision(
       if (decision.toolContext?.referencedSceneIds?.length && decision.toolContext.referencedSceneIds.length > 0) {
         // Safety: Only include scenes that exist in storyboard
         referenceScenes = storyboard.filter(s => 
-          decision.toolContext.referencedSceneIds!.includes(s.id)
+          decision.toolContext?.referencedSceneIds?.includes(s.id) || false
         );
         
         console.log(`📝 [ROUTER] Including ${referenceScenes.length} reference scenes for ADD operation`);
@@ -124,7 +133,9 @@ export async function executeToolFromDecision(
         isYouTubeAnalysis: decision.toolContext.isYouTubeAnalysis, // Pass YouTube analysis flag
         // Pass previous scene for style continuity (but not for first scene, GitHub, or Figma components)
         // GitHub and Figma components should have clean styling without previous scene influence
-        previousSceneContext: (storyboard.length > 0 && !decision.toolContext.useGitHub && !decision.toolContext.figmaComponentData) ? {
+        // Only include previous scene context when a previous scene exists.
+        // Guard deprecated/optional fields from earlier pipelines (useGitHub/figmaComponentData).
+        previousSceneContext: (storyboard.length > 0 && !((decision.toolContext as any)?.useGitHub) && !((decision.toolContext as any)?.figmaComponentData)) ? {
           tsxCode: storyboard[storyboard.length - 1].tsxCode,
           style: undefined
         } : undefined,
@@ -139,9 +150,12 @@ export async function executeToolFromDecision(
         // Pass project format for AI context
         projectFormat: projectFormat,
         // FIGMA: Pass Figma component data if available
-        figmaComponentData: decision.toolContext.figmaComponentData,
+        // Pass-through for Figma when available (optional in current schema)
+        figmaComponentData: (decision.toolContext as any)?.figmaComponentData,
         // TEMPLATE CONTEXT: Pass template examples for better first-scene generation
         templateContext: decision.toolContext.templateContext,
+        imageAction: (decision.toolContext as any)?.imageAction,
+        imageDirectives: (decision.toolContext as any)?.imageDirectives,
       } as AddToolInput;
       
       const addResult = await addTool.run(toolInput);
@@ -243,9 +257,12 @@ export async function executeToolFromDecision(
           const idx = parseInt(String(decision.toolContext.targetSceneId).match(/scene-(\d+)-id/i)?.[1] || '0', 10) - 1;
           if (!Number.isNaN(idx) && storyboard[idx]) {
             decision.toolContext.targetSceneId = storyboard[idx].id;
-            sceneToEdit = await db.query.scenes.findFirst({
-              where: eq(scenes.id, decision.toolContext.targetSceneId),
-            });
+            const targetSceneId = decision.toolContext.targetSceneId;
+            if (targetSceneId) {
+              sceneToEdit = await db.query.scenes.findFirst({
+                where: eq(scenes.id, targetSceneId),
+              });
+            }
           }
         } catch {}
       }
@@ -256,7 +273,7 @@ export async function executeToolFromDecision(
       
       // IMPROVED: Always provide neighboring scenes for better context
       // Find the index of the scene being edited
-      const targetSceneIndex = storyboard.findIndex(s => s.id === decision.toolContext.targetSceneId);
+      const targetSceneIndex = storyboard.findIndex(s => s.id === decision.toolContext?.targetSceneId);
       let editReferenceScenes: Array<{id: string, name: string, tsxCode: string}> = [];
       
       // Add explicitly referenced scenes if any
@@ -353,6 +370,16 @@ export async function executeToolFromDecision(
         });
       }
       
+      // Try to derive selector hint from imageDirectives if present
+      let targetSelector: string | undefined;
+      targetSelector = extractTargetSelectorFromDirectives((decision.toolContext as any)?.imageDirectives, decision.toolContext?.targetSceneId);
+      if (targetSelector) console.log('🧭 [HELPERS] Using selector from directives:', targetSelector);
+
+      // Log what we're about to pass to edit tool
+      if (decision.toolContext.imageUrls?.length) {
+        console.log('📸 [HELPERS] Image URLs being passed to EDIT tool:', decision.toolContext.imageUrls);
+      }
+      
       toolInput = {
         userPrompt: decision.toolContext.userPrompt,
         projectId,
@@ -364,10 +391,13 @@ export async function executeToolFromDecision(
         imageUrls: decision.toolContext.imageUrls,
         videoUrls: decision.toolContext.videoUrls,
         audioUrls: decision.toolContext.audioUrls,
+        targetSelector,
         errorDetails: decision.toolContext.errorDetails,
         referenceScenes: editReferenceScenes,
         formatContext: projectFormat,
         modelOverride: decision.toolContext.modelOverride, // Pass model override if provided
+        imageAction: (decision.toolContext as any)?.imageAction,
+        imageDirectives: (decision.toolContext as any)?.imageDirectives,
       } as EditToolInput;
       
       const editResult = await editTool.run(toolInput as EditToolInput);
@@ -411,9 +441,14 @@ export async function executeToolFromDecision(
         durationChanged,
       });
 
+      const targetSceneIdForUpdate = decision.toolContext.targetSceneId;
+      if (!targetSceneIdForUpdate) {
+        throw new Error('No target scene ID for update');
+      }
+      
       const [updatedScene] = await db.update(scenes)
         .set(setFields)
-        .where(eq(scenes.id, decision.toolContext.targetSceneId))
+        .where(eq(scenes.id, targetSceneIdForUpdate))
         .returning();
       
       if (!updatedScene) {
@@ -427,10 +462,10 @@ export async function executeToolFromDecision(
         
         // Create scene iteration record
         await db.insert(sceneIterations).values({
-          sceneId: decision.toolContext.targetSceneId,
+          sceneId: targetSceneIdForUpdate, // Use the validated ID from above
           projectId,
           operationType: 'edit',
-          userPrompt: decision.toolContext.userPrompt,
+          userPrompt: decision.toolContext.userPrompt || '',
           brainReasoning: decision.reasoning,
           codeBefore: sceneToEdit.tsxCode,
           codeAfter: editResult.data.tsxCode,
@@ -602,7 +637,8 @@ export async function executeToolFromDecision(
         scene: sceneToDelete as any // Cast to any to avoid props type issue
       };
 
-    case 'typographyScene':
+    // Typography scenes are handled by addScene
+    case 'typographyScene' as any:
       // Typography is now handled by addScene tool
       console.log('🎨 [HELPERS] Typography now handled by ADD tool');
       
@@ -634,8 +670,8 @@ export async function executeToolFromDecision(
       
       return { success: true, scene: typographyScene as any };
 
-    case 'imageRecreatorScene':
-      console.log('🖼️ [HELPERS] Using IMAGE RECREATOR tool');
+    // Note: legacy imageRecreatorScene removed from ToolName; no case here
+    /* Deprecated implementation kept below for reference
       
       // Build image recreator input with proper type checking
       const imageRecreatorInput: ImageRecreatorToolInput = {
@@ -730,15 +766,9 @@ export async function executeToolFromDecision(
         }
         
         console.log('✅ [HELPERS] Fallback to addTool successful:', fallbackScene.name);
-        return { success: true, scene: fallbackScene as any };
+      return { success: true, scene: fallbackScene as any };
       }
-      // [SCENEPLANNER DISABLED] - All scenePlanner logic commented out
-      // console.log(`📋 [HELPERS] Created plan with ${plannerResult.data.scenePlans.length} scenes`);
-      // ... (scenePlanner case logic removed for simplicity)
-      
-      // Fallback: redirect to addScene for multi-scene requests
-      console.log('⚠️ [HELPERS] scenePlanner disabled - falling back to addScene');
-      throw new Error('scenePlanner is temporarily disabled. Please create scenes one at a time using addScene.');
+      */
 
     case 'addAudio':
       console.log('🎵 [HELPERS] Processing addAudio tool');
@@ -820,7 +850,7 @@ export async function executeToolFromDecision(
       return {
         success: true,
         scenes: generatedScenes as any,
-        debugData: websiteResult.debugData, // Pass debug data for admin panel
+        // debugData removed - not part of ToolExecutionResult type
       };
 
     default:
@@ -992,17 +1022,19 @@ async function executeIndividualScene(
         
       case 'recreate':
         try {
-          toolResult = await imageRecreatorTool.run({
+          toolResult = await addTool.run({
             userPrompt: plan.prompt,
-            imageUrls: plan.context.imageUrls || [],
             projectId,
             userId,
+            sceneNumber: sceneOrder + 1,
+            storyboardSoFar: storyboard,
+            imageUrls: plan.context.imageUrls || [],
             projectFormat,
-            recreationType: 'full',
+            imageAction: 'recreate'
           });
           
           if (!toolResult.success || !toolResult.data) {
-            throw new Error(toolResult.error?.message || 'Image recreation tool failed');
+            throw new Error(toolResult.error?.message || 'Recreate plan failed via addTool');
           }
         } catch (error) {
           console.warn(`🔄 [MULTI-SCENE] Image recreation tool failed for scene ${sceneOrder}, falling back to code-generator:`, error);

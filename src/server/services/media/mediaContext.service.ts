@@ -365,14 +365,20 @@ VALIDATION: After generating code, verify ALL media URLs match the list above ex
   
   /**
    * Validate generated code contains only real URLs
+   * @param providedUrls - URLs that were explicitly provided and should be considered valid
    */
-  validateGeneratedCode(code: string, context: MediaContext): {
+  validateGeneratedCode(code: string, context: MediaContext, providedUrls?: string[]): {
     valid: boolean;
     issues: string[];
     fixedCode?: string;
   } {
     const issues: string[] = [];
     let fixedCode = code;
+    
+    // Create set of valid URLs (context + explicitly provided)
+    const validUrls = new Set<string>();
+    context.allMedia.forEach(media => validUrls.add(media.url));
+    providedUrls?.forEach(url => validUrls.add(url));
     
     // Find all URLs in the code
     const urlPattern = /(?:src|href|url)=["']([^"']+)["']/g;
@@ -390,18 +396,46 @@ VALIDATION: After generating code, verify ALL media URLs match the list above ex
       // Skip data URLs and relative paths that aren't media
       if (url.startsWith('data:') || url.startsWith('#')) return;
       
-      // Check if it's a real URL from our context
-      if (!context.byUrl.has(url)) {
-        // Try to find what the user might have meant
+      // Normalize URL for comparison (decode %20 to spaces, etc)
+      const normalizedUrl = decodeURIComponent(url);
+      
+      // Check against placeholder patterns first
+      const placeholderPatterns = [
+        /^\/api\/placeholder\//,
+        /^https?:\/\/example\.com\//,
+        /^https?:\/\/placeholder\.com\//,
+        /^https?:\/\/images\.unsplash\.com\//,
+        /IMAGE_URL_\d+/,
+        /\{imageUrl\d*\}/
+      ];
+      
+      const isPlaceholder = placeholderPatterns.some(pattern => pattern.test(url) || pattern.test(normalizedUrl));
+      
+      if (isPlaceholder) {
+        // This is definitely a placeholder that needs fixing
         const possibleMatches = this.findMediaByReference(context, url);
         
         if (possibleMatches.length > 0 && possibleMatches[0]) {
-          // Replace with the best match
           const replacement = possibleMatches[0].url;
           fixedCode = fixedCode.replace(url, replacement);
-          issues.push(`Replaced hallucinated URL "${url}" with real URL "${replacement}"`);
+          issues.push(`Replaced placeholder URL "${url}" with real URL "${replacement}"`);
+        } else if (providedUrls && providedUrls.length > 0) {
+          // Use first provided URL as fallback for placeholders
+          const replacement = providedUrls[0];
+          fixedCode = fixedCode.replace(url, replacement);
+          issues.push(`Replaced placeholder URL "${url}" with provided URL "${replacement}"`);
         } else {
-          issues.push(`Found unknown/hallucinated URL: ${url}`);
+          issues.push(`Found placeholder URL with no replacement: ${url}`);
+        }
+      } else if (!validUrls.has(url)) {
+        // Not a placeholder but also not in our valid URLs
+        // This might be a hallucinated URL that looks real
+        // But DON'T flag R2 URLs as hallucinated - they're our storage!
+        if (!url.includes('.r2.dev/') && !url.includes('pub-f970b0ef1f2e418e8d902ba0973ff5cf')) {
+          issues.push(`Found unknown URL (possible hallucination): ${url}`);
+        } else if (url.includes('.r2.dev/')) {
+          // This is an R2 URL that's not in context - it's likely valid but just not tracked
+          console.log(`📸 [MEDIA VALIDATION] R2 URL found but not in context (allowing): ${url}`);
         }
       }
     });
