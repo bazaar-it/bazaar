@@ -234,8 +234,23 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
   }
 
   // Desktop/Tablet layout
+  // Prevent two-finger horizontal swipe from triggering browser Back/Forward
+  useEffect(() => {
+    const onWheel = (e: WheelEvent) => {
+      if (e.defaultPrevented) return;
+      // Ignore pinch/zoom gestures
+      if (e.ctrlKey || e.metaKey) return;
+      // Treat strong horizontal intent as navigation gesture; block it globally on this page
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        try { e.preventDefault(); } catch {}
+      }
+    };
+    window.addEventListener('wheel', onWheel, { passive: false });
+    return () => window.removeEventListener('wheel', onWheel as any);
+  }, []);
+
   return (
-    <div className="h-[100dvh] flex flex-col overflow-hidden relative bg-white dark:bg-gray-900">
+    <div className="h-[100dvh] flex flex-col overflow-hidden relative bg-white dark:bg-gray-900 overscroll-x-none">
       {/* App Header - Fixed at top with proper z-index and rounded bottom corners */}
       <div className="sticky top-0 z-40 w-full bg-white dark:bg-gray-900 shadow-sm border-b border-gray-100 dark:border-gray-800 rounded-bl-[15px] rounded-br-[15px]">
         <AppHeader
@@ -281,7 +296,7 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
             
             {/* Timeline panel - fixed height based on content - ADMIN ONLY */}
             {isTimelineVisible && user?.isAdmin && (
-              <div className="bg-gray-900 border-t border-gray-200">
+              <div className="mt-2">
                 <TimelinePanel
                   key={`timeline-${projectId}`}
                   projectId={projectId}
