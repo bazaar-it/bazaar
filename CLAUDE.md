@@ -9,6 +9,9 @@ Use MCP tools to query both dev and prod Neon databases:
 
 **All development work MUST follow these guidelines:**
 
+always find root issues, use mcp tool to query the database, either prod or dev or both, to double check when u can. never just patch things to make it work in a hacky way, but try to be smart and think long term. Often, when I state something as the porblem, its just an exmaple of the problem. So dont just make custom solution for this one exmaple, but try to find out what this exmaple, and other exmaples, are a symptomps of.
+
+
 ### Sprint-Based Workflow
 - **Active Sprints** (ALWAYS check these first):
   - Sprint 116 - Images: Unified multimodal image workflow (`/memory-bank/sprints/sprint116_images/`)

@@ -66,7 +66,7 @@ export function PreviewPanelG({
   const [syncDebounceTimer, setSyncDebounceTimer] = useState<NodeJS.Timeout | null>(null);
   
   useEffect(() => {
-    if (dbScenes && dbScenes.length > 0 && currentProps) {
+    if (dbScenes && currentProps) {
       // 🚨 FIX: Check if scenes have actually changed to prevent redundant syncs
       const currentSceneIds = dbScenes.map(s => `${s.id}-${s.updatedAt}`).join(',');
       
@@ -93,27 +93,20 @@ export function PreviewPanelG({
       let currentStart = 0;
       const convertedScenes = ordered.map((dbScene: any) => {
         const sceneDuration = dbScene.duration || 150;
-        
-        // Debug log to check if tsxCode exists
         if (!dbScene.tsxCode) {
           console.warn('[PreviewPanelG] Scene missing tsxCode:', dbScene.id, dbScene.name);
         }
-        
-        // Check if there's a local scene with this ID
         const localScene = currentProps.scenes?.find((s: any) => s.id === dbScene.id);
         const localName = (localScene as any)?.name || localScene?.data?.name;
-        
         const scene = {
           id: dbScene.id,
           type: 'custom' as const,
           start: currentStart,
           duration: sceneDuration,
           order: dbScene.order ?? 0,
-          // Preserve local name if it exists and is different from DB name
           name: localName || dbScene.name,
           data: {
             code: dbScene.tsxCode,
-            // Also preserve local name in data for backward compatibility
             name: localName || dbScene.name,
             componentId: dbScene.id,
             props: dbScene.props || {}
@@ -122,12 +115,7 @@ export function PreviewPanelG({
         currentStart += sceneDuration;
         return scene;
       });
-      
-      // Dedupe by ID for defense-in-depth.
-      // Prevents accidental duplicates if multiple writers ever reappear.
-      // See memory-bank/sprints/sprint98_autofix_analysis/progress.md
       const dedupedScenes = Array.from(new Map(convertedScenes.map((s: any) => [s.id, s])).values());
-      // Update VideoState with new scenes
       const updatedProps = {
         ...currentProps,
         scenes: dedupedScenes,
@@ -136,8 +124,12 @@ export function PreviewPanelG({
           duration: dedupedScenes.reduce((sum: number, s: any) => sum + (s.duration || 0), 0)
         }
       };
-      
+      // If DB returns no scenes, explicitly clear scenes and reset duration to 150 (default placeholder length) or 0
+      if (dbScenes.length === 0) {
+        replace(projectId, { ...currentProps, scenes: [], meta: { ...currentProps.meta, duration: 150 } });
+      } else {
         replace(projectId, updatedProps);
+      }
       }, 300); // 300ms debounce for DB sync
       
       setSyncDebounceTimer(timer);
@@ -2233,55 +2225,69 @@ export default function FallbackComposition() {
   const isCompilingRef = useRef<boolean>(false);
   
   useEffect(() => {
-    if (scenes.length > 0) {
-      const currentFingerprint = `${scenesFingerprint}-${audioFingerprint}`;
-      
-      // Skip if fingerprint hasn't actually changed (prevents duplicate compiles)
-      if (currentFingerprint === lastCompiledFingerprintRef.current) {
-        console.log('[PreviewPanelG] 🎯 Fingerprint unchanged, skipping compilation');
-        return;
-      }
-      
-      // Skip if already compiling
-      if (isCompilingRef.current) {
-        console.log('[PreviewPanelG] ⏳ Already compiling, will queue next compilation');
-      }
-      
-      // Clear existing timer
-      if (compilationTimerRef.current) {
-        clearTimeout(compilationTimerRef.current);
-      }
-      
-      // Set new debounced timer with increased delay to batch rapid updates
-      compilationTimerRef.current = setTimeout(async () => {
-        // Double-check fingerprint hasn't become the same during debounce
-        const latestFingerprint = `${scenesFingerprint}-${audioFingerprint}`;
-        if (latestFingerprint === lastCompiledFingerprintRef.current) {
-          console.log('[PreviewPanelG] 🎯 Fingerprint became unchanged during debounce, skipping');
-          return;
-        }
-        
-        // Prevent overlapping compilations
-        if (isCompilingRef.current) {
-          console.log('[PreviewPanelG] ⏳ Still compiling previous, skipping this update');
-          return;
-        }
-        
-        console.log('[PreviewPanelG] 📝 Scene content changed, triggering compilation');
-        console.log('[PreviewPanelG] Old fingerprint:', lastCompiledFingerprintRef.current?.substring(0, 50) + '...');
-        console.log('[PreviewPanelG] New fingerprint:', latestFingerprint.substring(0, 50) + '...');
-        
+    const currentFingerprint = `${scenesFingerprint}-${audioFingerprint}-len:${scenes.length}`;
+
+    // Skip if fingerprint hasn't actually changed (prevents duplicate compiles)
+    if (currentFingerprint === lastCompiledFingerprintRef.current) {
+      console.log('[PreviewPanelG] 🎯 Fingerprint unchanged, skipping compilation');
+      return;
+    }
+
+    // For zero scenes, compile immediately to placeholder (no debounce)
+    if (scenes.length === 0) {
+      if (compilationTimerRef.current) clearTimeout(compilationTimerRef.current);
+      lastCompiledFingerprintRef.current = currentFingerprint;
+      (async () => {
+        if (isCompilingRef.current) return; // avoid overlap
         isCompilingRef.current = true;
-        lastCompiledFingerprintRef.current = latestFingerprint;
-        
         try {
           await compileMultiSceneComposition();
         } finally {
           isCompilingRef.current = false;
         }
-      }, 600); // Increased to 600ms to better batch rapid updates
+      })();
+      return;
     }
-    
+
+    // Skip if already compiling
+    if (isCompilingRef.current) {
+      console.log('[PreviewPanelG] ⏳ Already compiling, will queue next compilation');
+    }
+
+    // Clear existing timer
+    if (compilationTimerRef.current) {
+      clearTimeout(compilationTimerRef.current);
+    }
+
+    // Set new debounced timer with increased delay to batch rapid updates
+    compilationTimerRef.current = setTimeout(async () => {
+      // Double-check fingerprint hasn't become the same during debounce
+      const latestFingerprint = `${scenesFingerprint}-${audioFingerprint}-len:${scenes.length}`;
+      if (latestFingerprint === lastCompiledFingerprintRef.current) {
+        console.log('[PreviewPanelG] 🎯 Fingerprint became unchanged during debounce, skipping');
+        return;
+      }
+      
+      // Prevent overlapping compilations
+      if (isCompilingRef.current) {
+        console.log('[PreviewPanelG] ⏳ Still compiling previous, skipping this update');
+        return;
+      }
+      
+      console.log('[PreviewPanelG] 📝 Scene content changed, triggering compilation');
+      console.log('[PreviewPanelG] Old fingerprint:', lastCompiledFingerprintRef.current?.substring(0, 50) + '...');
+      console.log('[PreviewPanelG] New fingerprint:', latestFingerprint.substring(0, 50) + '...');
+      
+      isCompilingRef.current = true;
+      lastCompiledFingerprintRef.current = latestFingerprint;
+      
+      try {
+        await compileMultiSceneComposition();
+      } finally {
+        isCompilingRef.current = false;
+      }
+    }, 600); // Increased to 600ms to better batch rapid updates
+
     // Cleanup on unmount
     return () => {
       if (compilationTimerRef.current) {
