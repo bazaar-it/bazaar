@@ -7,7 +7,17 @@ import type { ModelPack } from '../../config/models.config';
 import { AIClientService } from '~/server/services/ai/aiClient.service';
 import { db } from "~/server/db";
 import { scenes, projects, users } from "~/server/db/schema";
+import { orchestrator } from "~/brain/orchestratorNEW";
+import { executeToolFromDecision } from "~/server/api/routers/generation/helpers";
 import { eq } from "drizzle-orm";
+import { 
+  validateEmbedMode, 
+  validateRecreateMode, 
+  validateNoForbiddenUrls,
+  validateRemotionImports 
+} from './test-fixtures';
+import * as fs from 'fs';
+import * as path from 'path';
 // TODO: Update eval runner to use new tool architecture
 
 export interface EvalRunConfig {
@@ -270,44 +280,64 @@ export class EvaluationRunner {
         }
       }
 
+      // Build user context and optional attached scene
+      let storyboardSoFar = context.storyboardSoFar || [];
+      const userContext: any = { ...context };
+
       if (prompt.type === 'image' && prompt.input.image) {
-        // ✅ FIXED: Handle image prompts with proper URL format
         const imageUrl = prompt.input.image;
         console.log(`    🖼️  Processing image: ${imageUrl.substring(0, 50)}...`);
-        
-        // TODO: Update to use new orchestratorNEW and generation.ts
-        throw new Error("Eval runner needs to be updated to use new architecture");
-        /*
-        response = await brainOrchestrator.processUserInput({
-          prompt: prompt.input.text || '',
-          projectId,
-          userId,
-          userContext: {
-            ...context,
-            imageUrls: [imageUrl] // Pass image as URL in userContext
-          },
-          storyboardSoFar: context.storyboardSoFar || [],
-          chatHistory: context.chatHistory || []
-        });
+        userContext.imageUrls = [imageUrl];
+      }
 
-        if (response.result?.imageAnalysis) {
-          imageAnalysis = response.result.imageAnalysis;
+      if (prompt.type === 'scene') {
+        // Attach a minimal scene if not supplied
+        const sceneId = crypto.randomUUID();
+        const baseCode = `const { AbsoluteFill } = window.Remotion; export default function EvalScene(){ return <AbsoluteFill style={{backgroundColor:'#111'}}/> }`;
+        storyboardSoFar = [{ id: sceneId, name: 'Eval Scene', tsxCode: baseCode, duration: 180, order: 1 }];
+        userContext.sceneUrls = [sceneId];
+        try {
+          await db.insert(scenes).values({
+            id: sceneId,
+            projectId,
+            name: 'Eval Scene',
+            tsxCode: baseCode,
+            order: 1,
+            duration: 180,
+            props: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }).onConflictDoNothing();
+        } catch (e) {
+          console.warn('[EvaluationRunner] Could not insert attached scene (non-fatal)', e);
         }
-        */
-      } else {
-        // Text-based prompts
-        // TODO: Update to use new orchestratorNEW and generation.ts
-        throw new Error("Eval runner needs to be updated to use new architecture");
-        /*
-        response = await brainOrchestrator.processUserInput({
-          prompt: prompt.input.text || '',
-          projectId,
-          userId,
-          userContext: context,
-          storyboardSoFar: context.storyboardSoFar || [],
-          chatHistory: context.chatHistory || []
-        });
-        */
+      }
+
+      // Use new orchestrator
+      response = await orchestrator.processUserInput({
+        prompt: prompt.input.text || '',
+        projectId,
+        userId,
+        userContext,
+        storyboardSoFar,
+        chatHistory: context.chatHistory || []
+      } as any);
+
+      // Execute tool decision to produce a scene/code
+      try {
+        if (response?.result?.toolName && response?.result?.toolContext) {
+          const exec = await executeToolFromDecision(
+            { success: true, toolName: response.result.toolName, toolContext: response.result.toolContext },
+            projectId,
+            userId,
+            storyboardSoFar
+          );
+          if (exec.scene?.tsxCode) {
+            codeOutput = exec.scene.tsxCode as any;
+          }
+        }
+      } catch (toolErr) {
+        console.warn('[EvaluationRunner] Tool execution failed during eval', toolErr);
       }
 
       if (response.toolUsed) {
@@ -327,7 +357,7 @@ export class EvaluationRunner {
         console.log(`    🤔 Reasoning: ${response.reasoning.substring(0, 100)}...`);
       }
 
-      const cost = this.estimateCost(response.chatResponse || '', model.provider, model.model);
+      const cost = this.estimateCost((response && response.chatResponse) || '', model.provider, model.model);
 
       // 🚨 CLEANUP: Remove the test records after evaluation (in proper order)
       try {
@@ -340,6 +370,42 @@ export class EvaluationRunner {
         // Non-critical error, continue
       }
 
+      // Validate the generated code if we have it
+      let validationResults: any = {};
+      if (codeOutput && prompt.expectedBehavior?.validation) {
+        const imageUrls = context.imageUrls || [];
+        const validation = prompt.expectedBehavior.validation;
+        
+        // Check embed/recreate mode compliance
+        if (context.mode === 'embed' || context.imageAction === 'embed') {
+          const embedResult = validateEmbedMode(codeOutput, imageUrls);
+          validationResults.embedMode = {
+            expected: validation.mustIncludeUrl,
+            actual: embedResult.valid,
+            foundUrls: embedResult.foundUrls,
+            missingUrls: embedResult.missingUrls
+          };
+        } else if (context.mode === 'recreate' || context.imageAction === 'recreate') {
+          const recreateResult = validateRecreateMode(codeOutput, imageUrls);
+          validationResults.recreateMode = {
+            expected: !validation.mustIncludeUrl,
+            actual: recreateResult.valid,
+            foundUrls: recreateResult.foundUrls
+          };
+        }
+        
+        // Check for forbidden URLs
+        const forbiddenResult = validateNoForbiddenUrls(codeOutput);
+        validationResults.forbiddenUrls = {
+          valid: forbiddenResult.valid,
+          found: forbiddenResult.foundForbidden
+        };
+        
+        // Check Remotion imports
+        const hasImages = imageUrls.length > 0 && (context.mode === 'embed' || context.imageAction === 'embed');
+        validationResults.remotionImports = validateRemotionImports(codeOutput, hasImages);
+      }
+
       return {
         promptId: prompt.id,
         prompt,
@@ -347,14 +413,15 @@ export class EvaluationRunner {
         modelKey: 'brain',
         provider: model.provider,
         model: model.model,
-        output: response.chatResponse || '',
-        actualOutput: response.chatResponse || '',
+        output: (response && response.chatResponse) || '',
+        actualOutput: (response && response.chatResponse) || '',
         codeOutput,
         imageAnalysis,
-        toolsUsed,
-        reasoning: response.reasoning,
-        success: response.success,
-        error: response.error,
+        toolsUsed: response?.result?.toolName ? [response.result.toolName] : toolsUsed,
+        reasoning: response?.reasoning,
+        success: !!response?.success,
+        error: response?.error,
+        validationResults,
         metrics: {
           latency,
           cost,
@@ -363,7 +430,29 @@ export class EvaluationRunner {
       };
 
     } catch (error) {
-      throw new Error(`${error instanceof Error ? error.message : String(error)}`);
+      // Still return a result even on error so we can track failures
+      return {
+        promptId: prompt.id,
+        prompt,
+        modelPack: modelPackId,
+        modelKey: 'brain',
+        provider: model.provider,
+        model: model.model,
+        output: '',
+        actualOutput: '',
+        codeOutput: undefined,
+        imageAnalysis: undefined,
+        toolsUsed: [],
+        reasoning: undefined,
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        validationResults: {},
+        metrics: {
+          latency,
+          cost: 0,
+          timestamp: new Date().toISOString()
+        }
+      };
     }
   }
 

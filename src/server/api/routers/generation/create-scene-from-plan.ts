@@ -4,7 +4,7 @@ import { db } from "~/server/db";
 import { scenes, messages, projects } from "~/server/db/schema";
 import { eq, and } from "drizzle-orm";
 import { addTool } from "~/tools/add/add";
-import { imageRecreatorTool } from "~/tools/image-recreator/image-recreator";
+// imageRecreatorTool removed — use addTool with imageAction: 'recreate'
 import type { ScenePlan } from "~/tools/helpers/types";
 
 export const createSceneFromPlanRouter = createTRPCRouter({
@@ -138,13 +138,16 @@ export const createSceneFromPlanRouter = createTRPCRouter({
               }
             } else {
               try {
-                toolResult = await imageRecreatorTool.run({
+                toolResult = await addTool.run({
                   userPrompt: scenePlan.prompt,
                   projectId,
                   userId,
+                  sceneNumber: storyboard.length + 1,
+                  storyboardSoFar: storyboard,
                   projectFormat,
                   imageUrls: imageUrls,
-                  recreationType: 'full',
+                  // Direct recreate intent
+                  imageAction: 'recreate'
                 });
               } catch (toolError) {
                 console.error('[CREATE_SCENE_FROM_PLAN] Image recreator error:', toolError);
@@ -444,9 +447,10 @@ export const createSceneFromPlanRouter = createTRPCRouter({
               // Typography is now handled by addTool
               toolResult = await addTool.run(baseInput);
             } else if (scenePlan.toolType === 'recreate' && imageUrls.length > 0) {
-              toolResult = await imageRecreatorTool.run({
+              toolResult = await addTool.run({
                 ...baseInput,
                 imageUrls,
+                imageAction: 'recreate'
               });
             } else {
               // Default to add tool

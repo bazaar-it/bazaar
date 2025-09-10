@@ -105,7 +105,8 @@ export class ContextBuilder {
           allAssets: projectAssets.assets.map(a => ({
             url: a.url,
             type: a.type,
-            originalName: a.originalName
+            originalName: a.originalName,
+            tags: a.tags || []
           })),
           logos: projectAssets.logos.map(l => l.url),
           assetUrls: projectAssets.assets.map(a => a.url)

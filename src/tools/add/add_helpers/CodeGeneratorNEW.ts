@@ -3,7 +3,9 @@ import { getModel } from "~/config/models.config";
 import { getParameterizedPrompt } from "~/config/prompts.config";
 import { extractDurationFromCode, analyzeDuration } from "~/lib/utils/codeDurationExtractor";
 import { getSmartTransitionContext } from "~/lib/utils/transitionContext";
-import { IMAGE_RECREATOR } from "~/config/prompts/active/image-recreator";
+import { TECHNICAL_GUARDRAILS_BASE } from "~/config/prompts/active/bases/technical-guardrails";
+import { IMAGE_EMBED_MODE } from "~/config/prompts/active/modes/image-embed";
+import { IMAGE_RECREATE_MODE } from "~/config/prompts/active/modes/image-recreate";
 import type { CodeGenerationInput, CodeGenerationOutput, ImageToCodeInput } from "~/tools/helpers/types";
 import { MediaValidation } from "./mediaValidation";
 import { validateAndFixCode } from "~/lib/utils/codeValidator";
@@ -53,7 +55,7 @@ export class UnifiedCodeProcessor {
     
     // 🚨 CRITICAL FIX: Remove mysterious "x" prefix bug - check multiple patterns
     // This bug causes "x is not defined" errors and is one of the most common failures
-    const firstLine = cleanCode.split('\n')[0].trim();
+    const firstLine = (cleanCode.split('\n')[0] || '').trim();
     if (firstLine === 'x' || firstLine === 'x;' || firstLine === 'x ') {
       console.error('🚨🚨🚨 [UNIFIED PROCESSOR] DETECTED "X" BUG - Removing standalone "x" from first line');
       console.error('First line was:', firstLine);
@@ -102,7 +104,7 @@ export class UnifiedCodeProcessor {
     
     // 🚨 CRITICAL: Apply comprehensive validation and fixes
     console.log('[UNIFIED PROCESSOR] Applying validation pipeline...');
-    const validationResult = validateAndFixCode(cleanCode);
+    const validationResult: any = validateAndFixCode(cleanCode);
     
     if (!validationResult.isValid && validationResult.fixedCode) {
       console.warn('[UNIFIED PROCESSOR] Code had issues, applying fixes:', validationResult.fixesApplied);
@@ -112,8 +114,8 @@ export class UnifiedCodeProcessor {
       // Continue with the code anyway - better to try than fail completely
     }
     
-    if (validationResult.fixesApplied.length > 0) {
-      console.log('[UNIFIED PROCESSOR] Applied fixes:', validationResult.fixesApplied.join(', '));
+    if ((validationResult.fixesApplied?.length || 0) > 0) {
+      console.log('[UNIFIED PROCESSOR] Applied fixes:', (validationResult.fixesApplied as string[]).join(', '));
     }
     
     // Extract duration
@@ -298,11 +300,9 @@ CRITICAL: You MUST use these exact image URLs above in your generated code with 
         console.warn(`⚠️ [IMAGE RECREATOR] Skipped ${avifImages.length} AVIF images. Using ${supportedImages.length} supported images.`);
       }
       
-      // Replace placeholders in IMAGE_RECREATOR content
-      const imageRecreatorPrompt = IMAGE_RECREATOR.content
-        .replace(/{{WIDTH}}/g, input.projectFormat?.width.toString() || '1920')
-        .replace(/{{HEIGHT}}/g, input.projectFormat?.height.toString() || '1080')
-        .replace(/{{FORMAT}}/g, input.projectFormat?.format?.toUpperCase() || 'LANDSCAPE');
+      // Build system prompt from base + recreate mode + canvas context
+      const canvasLine = `Canvas: ${input.projectFormat?.width || 1920}x${input.projectFormat?.height || 1080} (${(input.projectFormat?.format || 'landscape').toUpperCase()})`;
+      const imageRecreatorPrompt = `${TECHNICAL_GUARDRAILS_BASE}\n${IMAGE_RECREATE_MODE}\n${canvasLine}`;
       
       const response = await AIClientService.generateResponse(
         getModel('codeGenerator'),
@@ -396,9 +396,12 @@ CRITICAL: You MUST use these exact image URLs above in your generated code with 
     
     // Check cache first (skip for YouTube since it's unique)
     if (!input.isYouTubeAnalysis && input.projectId) {
+      const previousScene = (input.storyboardContext && input.storyboardContext.length > 0)
+        ? input.storyboardContext[input.storyboardContext.length - 1]?.tsxCode
+        : undefined;
       const cached = codeCache.get(input.userPrompt, input.projectId, {
         format: input.projectFormat?.format,
-        previousScene: input.storyboardContext?.[input.storyboardContext.length - 1]?.tsxCode,
+        previousScene,
       });
       
       if (cached) {
@@ -509,12 +512,13 @@ FUNCTION NAME: ${input.functionName}`;
 
       // Add storyboard context if available (for consistency across scenes)
       if (input.storyboardContext && input.storyboardContext.length > 0) {
+        const storyboardScenes = input.storyboardContext.slice(-3);
         userPrompt += `\n\n📽️ EXISTING SCENES IN PROJECT (for consistency):
 You have ${input.storyboardContext.length} existing scene(s) in this project. Maintain visual consistency with them.
 
-${input.storyboardContext.slice(-3).map((scene, i) => {
+${storyboardScenes.map((scene, i) => {
   // Include full code for the most recent scene, excerpts for others
-  const isLastScene = i === input.storyboardContext.slice(-3).length - 1;
+  const isLastScene = i === storyboardScenes.length - 1;
   const codeToShow = isLastScene ? scene.tsxCode : scene.tsxCode.substring(0, 1500);
   
   return `
@@ -657,13 +661,16 @@ ${ex.code}
       
       // Cache the generated code for future use (skip YouTube)
       if (!input.isYouTubeAnalysis && input.projectId) {
+        const prevScene = (input.storyboardContext && input.storyboardContext.length > 0)
+          ? input.storyboardContext[input.storyboardContext.length - 1]?.tsxCode
+          : undefined;
         codeCache.set(input.userPrompt, input.projectId, {
           tsxCode: result.code,
           name: result.name,
           duration: result.duration,
         }, {
           format: input.projectFormat?.format,
-          previousScene: input.storyboardContext?.[input.storyboardContext.length - 1]?.tsxCode,
+          previousScene: prevScene,
         });
       }
       
@@ -875,20 +882,17 @@ export default function ${input.functionName}() {
   /**
    * Generate code directly from images
    */
-  async generateCodeFromImage(input: ImageToCodeInput & { assetUrls?: string[] }): Promise<CodeGenerationOutput> {
+  async generateCodeFromImage(input: ImageToCodeInput & { assetUrls?: string[]; imageAction?: 'embed' | 'recreate' }): Promise<CodeGenerationOutput> {
     try {
       const config = getModel('codeGenerator');
       
       console.log('==================== codeGenerator reached:');
       console.log('==================== generateCodeFromImage reached:');
       
-      // Get the IMAGE_CODE_GENERATOR prompt specifically for image-based generation
-      const systemPrompt = getParameterizedPrompt('CODE_GENERATOR', {
-        FUNCTION_NAME: input.functionName,
-        WIDTH: input.projectFormat?.width.toString() || '1920',
-        HEIGHT: input.projectFormat?.height.toString() || '1080',
-        FORMAT: input.projectFormat?.format?.toUpperCase() || 'LANDSCAPE'
-      });
+      // Build system prompt from base + mode + canvas context
+      const canvasLine = `Canvas: ${input.projectFormat?.width || 1920}x${input.projectFormat?.height || 1080} (${(input.projectFormat?.format || 'landscape').toUpperCase()})`;
+      const modeLine = input.imageAction === 'recreate' ? IMAGE_RECREATE_MODE : IMAGE_EMBED_MODE;
+      const systemPrompt = { role: 'system' as const, content: `${TECHNICAL_GUARDRAILS_BASE}\n${modeLine}\n${canvasLine}` };
       
       // Build user message for vision API - include the actual user prompt AND image URLs!
       const imageUrlsList = input.imageUrls.map((url, i) => `Image ${i + 1}: ${url}`).join('\n');
@@ -934,39 +938,35 @@ Transform the static design into sequential storytelling.`;
       const response = await AIClientService.generateResponse(
         config,
         [{ role: 'user', content: visionMessagesContent }],
-        { role: 'system', content: systemPrompt.content }
+        systemPrompt
       );
 
-      // Clean up code
-      let cleanCode = response?.content?.trim() || '';
-      cleanCode = cleanCode.replace(/^```(?:javascript|tsx|ts|js)?\n?/i, '').replace(/\n?```$/i, '');
-      
+      const rawOutput = response?.content ?? '';
+      // Robust extraction: Use the unified processor to isolate TSX code only
+      let processed = this.processAIResponse(rawOutput, 'IMAGE_TO_CODE', input.userPrompt, input.functionName);
+
       // Validate and fix any hallucinated URLs
       if (input.projectId) {
         const validation = await MediaValidation.validateAndFixCode(
-          cleanCode,
+          processed.code,
           input.projectId,
           input.imageUrls
         );
-        
         if (validation.wasFixed) {
           console.log('🔧 [IMAGE-TO-CODE] Fixed hallucinated URLs:', validation.fixes);
-          cleanCode = validation.code;
+          processed.code = validation.code;
         }
       }
-      
-      // Extract duration from image-generated code
-      const durationAnalysis = analyzeDuration(cleanCode);
-      
+
       return {
-        code: cleanCode,
-        name: this.extractSceneNameFromPrompt(input.userPrompt), // Extract meaningful name from prompt
-        duration: durationAnalysis.frames,
-        reasoning: `Generated motion graphics directly from image analysis with ${durationAnalysis.frames} frames duration`,
+        code: processed.code,
+        name: this.extractSceneNameFromPrompt(input.userPrompt),
+        duration: processed.duration,
+        reasoning: `Generated motion graphics directly from image analysis with ${processed.duration} frames duration`,
         debug: {
           prompt: { system: 'Vision-based generation', user: `${input.imageUrls.length} images provided` },
-          response: response?.content || '',
-          parsed: { code: cleanCode, imageCount: input.imageUrls.length, durationAnalysis },
+          response: rawOutput,
+          parsed: { code: processed.code, imageCount: input.imageUrls.length, durationAnalysis: analyzeDuration(processed.code) },
         },
       };
     } catch (error) {

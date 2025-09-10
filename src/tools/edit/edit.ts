@@ -2,6 +2,9 @@ import { BaseMCPTool } from "~/tools/helpers/base";
 import { AIClientService } from "~/server/services/ai/aiClient.service";
 import { getModel, getIndividualModel } from "~/config/models.config";
 import { getSystemPrompt } from "~/config/prompts.config";
+import { TECHNICAL_GUARDRAILS_BASE } from "~/config/prompts/active/bases/technical-guardrails";
+import { IMAGE_EMBED_MODE } from "~/config/prompts/active/modes/image-embed";
+import { IMAGE_RECREATE_MODE } from "~/config/prompts/active/modes/image-recreate";
 import type { EditToolInput, EditToolOutput } from "~/tools/helpers/types";
 import { editToolInputSchema } from "~/tools/helpers/types";
 
@@ -68,6 +71,15 @@ BRAND MATCHING INSTRUCTIONS:
       
       if (input.imageUrls?.length) {
         context += `\n\nIMAGE CONTEXT: User provided ${input.imageUrls.length} image(s)`;
+        context += `\nIMAGE URLS (USE THESE EXACT URLS):`;
+        input.imageUrls.forEach((url, i) => {
+          const label = i === input.imageUrls!.length - 1 ? ' <- THIS IMAGE (most recent)' : '';
+          context += `\nImage ${i + 1}: ${url}${label}`;
+        });
+        // Add clarity about which image is "this image" or "the image"
+        if (input.imageUrls.length > 1) {
+          context += `\n\nWhen user says "this image" or "the image", they mean the LAST image in the list (most recently uploaded).`;
+        }
       }
       
       if (input.videoUrls?.length) {
@@ -120,11 +132,26 @@ BRAND MATCHING INSTRUCTIONS:
       
       if (allImageUrls.length > 0) {
         // Build vision content array for image-based edits
-        const contextInstructions = input.webContext 
-          ? 'IMPORTANT: The first two images are website screenshots for brand matching. Use them to understand the brand\'s visual identity, colors, and design patterns. ' +
-            (input.imageUrls?.length ? `The additional ${input.imageUrls.length} image(s) show specific content requirements. ` : '') +
-            'Apply the brand style while incorporating any specific visual requirements from additional images.'
-          : 'IMPORTANT: Look at the provided image(s) and recreate the visual elements from the image in the scene code. Match colors, layout, text, and visual hierarchy as closely as possible.';
+        const modeHint = input.imageAction === 'recreate'
+          ? 'Do NOT display the uploaded image(s). Use them only as visual reference. Modify the existing code to match colors, typography, spacing, border radius and layout of the reference. Limit scope to targeted elements; keep unrelated code unchanged.'
+          : 'You MUST insert the exact uploaded image(s) using <Img src="URL"> at the appropriate container/slot. Do not recreate; keep unrelated code unchanged. Use contain/cover and size/position appropriately.';
+        const brandingHint = input.webContext
+          ? 'The first two images are website screenshots for brand matching. Use them to understand the brand\'s visual identity, colors, and design patterns.'
+          : 'Look at the provided image(s) for visual guidance.';
+        const selectorHint = input.targetSelector ? `TARGET SELECTOR: ${input.targetSelector} — place/embed or modify within that element.` : '';
+        
+        // Add image reference clarification when multiple images
+        let imageReferenceHint = '';
+        if (input.imageUrls && input.imageUrls.length > 1) {
+          const lastImageUrl = input.imageUrls[input.imageUrls.length - 1];
+          imageReferenceHint = `\n\n🚨 MULTIPLE IMAGES - INTELLIGENT SELECTION REQUIRED:`;
+          imageReferenceHint += `\n- For "background" requests: Use images that look like photos/illustrations, NOT UI screenshots`;
+          imageReferenceHint += `\n- For "this image" without context: Use the LAST image (${lastImageUrl.split('/').pop()})`;
+          imageReferenceHint += `\n- NEVER use UI screenshots as backgrounds - that's illogical`;
+          imageReferenceHint += `\n- Match image type to purpose (photos for backgrounds, UI for interface reference)`;
+        }
+        
+        const contextInstructions = `${brandingHint} ${modeHint} ${selectorHint}${imageReferenceHint}`.trim();
         
         messageContent = [
           { 
@@ -169,8 +196,18 @@ Please edit the code according to the user request. Return the complete modified
         totalImages: allImageUrls.length,
         codeLength: input.tsxCode.length,
         codePreview: input.tsxCode.substring(0, 200),
-        websiteUrl: input.webContext?.originalUrl
+        websiteUrl: input.webContext?.originalUrl,
+        mode: input.imageAction || (input.imageUrls?.length ? 'embed' : 'none'),
+        targetSelector: input.targetSelector || null,
       });
+      
+      // Log the actual image URLs being used
+      if (input.imageUrls?.length) {
+        console.log('📸 [EDIT TOOL] Image URLs received:', input.imageUrls);
+      }
+      if (allImageUrls.length > 0) {
+        console.log('📸 [EDIT TOOL] All image URLs (including web):', allImageUrls);
+      }
 
       // Use the AI to edit the code
       // Check if there's a model override
@@ -185,11 +222,13 @@ Please edit the code according to the user request. Return the complete modified
         }
       }
       
-      const systemPrompt = getSystemPrompt('CODE_EDITOR');
+      const baseContent = getSystemPrompt('CODE_EDITOR');
+      const mode = input.imageAction === 'recreate' ? IMAGE_RECREATE_MODE : (input.imageUrls?.length ? IMAGE_EMBED_MODE : '');
+      const systemPrompt = { role: 'system' as const, content: `${baseContent}\n${TECHNICAL_GUARDRAILS_BASE}\n${mode}` };
 
       // DEBUG: Log request size
       const requestContent = typeof messageContent === 'string' ? messageContent : JSON.stringify(messageContent);
-      const requestSize = requestContent.length + systemPrompt.length;
+      const requestSize = requestContent.length + systemPrompt.content.length;
       console.log(`📊 [EDIT TOOL DEBUG] Request size: ${requestSize} chars (${(requestSize/1024).toFixed(2)}KB)`);
       
       // DEBUG: Time the AI call
@@ -198,7 +237,7 @@ Please edit the code according to the user request. Return the complete modified
       const response = await AIClientService.generateResponse(
         modelConfig,
         [{ role: "user", content: messageContent }],
-        { role: 'system', content: systemPrompt },
+        systemPrompt,
         { 
           responseFormat: { type: "json_object" }, 
           debug: true,
@@ -266,6 +305,24 @@ Please edit the code according to the user request. Return the complete modified
         newLength: parsed.code.length,
         changed: parsed.code !== input.tsxCode
       });
+
+      // If images are involved, validate and fix any hallucinated or broken media URLs
+      if ((input.imageUrls?.length || 0) > 0) {
+        try {
+          const { MediaValidation } = await import('~/tools/add/add_helpers/mediaValidation');
+          const validation = await MediaValidation.validateAndFixCode(
+            parsed.code,
+            input.projectId,
+            input.imageUrls
+          );
+          if (validation.wasFixed) {
+            console.warn('🔧 [EDIT TOOL] Media URLs fixed in edited code:', validation.fixes);
+            parsed.code = validation.code;
+          }
+        } catch (e) {
+          console.warn('⚠️ [EDIT TOOL] Media validation skipped due to error:', e);
+        }
+      }
 
       return {
         success: true,

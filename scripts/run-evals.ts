@@ -4,7 +4,7 @@ import { Command } from 'commander';
 import { evaluationRunner, type EvalRunConfig } from '../src/lib/evals/runner';
 import { getSuite, listSuites } from '../src/lib/evals/registry';
 import { listAvailablePacks } from '../src/config/models.config';
-import { brainOrchestrator } from '../src/server/services/brain/orchestrator';
+// Note: Avoid importing legacy orchestrator here; not needed for listing suites
 
 const program = new Command();
 
@@ -268,15 +268,7 @@ program
 function cleanupAndExit(exitCode: number = 0): void {
   console.log('\n🧹 Cleaning up resources...');
   
-  try {
-    // Clean up BrainOrchestrator TTL cache interval
-    if (brainOrchestrator && typeof (brainOrchestrator as any).imageFactsCache?.destroy === 'function') {
-      (brainOrchestrator as any).imageFactsCache.destroy();
-      console.log('✅ BrainOrchestrator cache cleaned up');
-    }
-  } catch (error) {
-    console.warn('⚠️ Warning: Failed to clean up BrainOrchestrator cache:', error);
-  }
+  // Legacy cleanup removed - new orchestrator doesn't need cleanup
   
   console.log('👋 Evaluation script exiting...\n');
   
