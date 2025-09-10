@@ -27,3 +27,18 @@ Date: 2025-09-10 (follow‑up PR review fixes)
   - Replaced window globals with internal refs for last pointer position.
   - Centralized long‑press timer cleanup in `clearLongPress()`; added null‑safe guards.
   - Applied helper consistently across handlers (drag start/end, mouse up/leave).
+
+Date: 2025-09-10 (bugfix: last scene deletion placeholder)
+- Root cause: PreviewPanelG only recompiles when `scenes.length > 0`, so deleting the last scene left the previous compiled component until a hard refresh.
+- Fixes:
+  - PreviewPanelG: trigger compilation even when `scenes.length === 0` (immediately compile placeholder component, no debounce).
+  - DB→state sync: handle empty `dbScenes` by replacing VideoState scenes with `[]` and resetting duration, preventing stale scenes.
+- Outcome: deleting the final scene now immediately shows the placeholder video without manual refresh.
+
+Date: 2025-09-10 (Timeline undo/redo)
+- Added reliable, single Undo/Redo controls in Timeline, mirroring CapCut behavior:
+  - Visible buttons in the controls bar + existing ⌘Z/⇧⌘Z shortcuts.
+  - Undo stack persists: delete, reorder, trim-right (duration), split, and duplicate.
+  - New TimelineAction types: `split`, `trimLeft`, `duplicate` with appropriate undo paths.
+  - Drag-resize end now records `updateDuration` to allow undo of trims.
+  - Duplicate action records snapshot to allow redo.
