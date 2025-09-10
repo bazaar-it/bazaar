@@ -155,10 +155,10 @@ NOTE: All tools are multimodal. When images are referenced, include them in the 
                 t.startsWith('kind:') || t.startsWith('layout:') || t.startsWith('hint:')
               );
               if (relevantTags.length > 0) {
-                const hasEmbedHint = relevantTags.some(t => t.includes('embed'));
-                const hasRecreateHint = relevantTags.some(t => t.includes('recreate'));
-                const isPhoto = relevantTags.some(t => t.includes('photo'));
-                const isUI = relevantTags.some(t => t.includes('ui'));
+                const hasEmbedHint = relevantTags.some((t: string) => t.includes('embed'));
+                const hasRecreateHint = relevantTags.some((t: string) => t.includes('recreate'));
+                const isPhoto = relevantTags.some((t: string) => t.includes('photo'));
+                const isUI = relevantTags.some((t: string) => t.includes('ui'));
                 
                 imageInfo += `\nImage ${index + 1} metadata: ${relevantTags.join(', ')}`;
                 

@@ -375,6 +375,11 @@ export async function executeToolFromDecision(
       targetSelector = extractTargetSelectorFromDirectives((decision.toolContext as any)?.imageDirectives, decision.toolContext?.targetSceneId);
       if (targetSelector) console.log('🧭 [HELPERS] Using selector from directives:', targetSelector);
 
+      // Log what we're about to pass to edit tool
+      if (decision.toolContext.imageUrls?.length) {
+        console.log('📸 [HELPERS] Image URLs being passed to EDIT tool:', decision.toolContext.imageUrls);
+      }
+      
       toolInput = {
         userPrompt: decision.toolContext.userPrompt,
         projectId,

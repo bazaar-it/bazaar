@@ -71,14 +71,14 @@ BRAND MATCHING INSTRUCTIONS:
       
       if (input.imageUrls?.length) {
         context += `\n\nIMAGE CONTEXT: User provided ${input.imageUrls.length} image(s)`;
+        context += `\nIMAGE URLS (USE THESE EXACT URLS):`;
+        input.imageUrls.forEach((url, i) => {
+          const label = i === input.imageUrls!.length - 1 ? ' <- THIS IMAGE (most recent)' : '';
+          context += `\nImage ${i + 1}: ${url}${label}`;
+        });
         // Add clarity about which image is "this image" or "the image"
         if (input.imageUrls.length > 1) {
-          context += `\nWhen user says "this image" or "the image", they mean the LAST image in the list (most recently uploaded).`;
-          context += `\nImage order (oldest to newest):`;
-          input.imageUrls.forEach((url, i) => {
-            const label = i === input.imageUrls!.length - 1 ? ' <- THIS IMAGE (most recent)' : '';
-            context += `\n  ${i + 1}. ${url.split('/').pop()}${label}`;
-          });
+          context += `\n\nWhen user says "this image" or "the image", they mean the LAST image in the list (most recently uploaded).`;
         }
       }
       
@@ -200,6 +200,14 @@ Please edit the code according to the user request. Return the complete modified
         mode: input.imageAction || (input.imageUrls?.length ? 'embed' : 'none'),
         targetSelector: input.targetSelector || null,
       });
+      
+      // Log the actual image URLs being used
+      if (input.imageUrls?.length) {
+        console.log('📸 [EDIT TOOL] Image URLs received:', input.imageUrls);
+      }
+      if (allImageUrls.length > 0) {
+        console.log('📸 [EDIT TOOL] All image URLs (including web):', allImageUrls);
+      }
 
       // Use the AI to edit the code
       // Check if there's a model override

@@ -265,6 +265,11 @@ export class Orchestrator {
         templateNames: contextPacket.templateContext?.examples?.map(t => t.name) || [],
       });
       
+      // Log actual image URLs being passed to tools
+      if ((input.userContext?.imageUrls as string[])?.length) {
+        console.log('📸 [NEW ORCHESTRATOR] Image URLs being passed to tool:', input.userContext?.imageUrls);
+      }
+      
       console.log('🧠 [NEW ORCHESTRATOR] === ORCHESTRATION COMPLETE ===\n');
       return result;
 
