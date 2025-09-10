@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
-import { scenes, projects, messages } from "~/server/db/schema";
+import { scenes, projects, messages, sceneOperations } from "~/server/db/schema";
 import { eq, and, desc, gte, sql } from "drizzle-orm";
 import { messageService } from "~/server/services/data/message.service";
 import { orchestrator } from "~/brain/orchestratorNEW";
@@ -577,6 +577,8 @@ export const removeScene = protectedProcedure
   .input(z.object({
     projectId: z.string(),
     sceneId: z.string(),
+    clientRevision: z.number().optional(),
+    idempotencyKey: z.string().optional(),
   }))
   .mutation(async ({ input, ctx }): Promise<SceneDeleteResponse> => {
     const response = new ResponseBuilder();
@@ -586,6 +588,32 @@ export const removeScene = protectedProcedure
     console.log(`[${response.getRequestId()}] Starting scene removal`, { projectId, sceneId });
 
     try {
+      // 0. Idempotency check
+      if (input.idempotencyKey) {
+        const existing = await db.query.sceneOperations.findFirst({
+          where: and(
+            eq(sceneOperations.projectId, input.projectId),
+            eq(sceneOperations.idempotencyKey, input.idempotencyKey)
+          ),
+        });
+        if (existing) {
+          // Return success with current revision (no-op)
+          const proj = await db.query.projects.findFirst({ where: eq(projects.id, input.projectId) });
+          const payload: any = existing.result || {};
+          const res = new ResponseBuilder(response.getRequestId()).success(
+            {
+              deletedId: payload.deletedId || input.sceneId,
+              deletedScene: payload.deletedScene || null,
+              newRevision: proj?.revision,
+            },
+            'scene.delete',
+            'scene',
+            [input.sceneId]
+          );
+          return res as any as SceneDeleteResponse;
+        }
+      }
+
       // 1. Verify project ownership and scene existence
       const scene = await db.query.scenes.findFirst({
         where: eq(scenes.id, sceneId),
@@ -615,14 +643,48 @@ export const removeScene = protectedProcedure
         layoutJson: scene.layoutJson,
       } as const;
 
-      // 2. Delete the scene
+      // Optional revision check
+      if (input.clientRevision !== undefined) {
+        const proj = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });
+        if (proj && proj.revision !== input.clientRevision) {
+          throw new TRPCError({ code: 'CONFLICT', message: 'Stale client revision' });
+        }
+      }
+
+      // 2. Delete the scene, then normalize order and bump revision
       await db.delete(scenes).where(eq(scenes.id, sceneId));
+
+      // Normalize orders 0..n-1
+      const ordered = await db.query.scenes.findMany({
+        where: eq(scenes.projectId, projectId),
+        orderBy: [scenes.order],
+      });
+      await Promise.all(
+        ordered.map((s, idx) => db.update(scenes).set({ order: idx }).where(eq(scenes.id, s.id)))
+      );
+
+      const projUpdated = await db
+        .update(projects)
+        .set({ revision: sql`${projects.revision} + 1` })
+        .where(eq(projects.id, projectId))
+        .returning();
 
       console.log(`[${response.getRequestId()}] Scene deleted successfully`);
 
-      // 3. Return success response (include payload for potential undo)
+      // 3. Idempotency record
+      if (input.idempotencyKey) {
+        await db.insert(sceneOperations).values({
+          projectId,
+          idempotencyKey: input.idempotencyKey,
+          operationType: 'delete',
+          payload: { sceneId },
+          result: { deletedId: sceneId, deletedScene: deletedScenePayload },
+        });
+      }
+
+      // 4. Return success response (include payload + newRevision)
       return response.success(
-        { deletedId: sceneId, deletedScene: deletedScenePayload },
+        { deletedId: sceneId, deletedScene: deletedScenePayload, newRevision: projUpdated[0]?.revision },
         'scene.delete',
         'scene',
         [sceneId]
@@ -700,6 +762,8 @@ export const updateSceneName = protectedProcedure
     projectId: z.string(),
     sceneId: z.string(),
     name: z.string().min(1).max(100),
+    clientRevision: z.number().optional(),
+    idempotencyKey: z.string().optional(),
   }))
   .mutation(async ({ input, ctx }) => {
     const { projectId, sceneId, name } = input;
@@ -723,6 +787,28 @@ export const updateSceneName = protectedProcedure
         });
       }
 
+      // 1.5. Idempotency
+      if (input.idempotencyKey) {
+        const existing = await db.query.sceneOperations.findFirst({
+          where: and(
+            eq(sceneOperations.projectId, input.projectId),
+            eq(sceneOperations.idempotencyKey, input.idempotencyKey)
+          ),
+        });
+        if (existing) {
+          const proj = await db.query.projects.findFirst({ where: eq(projects.id, input.projectId) });
+          return { success: true, scene: scene, newRevision: proj?.revision } as any;
+        }
+      }
+
+      // Optional revision check
+      if (input.clientRevision !== undefined) {
+        const proj = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });
+        if (proj && proj.revision !== input.clientRevision) {
+          throw new TRPCError({ code: 'CONFLICT', message: 'Stale client revision' });
+        }
+      }
+
       // 2. Update the scene name
       const updatedScene = await db.update(scenes)
         .set({
@@ -734,10 +820,28 @@ export const updateSceneName = protectedProcedure
 
       console.log(`[updateSceneName] Scene name updated successfully`);
 
-      // 3. Return updated scene
+      // Bump revision and record idempotent op
+      const projUpdated = await db
+        .update(projects)
+        .set({ revision: sql`${projects.revision} + 1` })
+        .where(eq(projects.id, projectId))
+        .returning();
+
+      if (input.idempotencyKey) {
+        await db.insert(sceneOperations).values({
+          projectId,
+          idempotencyKey: input.idempotencyKey,
+          operationType: 'updateName',
+          payload: { sceneId, name },
+          result: { sceneId },
+        });
+      }
+
+      // 3. Return updated scene + new revision
       return {
         success: true,
         scene: updatedScene[0],
+        newRevision: projUpdated[0]?.revision,
       };
 
     } catch (error) {

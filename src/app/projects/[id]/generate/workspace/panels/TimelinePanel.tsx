@@ -356,9 +356,12 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   
   // API mutation for updating scene name
   const updateSceneNameMutation = api.generation.updateSceneName.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (res: any) => {
       console.log('[Timeline] Scene name persisted to database');
       await utils.generation.getProjectScenes.invalidate({ projectId });
+      if (res?.newRevision != null) {
+        try { (useVideoState.getState().projects as any)[projectId].revision = res.newRevision; } catch {}
+      }
     },
     onError: (error) => {
       console.error('[Timeline] Failed to persist scene name:', error);
@@ -390,6 +393,9 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         }
       } as any);
       await utils.generation.getProjectScenes.invalidate({ projectId });
+      if (res?.data?.newRevision != null) {
+        try { (useVideoState.getState().projects as any)[projectId].revision = res.data.newRevision; } catch {}
+      }
     },
     onError: (error) => {
       console.error('[Timeline] Failed to delete scene:', error);
@@ -1712,8 +1718,10 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     // Defer actual removal to allow fade-out
     window.setTimeout(() => {
       deleteScene(projectId, sceneId);
+      const idKey = `del-${nanoid(8)}`;
+      const clientRevision = (useVideoState.getState().projects as any)[projectId]?.revision;
       removeSceneMutation.mutate(
-        { projectId, sceneId },
+        { projectId, sceneId, idempotencyKey: idKey, clientRevision },
         {
           onSettled: () => {
             setIsDeletionBusy(false);
@@ -1930,10 +1938,14 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       });
       
       // Persist to database
+      const idKey = `rename-${nanoid(8)}`;
+      const clientRevision = (useVideoState.getState().projects as any)[projectId]?.revision;
       updateSceneNameMutation.mutate({
         projectId,
         sceneId,
-        name: newName
+        name: newName,
+        idempotencyKey: idKey,
+        clientRevision,
       });
     }
     setEditingSceneId(null);
