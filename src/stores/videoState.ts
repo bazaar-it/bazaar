@@ -1301,6 +1301,28 @@ export const useVideoState = create<VideoState>()(
       };
     }),
 
+  addPendingDelete: (projectId: string, sceneId: string) =>
+    set((state) => {
+      const map = (state as any).pendingDeleteIds || {};
+      const setForProject = new Set(map[projectId] || []);
+      setForProject.add(sceneId);
+      return {
+        ...(state as any),
+        pendingDeleteIds: { ...map, [projectId]: setForProject }
+      } as any;
+    }),
+
+  clearPendingDelete: (projectId: string, sceneId: string) =>
+    set((state) => {
+      const map = (state as any).pendingDeleteIds || {};
+      const setForProject = new Set(map[projectId] || []);
+      setForProject.delete(sceneId);
+      return {
+        ...(state as any),
+        pendingDeleteIds: { ...map, [projectId]: setForProject }
+      } as any;
+    }),
+
   // 🚨 NEW: Add system message for cross-panel communication
   addSystemMessage: (projectId: string, content: string, kind?: ChatMessage['kind']) =>
     set((state) => {

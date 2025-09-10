@@ -219,6 +219,8 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   const pushRedo = useVideoState((state: any) => state.pushRedo as (projectId: string, action: any) => void);
   const popRedo = useVideoState((state: any) => state.popRedo as (projectId: string) => any);
   const updateProjectAudio = useVideoState(state => state.updateProjectAudio);
+  const addPendingDelete = useVideoState((state: any) => state.addPendingDelete as (projectId: string, sceneId: string) => void);
+  const clearPendingDelete = useVideoState((state: any) => state.clearPendingDelete as (projectId: string, sceneId: string) => void);
   const reorderScenes = useVideoState(state => state.reorderScenes);
   const storeSetPlaybackSpeed = useVideoState(state => state.setPlaybackSpeed);
   // Undo/Redo stack sizes for UI disabling
@@ -1696,6 +1698,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     setIsDeletionBusy(true);
     deletionInProgressRef.current.add(sceneId);
     markDeleting(sceneId);
+    try { addPendingDelete(projectId, sceneId); } catch {}
 
     // Push undo snapshot prior to removal
     const sceneIndex = scenes.findIndex((s: any) => s.id === sceneId);
@@ -1716,6 +1719,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
             setIsDeletionBusy(false);
             deletionInProgressRef.current.delete(sceneId);
             unmarkDeleting(sceneId);
+            try { clearPendingDelete(projectId, sceneId); } catch {}
           }
         }
       );

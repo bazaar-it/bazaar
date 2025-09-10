@@ -91,7 +91,11 @@ export function PreviewPanelG({
       // Convert database scenes to InputProps format (sorted by order)
       const ordered = [...dbScenes].sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0));
       let currentStart = 0;
-      const convertedScenes = ordered.map((dbScene: any) => {
+      // Exclude any scenes that are pending deletion optimistically
+      const pendingDeleteSet = (useVideoState.getState() as any).pendingDeleteIds?.[projectId] as Set<string> | undefined;
+      const convertedScenes = ordered.filter((dbScene: any) => {
+        return !(pendingDeleteSet && pendingDeleteSet.has(dbScene.id));
+      }).map((dbScene: any) => {
         const sceneDuration = dbScene.duration || 150;
         if (!dbScene.tsxCode) {
           console.warn('[PreviewPanelG] Scene missing tsxCode:', dbScene.id, dbScene.name);
