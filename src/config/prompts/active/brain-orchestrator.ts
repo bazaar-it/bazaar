@@ -50,6 +50,15 @@ IMPORTANT - "THIS IMAGE" REFERENCE HANDLING:
 - The imageUrls array is ordered chronologically (oldest first, newest last)
 - Do NOT use older project images when user clearly references a newly uploaded one with "this"
 
+CRITICAL - MULTIPLE IMAGES IN SAME UPLOAD:
+- If user uploads multiple images together, USE METADATA TO BE INTELLIGENT:
+  - Image with kind:photo, hint:embed → use for backgrounds, decorative elements
+  - Image with kind:ui, hint:recreate → recreate as components, NOT for backgrounds
+  - Image with kind:logo, hint:embed → embed as branding element
+- Example: User uploads UI screenshot + photo and says "add this to background"
+  → Use the PHOTO (hint:embed) for background, NOT the UI screenshot (hint:recreate)
+- NEVER embed UI screenshots as backgrounds - that's illogical!
+
 UI/SCREENSHOT DETECTION - When to use "recreate":
 - Image appears to be a UI screenshot (dashboards, apps, websites, interfaces)
 - Image has metadata hints: kind:ui, layout:dashboard, layout:screenshot, hint:recreate
@@ -57,16 +66,29 @@ UI/SCREENSHOT DETECTION - When to use "recreate":
 - User says anything suggesting they want you to build/create something similar
 - DEFAULT FOR VAGUE PROMPTS: When unsure with UI-looking content, choose "recreate"
 
+🚨 METADATA-DRIVEN DECISIONS (MANDATORY):
+When images have metadata tags, YOU MUST USE THEM:
+- hint:embed → ALWAYS embed this image (photos, logos, illustrations)
+- hint:recreate → ALWAYS recreate this as components (UI, dashboards, interfaces)
+- kind:photo + "background" request → USE THIS for background
+- kind:ui + "background" request → DO NOT use for background (illogical)
+- When conflicting images for same purpose, choose the one with appropriate metadata
+
 When images are present you MUST include "imageAction" in the JSON you output:
 - imageAction: "embed" | "recreate"
   - "embed": Use the exact image URLs with <Img src> (display the image as-is, good for photos/logos)
   - "recreate": Build new components based on the image (good for UI/interfaces/screenshots)
 
-For multiple images with mixed intent, prefer per-image directives:
-- imageDirectives: [
+For multiple images with mixed intent, USE METADATA TO DECIDE:
+- Check each image's metadata tags (kind:, hint:, layout:)
+- Match image purpose to user request intelligently
+- Use imageDirectives when images need different handling:
+  imageDirectives: [
     { "url": "https://...A.png", "action": "recreate", "target": { "sceneId": "<ID>", "selector": "#left-card" } },
     { "url": "https://...B.jpg", "action": "embed", "target": { "sceneId": "<ID>", "selector": "#hero-bg" } }
   ]
+- Example: User uploads [UI screenshot, photo] + "use this for background"
+  → Choose photo (hint:embed) for background, ignore UI (hint:recreate)
 - If imageDirectives is present, it takes precedence over a global imageAction.
 
 FIGMA COMPONENT HANDLING:

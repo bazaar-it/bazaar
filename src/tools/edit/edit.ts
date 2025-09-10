@@ -144,7 +144,11 @@ BRAND MATCHING INSTRUCTIONS:
         let imageReferenceHint = '';
         if (input.imageUrls && input.imageUrls.length > 1) {
           const lastImageUrl = input.imageUrls[input.imageUrls.length - 1];
-          imageReferenceHint = `\n\nIMPORTANT: When the user says "this image" or "the image", they are referring to the LAST user-provided image (${lastImageUrl.split('/').pop()}), not earlier images or website screenshots.`;
+          imageReferenceHint = `\n\n🚨 MULTIPLE IMAGES - INTELLIGENT SELECTION REQUIRED:`;
+          imageReferenceHint += `\n- For "background" requests: Use images that look like photos/illustrations, NOT UI screenshots`;
+          imageReferenceHint += `\n- For "this image" without context: Use the LAST image (${lastImageUrl.split('/').pop()})`;
+          imageReferenceHint += `\n- NEVER use UI screenshots as backgrounds - that's illogical`;
+          imageReferenceHint += `\n- Match image type to purpose (photos for backgrounds, UI for interface reference)`;
         }
         
         const contextInstructions = `${brandingHint} ${modeHint} ${selectorHint}${imageReferenceHint}`.trim();

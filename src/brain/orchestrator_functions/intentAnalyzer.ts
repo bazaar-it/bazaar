@@ -122,12 +122,18 @@ NOTE: All tools are multimodal. When images are referenced, include them in the 
     if (currentImageUrls.length > 0) {
       imageInfo += `\n\nCURRENT MESSAGE: Includes ${currentImageUrls.length} image(s) uploaded with this request.`;
       
-      // Be explicit about which image is "this image"
+      // Be explicit about which image is "this image" and add metadata-based intelligence
       if (currentImageUrls.length > 1) {
-        imageInfo += `\nIMPORTANT: When user says "this image" or "the image" without specifics, they mean the LAST image in the list (most recently uploaded):`;
+        imageInfo += `\n\n🚨 MULTIPLE IMAGES UPLOADED - USE METADATA FOR INTELLIGENT DECISIONS:`;
+        imageInfo += `\nWhen user says "this image" without specifics:`;
+        imageInfo += `\n- If context suggests background/embed → choose image with hint:embed or kind:photo`;
+        imageInfo += `\n- If context suggests UI/interface → choose image with hint:recreate or kind:ui`;
+        imageInfo += `\n- If ambiguous → use the LAST image (most recent)\n`;
+        
+        imageInfo += `\nImage list with metadata:`;
         currentImageUrls.forEach((url, index) => {
           const isLast = index === currentImageUrls.length - 1;
-          const label = isLast ? ' <- THIS IMAGE (most recent upload)' : '';
+          const label = isLast ? ' <- MOST RECENT' : '';
           imageInfo += `\n  ${index + 1}. ${url.split('/').pop()?.substring(0, 50)}${label}`;
         });
       }
@@ -149,8 +155,22 @@ NOTE: All tools are multimodal. When images are referenced, include them in the 
                 t.startsWith('kind:') || t.startsWith('layout:') || t.startsWith('hint:')
               );
               if (relevantTags.length > 0) {
-                imageInfo += `\nImage ${index + 1} metadata hints: ${relevantTags.join(', ')}`;
-                console.log('✅ [INTENT] Added metadata hints to prompt:', relevantTags);
+                const hasEmbedHint = relevantTags.some(t => t.includes('embed'));
+                const hasRecreateHint = relevantTags.some(t => t.includes('recreate'));
+                const isPhoto = relevantTags.some(t => t.includes('photo'));
+                const isUI = relevantTags.some(t => t.includes('ui'));
+                
+                imageInfo += `\nImage ${index + 1} metadata: ${relevantTags.join(', ')}`;
+                
+                // Add specific guidance based on metadata
+                if (hasEmbedHint || isPhoto) {
+                  imageInfo += ` → BEST FOR: backgrounds, decorative elements, direct display`;
+                }
+                if (hasRecreateHint || isUI) {
+                  imageInfo += ` → BEST FOR: recreating as components, NOT backgrounds`;
+                }
+                
+                console.log('✅ [INTENT] Added metadata hints with guidance:', relevantTags);
               } else {
                 console.log('⚠️ [INTENT] Asset has tags but none are relevant:', asset.tags);
               }
