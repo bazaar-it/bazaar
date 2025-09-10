@@ -21,3 +21,9 @@ Date: 2025-09-10
   - Added small movement threshold during hold to avoid accidental activation.
   - Widened drop acceptance band to center 25–75% of target scene for reliable drop.
   - Persist reorder to DB via `scenes.reorderScenes` and keep Zustand + Preview in sync.
+
+Date: 2025-09-10 (follow‑up PR review fixes)
+- Addressed reviewer feedback on timer cleanup and global state:
+  - Replaced window globals with internal refs for last pointer position.
+  - Centralized long‑press timer cleanup in `clearLongPress()`; added null‑safe guards.
+  - Applied helper consistently across handlers (drag start/end, mouse up/leave).
