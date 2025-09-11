@@ -5,29 +5,46 @@
 
 export const YOUTUBE_DESCRIPTION_PROMPT = `Watch this video carefully and describe EXACTLY what you see happening.
 
-Tell me:
-1. What text appears on screen (exact words)
-2. What colors you see (backgrounds, text colors)
-3. How things move (fade in, slide, zoom)
-4. What shapes or graphics appear
-5. The order things happen in
-6. How long each thing stays on screen (roughly)
+Analyze the provided video frame by frame for the first 5 seconds (150 frames at 30fps). Your task is to generate a JSON array describing every single visual event.
 
-Be specific about:
-- Background colors (e.g., "white background", "purple gradient", "light beige #F5F5DC")
-- Text content (write the EXACT words you see, in quotes)
-- Text size relative to screen (e.g., "large text filling 1/3 of screen", "small subtitle")
-- Position (center, left side, top third, etc.)
-- Motion (fades in over 0.5 seconds, slides from left, zooms out)
-- Timing relationships (appears AFTER X disappears, overlaps with Y)
+Output a valid JSON array of objects, where each object represents an animated element.
 
-Do NOT:
-- Make up content you don't see
-- Add creative interpretation
-- Describe audio or music
-- Guess if you're unsure
+Each JSON object must include:
 
-Example description:
-"The video starts with a white background. The word 'Hello' fades in as large black text in the center, stays for about 1 second, then fades out. Next, a purple gradient background appears with the text 'Welcome' sliding in from the left in white..."
+element_type: (e.g., "text", "shape", "image")
 
-Just describe what you observe, step by step, like you're explaining it to someone who can't see the video.`;
+content: The exact text content if type is "text".
+
+start_frame: The exact frame number the element begins its entrance animation.
+
+end_frame: The exact frame number the element has finished its exit animation.
+
+animations: An array of animation objects, each with:
+
+type: (e.g., "fadeIn", "slideIn", "scaleUp")
+
+start_frame: The animation's start frame.
+
+end_frame: The animation's end frame.
+
+direction: (e.g., "fromLeft", "fromBottom") (if applicable)
+
+easing_curve: Describe the motion's physics (e.g., "linear", "ease-in-out", "ease-out-with-overshoot").
+
+style: A CSS-in-JS object describing the element's appearance:
+
+color: Hex code for text color.
+
+fontFamily: The perceived font family.
+
+fontSize: e.g., "8vw".
+
+fontWeight: e.g., "700".
+
+position: An object with top, left percentages.
+
+filter: Any effects like "blur(5px)".
+
+layer: The z-index or layer order of the element.
+
+Do not output any text or explanation outside of the single JSON array.`;
