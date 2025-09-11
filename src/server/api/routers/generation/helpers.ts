@@ -385,6 +385,16 @@ export async function executeToolFromDecision(
       targetSelector = extractTargetSelectorFromDirectives((decision.toolContext as any)?.imageDirectives, decision.toolContext?.targetSceneId);
       if (targetSelector) console.log('🧭 [HELPERS] Using selector from directives:', targetSelector);
 
+      // Normalize/merge image sources for EDIT as well (icons may be referenced without real URLs)
+      const normalizedEditImageUrls: string[] | undefined = (() => {
+        const fromContext = (decision.toolContext.imageUrls || []).filter(Boolean);
+        const fromDirectives = ((decision.toolContext as any).imageDirectives || [])
+          .map((d: any) => d?.url)
+          .filter((u: any) => typeof u === 'string' && u.trim().length > 0);
+        const merged = [...fromContext, ...fromDirectives];
+        return merged.length > 0 ? Array.from(new Set(merged)) : undefined;
+      })();
+
       // Log what we're about to pass to edit tool
       if (decision.toolContext.imageUrls?.length) {
         console.log('📸 [HELPERS] Image URLs being passed to EDIT tool:', decision.toolContext.imageUrls);
@@ -399,7 +409,7 @@ export async function executeToolFromDecision(
         tsxCode: sceneToEdit.tsxCode, // ✓ Fixed: Using correct field name
         sceneName: sceneToEdit.name, // Pass current scene name to preserve it
         currentDuration: sceneToEdit.duration,
-        imageUrls: decision.toolContext.imageUrls,
+        imageUrls: normalizedEditImageUrls,
         videoUrls: decision.toolContext.videoUrls,
         audioUrls: decision.toolContext.audioUrls,
         targetSelector,
@@ -408,7 +418,7 @@ export async function executeToolFromDecision(
         formatContext: projectFormat,
         modelOverride: decision.toolContext.modelOverride, // Pass model override if provided
         imageAction: (decision.toolContext as any)?.imageAction,
-        imageDirectives: (decision.toolContext as any)?.imageDirectives,
+        // Do NOT pass raw imageDirectives; EDIT tool doesn't consume them and schema is strict.
       } as EditToolInput;
       
       const editResult = await editTool.run(toolInput as EditToolInput);
