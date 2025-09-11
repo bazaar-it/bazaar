@@ -85,8 +85,9 @@ export default function ChatPanelG({
   userId,
 }: ChatPanelGProps) {
   // Get draft message and attachments from store to persist across panel changes
+  const EMPTY_ATTACHMENTS: DraftAttachment[] = React.useMemo(() => [], []);
   const draftMessage = useVideoState((state) => state.projects[projectId]?.draftMessage || '');
-  const draftAttachments = useVideoState((state) => state.projects[projectId]?.draftAttachments || []);
+  const draftAttachments = useVideoState((state) => state.projects[projectId]?.draftAttachments ?? EMPTY_ATTACHMENTS);
   const setDraftMessage = useVideoState((state) => state.setDraftMessage);
   const setDraftAttachments = useVideoState((state) => state.setDraftAttachments);
   const clearDraft = useVideoState((state) => state.clearDraft);

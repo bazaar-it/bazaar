@@ -149,7 +149,9 @@ export class UnifiedCodeProcessor {
     }
 
     // 2) Prefer prominent text found in generated code (first large text node)
-    const textNodes = Array.from(code.matchAll(/>([^<>{}\n][^<>{}]*)</g)).map(m => m[1].trim());
+    const textNodes = Array.from(code.matchAll(/>([^<>{}\n][^<>{}]*)</g))
+      .map((m) => (m[1] ? m[1].trim() : ''))
+      .filter((t) => t.length > 0);
     const meaningful = textNodes
       .map(t => t.replace(/[\s]+/g, ' ').trim())
       .filter(t => t.length >= 3 && !/^\d+$/.test(t) && !/^[•\-–]/.test(t));

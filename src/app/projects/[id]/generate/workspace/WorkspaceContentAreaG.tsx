@@ -363,16 +363,28 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
       };
     }, [openPanels, panelLayout, projectId]);
 
-    // Keep layout array in sync with panel count
+    // Normalize layout helper to ensure sum = 100 and correct length
+    const normalizeLayout = useCallback((layout: number[] | null, count: number) => {
+      if (!count) return null;
+      let arr = Array.isArray(layout) && layout.length === count
+        ? layout.slice()
+        : Array.from({ length: count }, () => Math.floor(100 / count));
+      // Fix remainder on the last panel to make sum exactly 100
+      const sum = arr.reduce((a, b) => a + (isFinite(b) ? b : 0), 0);
+      const diff = 100 - sum;
+      arr[count - 1] = Math.max(1, (arr[count - 1] || 0) + diff);
+      return arr;
+    }, []);
+
+    // Keep layout array in sync with panel count and normalized totals
     useEffect(() => {
       const count = openPanels.length;
       if (count === 0) return;
-      if (!panelLayout || panelLayout.length !== count) {
-        // Distribute sizes evenly as a starting point
-        const even = Array.from({ length: count }, () => Math.round(100 / count));
-        setPanelLayout(even);
+      const next = normalizeLayout(panelLayout, count);
+      if (!panelLayout || !next || panelLayout.join(',') !== next.join(',')) {
+        setPanelLayout(next);
       }
-    }, [openPanels.length]);
+    }, [openPanels.length, panelLayout, normalizeLayout]);
 
     // Cross-tab sync: update layout if another tab changes it
     useEffect(() => {
@@ -949,14 +961,15 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
               {/* Panel layout */}
               {openPanels.length > 0 && (
                 <PanelGroup 
+                  key={`pg-${openPanels.map(p=>p.id).join('-')}-${(panelLayout||[]).join('-')}`}
                   direction="horizontal" 
                   className="h-full"
-                  layout={panelLayout || undefined}
                   onLayout={(layout) => setPanelLayout(layout)}
                 >
                   {openPanels.map((panel, idx) => (
                       <React.Fragment key={panel?.id || `panel-${idx}`}>
                         <Panel 
+                          id={panel?.id}
                           minSize={10} 
                           defaultSize={(panelLayout && panelLayout[idx]) || (100 / (openPanels.length || 1))}
                           className="transition-all duration-300"

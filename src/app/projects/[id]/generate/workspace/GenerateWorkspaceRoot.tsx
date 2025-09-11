@@ -280,34 +280,7 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
   // Get current scenes for template creation
   const currentScenes = getCurrentProps()?.scenes || [];
 
-  // Use mobile layout for mobile breakpoint
-  if (breakpoint === 'mobile') {
-    return (
-      <div className="h-[100dvh] flex flex-col overflow-hidden bg-white dark:bg-gray-900">
-        {/* Mobile Header - Compact version */}
-        <div className="sticky top-0 z-40 w-full">
-          <MobileAppHeader
-            projectTitle={title}
-            projectId={projectId}
-            userId={userId}
-            onRename={handleRename}
-            isRenaming={renameMutation.isPending}
-          />
-        </div>
-        
-        {/* Mobile Workspace */}
-        <div className="flex-1 overflow-hidden">
-          <MobileWorkspaceLayout
-            projectId={projectId}
-            userId={userId}
-            initialProps={initialProps}
-            projects={userProjects}
-            onProjectRename={handleProjectRenamed}
-          />
-        </div>
-      </div>
-    );
-  }
+  const isMobile = breakpoint === 'mobile';
 
   // Desktop/Tablet layout
   // Prevent two-finger horizontal swipe from triggering browser Back/Forward
@@ -327,6 +300,29 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
 
   return (
     <div className="h-[100dvh] flex flex-col overflow-hidden relative bg-white dark:bg-gray-900 overscroll-x-none">
+      {isMobile ? (
+        <>
+          <div className="sticky top-0 z-40 w-full">
+            <MobileAppHeader
+              projectTitle={title}
+              projectId={projectId}
+              userId={userId}
+              onRename={handleRename}
+              isRenaming={renameMutation.isPending}
+            />
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <MobileWorkspaceLayout
+              projectId={projectId}
+              userId={userId}
+              initialProps={initialProps}
+              projects={userProjects}
+              onProjectRename={handleProjectRenamed}
+            />
+          </div>
+        </>
+      ) : (
+        <>
       {/* App Header - Fixed at top with proper z-index and rounded bottom corners */}
       <div className="sticky top-0 z-40 w-full bg-white dark:bg-gray-900 shadow-sm border-b border-gray-100 dark:border-gray-800 rounded-bl-[15px] rounded-br-[15px]">
         <AppHeader
@@ -420,6 +416,8 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
           updatedAt: new Date()
         }))}
       />
+        </>
+      )}
     </div>
   );
-} 
+}
