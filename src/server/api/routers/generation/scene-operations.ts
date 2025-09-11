@@ -14,6 +14,7 @@ import { TRPCError } from "@trpc/server";
 
 // Import universal response types and helpers
 import { ResponseBuilder, getErrorCode } from "~/lib/api/response-helpers";
+import { extractUrls } from "~/lib/utils/url-detection";
 import type { SceneCreateResponse, SceneDeleteResponse } from "~/lib/types/api/universal";
 import { ErrorCode } from "~/lib/types/api/universal";
 import { formatSceneOperationMessage } from "~/lib/utils/scene-message-formatter";
@@ -149,6 +150,55 @@ export const generateScene = protectedProcedure
         content: msg.content
       }));
 
+      // Inherit media from previous user message when the user responds to clarification
+      // If current user has no explicit media, carry forward URLs from the previous user message
+      let inheritedImageUrls: string[] = [];
+      let inheritedVideoUrls: string[] = [];
+      let inheritedAudioUrls: string[] = [];
+      let inheritedSceneUrls: string[] = [];
+      try {
+        const messagesAsc = recentMessages; // now oldest -> newest after reverse()
+        // Last message should be the current user message
+        // Find previous user message before the current one
+        for (let i = messagesAsc.length - 2; i >= 0; i--) {
+          const prev = messagesAsc[i] as any;
+          if (prev?.role === 'user') {
+            // Prefer structured imageUrls if present
+            if (Array.isArray(prev.imageUrls) && prev.imageUrls.length > 0) {
+              inheritedImageUrls = prev.imageUrls.filter(Boolean);
+            }
+            if (Array.isArray(prev.videoUrls) && prev.videoUrls.length > 0) {
+              inheritedVideoUrls = prev.videoUrls.filter(Boolean);
+            }
+            if (Array.isArray(prev.audioUrls) && prev.audioUrls.length > 0) {
+              inheritedAudioUrls = prev.audioUrls.filter(Boolean);
+            }
+            if (Array.isArray(prev.sceneUrls) && prev.sceneUrls.length > 0) {
+              inheritedSceneUrls = prev.sceneUrls.filter(Boolean);
+            }
+            // Also parse raw URLs from text (fallback when not uploaded via UI)
+            if (typeof prev.content === 'string') {
+              const urls = extractUrls(prev.content);
+              const imageLike = urls.filter(u => /\.(png|jpe?g|webp|gif|bmp|svg)$/i.test(u));
+              if (imageLike.length > 0) {
+                inheritedImageUrls = [...new Set([...(inheritedImageUrls || []), ...imageLike])];
+              }
+              const videoLike = urls.filter(u => /\.(mp4|webm|mov|m4v|avi|mkv)$/i.test(u));
+              if (videoLike.length > 0) {
+                inheritedVideoUrls = [...new Set([...(inheritedVideoUrls || []), ...videoLike])];
+              }
+              const audioLike = urls.filter(u => /\.(mp3|wav|ogg|m4a)$/i.test(u));
+              if (audioLike.length > 0) {
+                inheritedAudioUrls = [...new Set([...(inheritedAudioUrls || []), ...audioLike])];
+              }
+            }
+            break;
+          }
+        }
+      } catch (e) {
+        console.warn('[generateScene] Failed to compute inherited media:', e);
+      }
+
       // 4. User message is already created in SSE route, skip creating it here
       // This prevents duplicate messages and ensures correct sequence order
 
@@ -257,10 +307,18 @@ export const generateScene = protectedProcedure
         storyboardSoFar: storyboardForBrain,
         chatHistory,
         userContext: {
-          imageUrls: userContext?.imageUrls,
-          videoUrls: userContext?.videoUrls,
-          audioUrls: userContext?.audioUrls,
-          sceneUrls: userContext?.sceneUrls, // Pass attached scene IDs to orchestrator
+          imageUrls: (userContext?.imageUrls && userContext.imageUrls.length > 0)
+            ? userContext.imageUrls
+            : (inheritedImageUrls && inheritedImageUrls.length > 0 ? inheritedImageUrls : undefined),
+          videoUrls: (userContext?.videoUrls && userContext.videoUrls.length > 0)
+            ? userContext.videoUrls
+            : (inheritedVideoUrls && inheritedVideoUrls.length > 0 ? inheritedVideoUrls : undefined),
+          audioUrls: (userContext?.audioUrls && userContext.audioUrls.length > 0)
+            ? userContext.audioUrls
+            : (inheritedAudioUrls && inheritedAudioUrls.length > 0 ? inheritedAudioUrls : undefined),
+          sceneUrls: (userContext?.sceneUrls && userContext.sceneUrls.length > 0)
+            ? userContext.sceneUrls
+            : (inheritedSceneUrls && inheritedSceneUrls.length > 0 ? inheritedSceneUrls : undefined), // Pass attached scene IDs to orchestrator
           modelOverride: userContext?.modelOverride,
           useGitHub: userContext?.useGitHub, // Pass the explicit GitHub flag
           githubConnected,
@@ -318,6 +376,24 @@ export const generateScene = protectedProcedure
           'scene.create',
           'scene'
         ) as any as SceneCreateResponse;
+      }
+
+      // Safety: if Brain didn't return images but we inherited some, attach them
+      if (orchestratorResponse.success && orchestratorResponse.result) {
+        const ctx: any = orchestratorResponse.result.toolContext;
+        if ((!ctx.imageUrls || ctx.imageUrls.length === 0) && inheritedImageUrls.length > 0) {
+          ctx.imageUrls = inheritedImageUrls;
+          if (!ctx.imageAction) ctx.imageAction = 'embed';
+        }
+        if ((!ctx.videoUrls || ctx.videoUrls.length === 0) && inheritedVideoUrls.length > 0) {
+          ctx.videoUrls = inheritedVideoUrls;
+        }
+        if ((!ctx.audioUrls || ctx.audioUrls.length === 0) && inheritedAudioUrls.length > 0) {
+          ctx.audioUrls = inheritedAudioUrls;
+        }
+        if ((!ctx.referencedSceneIds || ctx.referencedSceneIds.length === 0) && inheritedSceneUrls.length > 0) {
+          ctx.referencedSceneIds = inheritedSceneUrls;
+        }
       }
 
       const decision: BrainDecision = {

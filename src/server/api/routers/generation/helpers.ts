@@ -119,6 +119,16 @@ export async function executeToolFromDecision(
         });
       }
 
+      // Normalize/merge image sources
+      const normalizedImageUrls: string[] | undefined = (() => {
+        const fromContext = (decision.toolContext.imageUrls || []).filter(Boolean);
+        const fromDirectives = ((decision.toolContext as any).imageDirectives || [])
+          .map((d: any) => d?.url)
+          .filter((u: any) => typeof u === 'string');
+        const merged = [...fromContext, ...fromDirectives];
+        return merged.length > 0 ? Array.from(new Set(merged)) : undefined;
+      })();
+
       toolInput = {
         userPrompt: decision.toolContext.userPrompt,
         projectId,
@@ -126,7 +136,7 @@ export async function executeToolFromDecision(
         requestedDurationFrames: decision.toolContext.requestedDurationFrames, // ADD THIS
         sceneNumber: storyboard.length + 1,
         storyboardSoFar: storyboard,
-        imageUrls: decision.toolContext.imageUrls,
+        imageUrls: normalizedImageUrls,
         videoUrls: decision.toolContext.videoUrls,
         audioUrls: decision.toolContext.audioUrls,
         assetUrls: decision.toolContext.assetUrls, // Pass persistent asset URLs
@@ -155,7 +165,7 @@ export async function executeToolFromDecision(
         // TEMPLATE CONTEXT: Pass template examples for better first-scene generation
         templateContext: decision.toolContext.templateContext,
         imageAction: (decision.toolContext as any)?.imageAction,
-        imageDirectives: (decision.toolContext as any)?.imageDirectives,
+        // Do NOT pass raw imageDirectives; add tool doesn't consume them and schema is strict
       } as AddToolInput;
       
       const addResult = await addTool.run(toolInput);
@@ -816,6 +826,31 @@ export async function executeToolFromDecision(
 
     case 'websiteToVideo':
       console.log('🌐 [HELPERS] Processing websiteToVideo tool');
+      {
+        const { FEATURES } = await import('~/config/features');
+        if (!FEATURES.WEBSITE_TO_VIDEO_ENABLED) {
+          console.log('🌐 [HELPERS] Website pipeline disabled by feature flag, falling back to addScene');
+          // Fallback: treat as a standard addScene using the same prompt/context
+          const fallbackDecision: BrainDecision = {
+            success: true,
+            toolName: 'addScene',
+            toolContext: {
+              ...decision.toolContext,
+              websiteUrl: undefined,
+            },
+            reasoning: (decision.reasoning ? `${decision.reasoning} ` : '') + '[Website tool disabled] Fallback to addScene.',
+            chatResponse: decision.chatResponse,
+          };
+          return await executeToolFromDecision(
+            fallbackDecision,
+            projectId,
+            userId,
+            storyboard,
+            messageId,
+            onSceneComplete
+          );
+        }
+      }
       
       const websiteInput = {
         userPrompt: decision.toolContext.userPrompt,

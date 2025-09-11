@@ -136,100 +136,74 @@ export class UnifiedCodeProcessor {
    * UNIFIED: Generate scene name based on tool type and content
    */
   private generateSceneName(toolName: string, userPrompt: string, code: string): string {
-    // First, try to extract meaningful content from the prompt regardless of tool type
-    
-    // Check for quoted text which often indicates the main content
+    const clamp = (s: string) => s.trim().substring(0, 40);
+    const titleCase = (words: string[]) => words
+      .slice(0, 5)
+      .map((w, i) => i === 0 || w.length > 3 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w.toLowerCase())
+      .join(' ');
+
+    // 1) Quoted phrases usually carry essence
     const quotedMatch = userPrompt.match(/["']([^"']+)["']/);
-    if (quotedMatch?.[1] && quotedMatch[1].length > 2 && quotedMatch[1].length < 50) {
-      // Clean up and format the quoted text
-      const cleanText = quotedMatch[1]
-        .split(' ')
-        .slice(0, 4)
-        .map((word, i) => i === 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word)
-        .join(' ');
-      return cleanText.substring(0, 40);
+    if (quotedMatch?.[1] && quotedMatch[1].length >= 3) {
+      return clamp(titleCase(quotedMatch[1].split(/\s+/)));
     }
-    
-    // Look for specific content types
+
+    // 2) Prefer prominent text found in generated code (first large text node)
+    const textNodes = Array.from(code.matchAll(/>([^<>{}\n][^<>{}]*)</g)).map(m => m[1].trim());
+    const meaningful = textNodes
+      .map(t => t.replace(/[\s]+/g, ' ').trim())
+      .filter(t => t.length >= 3 && !/^\d+$/.test(t) && !/^[•\-–]/.test(t));
+    if (meaningful.length > 0) {
+      const candidate = meaningful.sort((a, b) => b.length - a.length)[0]!.slice(0, 30);
+      if (candidate && !/^(scene|title|text|new)$/i.test(candidate)) {
+        return clamp(candidate.charAt(0).toUpperCase() + candidate.slice(1));
+      }
+    }
+
+    // 3) Extract key content from prompt
     const contentPatterns = [
-      // Typography/Text patterns
-      { pattern: /(?:text|title|heading|label)(?:\s+(?:that\s+)?(?:says?|showing|displaying|with))?\s*[:"]?\s*(.+?)(?:["\s]|$)/i, prefix: '' },
-      { pattern: /(?:says?|showing|displaying)\s+(.+?)(?:\s+with|\s+in|\s+on|$)/i, prefix: '' },
-      
-      // Visual element patterns
-      { pattern: /(?:create|make|add|generate|show|display|animate)\s+(?:a\s+|an\s+)?(.+?)(?:\s+with|\s+that|\s+which|$)/i, prefix: '' },
-      { pattern: /(?:a|an|the)\s+(.+?)\s+(?:scene|animation|component|visual|effect|graphic)/i, prefix: '' },
-      
-      // Action-based patterns
-      { pattern: /(?:introducing|presenting|showcasing|featuring|highlighting)\s+(.+?)(?:\s+with|$)/i, prefix: '' },
-      
-      // Specific UI components
-      { pattern: /(dashboard|chart|graph|animation|particle|effect|transition|logo|button|card|slider|hero|banner|gallery|form|menu|modal|tooltip|badge|avatar|spinner|loader|progress|timeline|calendar|table|list|grid|countdown|testimonial|pricing|features?|cta|call.?to.?action)/i, prefix: '' }
+      { pattern: /(?:title|heading|label)\s*(?:that\s+)?(?:says?|showing|displaying|with)?\s*[:\"]?\s*([^\"\n]+?)(?:\s+with|\s+in|\s+on|$)/i },
+      { pattern: /(?:create|make|add|generate|show|display|animate)\s+(?:a\s+|an\s+)?([^\n]+?)(?:\s+with|\s+that|\s+which|$)/i },
+      { pattern: /(?:introducing|presenting|showcasing|featuring|highlighting)\s+([^\n]+?)(?:\s+with|$)/i },
     ];
-    
-    for (const { pattern, prefix } of contentPatterns) {
-      const match = userPrompt.match(pattern);
-      if (match?.[1]) {
-        // Clean up the extracted text
-        let cleanName = match[1]
-          .replace(/[.,!?;:'"]+$/, '') // Remove trailing punctuation
-          .replace(/^[.,!?;:'"]+/, '') // Remove leading punctuation
+    for (const { pattern } of contentPatterns) {
+      const m = userPrompt.match(pattern);
+      if (m?.[1]) {
+        const raw = m[1]
+          .replace(/[.,!?;:'\"]+$/, '')
+          .replace(/^[.,!?;:'\"]+/, '')
           .trim();
-        
-        // Skip if it's too short or generic
-        if (cleanName.length < 3 || /^(a|an|the|this|that|some|any)$/i.test(cleanName)) {
-          continue;
-        }
-        
-        // Format the name nicely
-        const words = cleanName.split(/\s+/).slice(0, 4);
-        const formatted = words
-          .map((word, i) => {
-            // Capitalize first word and important words
-            if (i === 0 || word.length > 3) {
-              return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-            }
-            return word.toLowerCase();
-          })
-          .join(' ');
-        
-        const finalName = prefix ? `${prefix}${formatted}` : formatted;
-        if (finalName.length > 2) {
-          return finalName.substring(0, 40);
+        if (raw && raw.length >= 3) {
+          return clamp(titleCase(raw.split(/\s+/)));
         }
       }
     }
-    
-    // Tool-specific fallbacks
-    switch (toolName.toLowerCase()) {
-      case 'typography':
-        // Try to extract text from the generated code if prompt didn't help
-        const codeTextMatch = code.match(/>([^<>{}\n]+)</);
-        if (codeTextMatch?.[1] && codeTextMatch[1].length > 2 && codeTextMatch[1].length < 50) {
-          const cleanText = codeTextMatch[1].trim().substring(0, 30);
-          return cleanText.charAt(0).toUpperCase() + cleanText.slice(1);
-        }
-        return 'Text Animation';
-        
-      case 'image_recreator':
-        return 'Visual Scene';
-        
-      default:
-        // Extract key action words as last resort
-        const actionWords = userPrompt.match(/\b(intro|outro|transition|overlay|background|foreground|header|footer|section|segment|clip|sequence)\b/gi);
-        if (actionWords && actionWords.length > 0) {
-          const word = actionWords[0];
-          return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase() + ' Scene';
-        }
-        
-        // Count the scene number if we can
-        const sceneNumberMatch = userPrompt.match(/scene\s*(\d+)/i);
-        if (sceneNumberMatch?.[1]) {
-          return `Scene ${sceneNumberMatch[1]}`;
-        }
-        
-        return 'Motion Scene'; // Better than just "New" or "Generated Scene"
-    }
+
+    // 4) Map common intents to expressive names with optional nouns
+    const lower = userPrompt.toLowerCase();
+    const noun = (() => {
+      const tokens = userPrompt
+        .replace(/["'`]/g, '')
+        .split(/\s+/)
+        .filter(w => w.length > 2 && !/^(create|make|add|generate|please|a|an|the|and|or|to|of|for|with|scene|video|project)$/i.test(w));
+      return tokens[0] || '';
+    })();
+    if (/\bhero|intro|opening\b/.test(lower)) return clamp(titleCase(['Hero', noun || 'Intro']));
+    if (/\bcta|call\s*to\s*action|signup|sign\s?up\b/.test(lower)) return 'Call To Action';
+    if (/\bfeature|features\b/.test(lower)) return 'Feature Highlights';
+    if (/\bmetric|kpi|stats?|statistics|numbers\b/.test(lower)) return 'Key Metrics';
+    if (/\btestimonial|quote|review\b/.test(lower)) return 'Customer Testimonial';
+    if (/\bchart|graph|dashboard\b/.test(lower)) return clamp(titleCase([noun || 'Analytics', 'Dashboard']));
+    if (/\blogo\b/.test(lower)) return 'Logo Reveal';
+
+    // 5) Last resort: distill prompt to 2–4 meaningful words
+    const distilled = userPrompt
+      .replace(/["'`]/g, '')
+      .split(/\s+/)
+      .filter(w => w.length > 2 && !/^(create|make|add|generate|please|a|an|the|and|or|to|of|for|with|scene|video|project|new|my|our)$/i.test(w))
+      .slice(0, 4);
+    const fallback = titleCase(distilled);
+    return fallback || 'Scene';
   }
 
   /**

@@ -36,6 +36,22 @@ URLs in chat no longer trigger the website pipeline. Normal add/edit flows proce
 ### Re-enable Plan
 Flip the flag to `true` and revert ChatPanelG `websiteUrl` pass-through, once website pipeline is production-ready.
 
+## 2025-09-11 - Clarification Inherits Media + Directive Normalization
+
+### Issue
+When the brain asked for clarification, the follow-up user reply lost the original image URL context. The decision returned `imageDirectives` with `scenePosition`, which failed `zod` validation for `AddToolInput` and caused `Add operation failed`.
+
+### Fix
+- In `generation.scene-operations`:
+  - Inherit `imageUrls` from the previous user message if the current message has none (parse raw URLs and use DB `imageUrls` when available).
+  - After brain decision, if `toolContext.imageUrls` is still empty, inject the inherited URLs and default `imageAction: 'embed'`.
+- In `generation.helpers` (addScene path):
+  - Merge `imageDirectives[].url` into `imageUrls` if present.
+  - Stop passing raw `imageDirectives` to the Add tool (schema is strict and the tool doesn’t consume them). This avoids `scenePosition` validation errors.
+
+### Result
+Clarification follow-ups now retain the original image URL and succeed. Invalid directive shapes no longer break Add tool input.
+
 ## 2025-09-02 - Sprint Initiated
 
 ### Analysis Completed ✅
