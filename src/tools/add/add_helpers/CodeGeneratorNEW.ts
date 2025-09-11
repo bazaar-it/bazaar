@@ -235,7 +235,8 @@ export class UnifiedCodeProcessor {
     
     try {
       // Build message content with text and images - include URLs in prompt text too!
-      const imageUrlsList = input.imageUrls.map((url, i) => `Image ${i + 1}: ${url}`).join('\n');
+      const filteredUrls = input.imageUrls.filter((u) => /^https?:\/\//i.test(u));
+      const imageUrlsList = filteredUrls.map((url, i) => `Image ${i + 1}: ${url}`).join('\n');
       const enhancedPrompt = `${input.userPrompt}
 
 UPLOADED IMAGES TO USE:
@@ -251,7 +252,7 @@ CRITICAL: You MUST use these exact image URLs above in your generated code with 
       const supportedImages = [];
       const avifImages = [];
       
-      for (const url of input.imageUrls) {
+      for (const url of filteredUrls) {
         console.log('🖼️ [IMAGE RECREATOR] Adding image URL to message:', url);
         
         if (url.toLowerCase().includes('.avif')) {
@@ -904,7 +905,7 @@ Transform the static design into sequential storytelling.`;
         { type: 'text', text: userPrompt }
       ];
 
-      for (const url of input.imageUrls) {
+      for (const url of filteredUrls) {
         visionMessagesContent.push({ 
           type: 'image_url', 
           image_url: { url } 

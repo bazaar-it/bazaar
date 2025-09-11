@@ -121,10 +121,11 @@ export async function executeToolFromDecision(
 
       // Normalize/merge image sources
       const normalizedImageUrls: string[] | undefined = (() => {
-        const fromContext = (decision.toolContext.imageUrls || []).filter(Boolean);
+        const isHttp = (u: any) => typeof u === 'string' && /^https?:\/\//i.test(u);
+        const fromContext = (decision.toolContext.imageUrls || []).filter(isHttp);
         const fromDirectives = ((decision.toolContext as any).imageDirectives || [])
           .map((d: any) => d?.url)
-          .filter((u: any) => typeof u === 'string');
+          .filter(isHttp);
         const merged = [...fromContext, ...fromDirectives];
         return merged.length > 0 ? Array.from(new Set(merged)) : undefined;
       })();
@@ -387,10 +388,11 @@ export async function executeToolFromDecision(
 
       // Normalize/merge image sources for EDIT as well (icons may be referenced without real URLs)
       const normalizedEditImageUrls: string[] | undefined = (() => {
-        const fromContext = (decision.toolContext.imageUrls || []).filter(Boolean);
+        const isHttp = (u: any) => typeof u === 'string' && /^https?:\/\//i.test(u);
+        const fromContext = (decision.toolContext.imageUrls || []).filter(isHttp);
         const fromDirectives = ((decision.toolContext as any).imageDirectives || [])
           .map((d: any) => d?.url)
-          .filter((u: any) => typeof u === 'string' && u.trim().length > 0);
+          .filter(isHttp);
         const merged = [...fromContext, ...fromDirectives];
         return merged.length > 0 ? Array.from(new Set(merged)) : undefined;
       })();
