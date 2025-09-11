@@ -548,20 +548,23 @@ export default function ChatPanelG({
     // Use finalMessage if it's a YouTube follow-up, otherwise use trimmedMessage (which includes icon info for backend)
     const backendMessage = finalMessage !== trimmedMessage ? finalMessage : trimmedMessage;
     
-    // ✨ NEW: Extract website URL from message
-    const urlRegex = /https?:\/\/[^\s]+/g;
-    const urls = backendMessage.match(urlRegex);
-    const websiteUrl = urls?.find(url => 
-      !url.includes('youtube.com') && 
-      !url.includes('youtu.be') &&
-      !url.includes('localhost') &&
-      !url.includes('127.0.0.1')
-    );
+    // Website-to-video pipeline is temporarily disabled.
+    // Keep URL extraction commented for future re-enable.
+    // const urlRegex = /https?:\/\/[^\s]+/g;
+    // const urls = backendMessage.match(urlRegex);
+    // const websiteUrl = urls?.find(url => 
+    //   !url.includes('youtube.com') && 
+    //   !url.includes('youtu.be') &&
+    //   !url.includes('localhost') &&
+    //   !url.includes('127.0.0.1')
+    // );
+    const websiteUrl = undefined;
     
     // Pass both GitHub and Figma modes to generation, plus website URL
     // Use backendMessage which contains icon information for the LLM
     console.log('[ChatPanelG] Backend message with icon info:', backendMessage);
-    generateSSE(backendMessage, imageUrls, videoUrls, audioUrls, sceneUrls, selectedModel, isGitHubMode || isFigmaMode, websiteUrl);
+    // Do not pass websiteUrl while the pipeline is disabled
+    generateSSE(backendMessage, imageUrls, videoUrls, audioUrls, sceneUrls, selectedModel, isGitHubMode || isFigmaMode, undefined);
     
     // Create display message for chat that includes icon information
     let userDisplayMessage = originalMessage;

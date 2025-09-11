@@ -4,6 +4,7 @@ import { AIClientService } from "~/server/services/ai/aiClient.service";
 import { getModel } from "~/config/models.config";
 import { SYSTEM_PROMPTS } from "~/config/prompts.config";
 import type { OrchestrationInput, ToolSelectionResult, ContextPacket } from "~/lib/types/ai/brain.types";
+import { FEATURES } from "~/config/features";
 
 export class IntentAnalyzer {
   private modelConfig = getModel("brain");
@@ -293,7 +294,7 @@ Respond with JSON only.`;
     }
 
     // Single tool operation
-    const result: ToolSelectionResult = {
+    let result: ToolSelectionResult = {
       success: true,
       toolName: parsed.toolName,
       reasoning: parsed.reasoning,
@@ -305,6 +306,18 @@ Respond with JSON only.`;
       imageDirectives: parsed.imageDirectives, // Optional per-image actions
       userFeedback: parsed.userFeedback,
     };
+
+    // Guard: disable website tool when the feature flag is off
+    if (!FEATURES.WEBSITE_TO_VIDEO_ENABLED && result.toolName === 'websiteToVideo') {
+      // Fallback to a safe default (addScene) and strip website specifics
+      result = {
+        ...result,
+        toolName: 'addScene',
+        websiteUrl: undefined,
+        reasoning: (parsed.reasoning ? `${parsed.reasoning} ` : '') + '[Website tool disabled] Proceeding with standard scene generation.',
+        userFeedback: parsed.userFeedback || 'Proceeding with a standard scene (website pipeline is temporarily disabled).'
+      };
+    }
 
     // Extract requested duration
     const requestedDurationSeconds = this.extractRequestedDuration(input.prompt);

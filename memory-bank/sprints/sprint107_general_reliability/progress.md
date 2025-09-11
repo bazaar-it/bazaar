@@ -18,6 +18,24 @@ No horizontal scroll with long URLs or continuous strings; preserves vertical-on
 
 See: `analysis/chat-horizontal-overflow.md`
 
+## 2025-09-11 - Website Tool Temporarily Disabled
+
+### Issue
+Pasting a URL caused the brain to select the unfinished website-to-video pipeline, leading to broken flows.
+
+### Fix (feature-gated)
+- Added `FEATURES.WEBSITE_TO_VIDEO_ENABLED = false` in `src/config/features.ts`.
+- Orchestrator: Skip website detection and do not pass `websiteUrl` when disabled.
+- Intent Analyzer: If brain returns `websiteToVideo`, force fallback to `addScene` with clear reasoning.
+- Context Builder: Short-circuit web context building when disabled.
+- Chat/SSE: Stop extracting and passing `websiteUrl` from ChatPanelG to SSE.
+
+### Result
+URLs in chat no longer trigger the website pipeline. Normal add/edit flows proceed.
+
+### Re-enable Plan
+Flip the flag to `true` and revert ChatPanelG `websiteUrl` pass-through, once website pipeline is production-ready.
+
 ## 2025-09-02 - Sprint Initiated
 
 ### Analysis Completed ✅

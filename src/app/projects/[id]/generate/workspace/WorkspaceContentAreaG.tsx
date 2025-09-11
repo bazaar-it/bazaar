@@ -298,16 +298,32 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
     useEffect(() => {
       if (typeof window === 'undefined') return;
       const key = `bazaar:workspace:${projectId}`;
+      const lastKey = `bazaar:workspace:__last`;
       try {
         const raw = localStorage.getItem(key);
+        let applied = false;
         if (raw) {
           const cfg = JSON.parse(raw);
           if (Array.isArray(cfg.openPanels)) {
             const valid = cfg.openPanels.filter((p: any) => p && PANEL_COMPONENTS_G[p.type as PanelTypeG]);
-            if (valid.length > 0) setOpenPanels(valid as OpenPanelG[]);
+            if (valid.length > 0) { setOpenPanels(valid as OpenPanelG[]); applied = true; }
           }
           if (Array.isArray(cfg.layout) && cfg.layout.every((n: any) => typeof n === 'number')) {
             setPanelLayout(cfg.layout as number[]);
+          }
+        }
+        // Fallback to last-used workspace if this project has no saved config
+        if (!applied) {
+          const lastRaw = localStorage.getItem(lastKey);
+          if (lastRaw) {
+            const lastCfg = JSON.parse(lastRaw);
+            if (Array.isArray(lastCfg.openPanels)) {
+              const valid = lastCfg.openPanels.filter((p: any) => p && PANEL_COMPONENTS_G[p.type as PanelTypeG]);
+              if (valid.length > 0) setOpenPanels(valid as OpenPanelG[]);
+            }
+            if (Array.isArray(lastCfg.layout) && lastCfg.layout.every((n: any) => typeof n === 'number')) {
+              setPanelLayout(lastCfg.layout as number[]);
+            }
           }
         }
       } catch {}
@@ -334,6 +350,9 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
           }
           const payload = { ...existing, openPanels, layout: roundedLayout };
           localStorage.setItem(key, JSON.stringify(payload));
+          // Also write a global snapshot so new projects can inherit
+          const lastKey = `bazaar:workspace:__last`;
+          try { localStorage.setItem(lastKey, JSON.stringify(payload)); } catch {}
         } catch {}
       }, 250); // trailing debounce
       return () => {

@@ -59,11 +59,23 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
   useEffect(() => {
     try {
       const key = `bazaar:workspace:${projectId}`;
+      const lastKey = `bazaar:workspace:__last`;
       const raw = typeof window !== 'undefined' ? localStorage.getItem(key) : null;
       if (raw) {
         const cfg = JSON.parse(raw);
         if (cfg && cfg.timeline && typeof cfg.timeline.visible === 'boolean') {
           setIsTimelineVisible(Boolean(cfg.timeline.visible));
+        }
+      } else {
+        // Fallback to last-used workspace if no project-specific config yet
+        const lastRaw = typeof window !== 'undefined' ? localStorage.getItem(lastKey) : null;
+        if (lastRaw) {
+          try {
+            const lastCfg = JSON.parse(lastRaw);
+            if (lastCfg && lastCfg.timeline && typeof lastCfg.timeline.visible === 'boolean') {
+              setIsTimelineVisible(Boolean(lastCfg.timeline.visible));
+            }
+          } catch {}
         }
       }
     } catch {}
@@ -77,6 +89,9 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
       const existing = raw ? (() => { try { return JSON.parse(raw) || {}; } catch { return {}; } })() : {};
       const payload = { ...existing, timeline: { ...(existing.timeline || {}), visible: isTimelineVisible } };
       localStorage.setItem(key, JSON.stringify(payload));
+      // Also update global snapshot so new projects can inherit timeline state
+      const lastKey = `bazaar:workspace:__last`;
+      try { localStorage.setItem(lastKey, JSON.stringify(payload)); } catch {}
     } catch {}
   }, [isTimelineVisible, projectId]);
   
