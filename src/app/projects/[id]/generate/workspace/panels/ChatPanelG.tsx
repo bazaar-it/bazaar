@@ -182,6 +182,20 @@ export default function ChatPanelG({
   }, [dbMessages, projectId, syncDbMessages]);
 
 
+  // Helper: sanitize content for display (hide machine-only tokens)
+  const sanitizeForDisplay = useCallback((text: string, isUser: boolean) => {
+    if (!text) return text;
+    let out = text;
+    if (isUser) {
+      // Remove scene targeting hints from display
+      out = out.replace(/\n?Use these specific scenes:[^\n]*\n?/gi, '\n');
+      out = out.replace(/\[scene:[^\]]+\]/gi, '');
+      // Collapse extra whitespace
+      out = out.replace(/\n{3,}/g, '\n\n').replace(/\s{2,}/g, ' ').trim();
+    }
+    return out;
+  }, []);
+
   // Convert VideoState messages to component format for rendering
   const componentMessages: ComponentMessage[] = useMemo(() => {
     // ✅ DEDUPLICATE: Remove duplicate messages by ID to prevent React key errors
@@ -193,7 +207,7 @@ export default function ChatPanelG({
     
     return uniqueMessages.map(msg => ({
       id: msg.id,
-      content: msg.message,
+      content: sanitizeForDisplay(msg.message, msg.isUser),
       isUser: msg.isUser,
       timestamp: new Date(msg.timestamp),
       status: msg.status,
@@ -202,7 +216,7 @@ export default function ChatPanelG({
       videoUrls: msg.videoUrls,
       audioUrls: msg.audioUrls,
     }));
-  }, [messages]);
+  }, [messages, sanitizeForDisplay]);
 
   // ✅ BATCH LOADING: Get iterations for all messages at once
   const messageIds = componentMessages
