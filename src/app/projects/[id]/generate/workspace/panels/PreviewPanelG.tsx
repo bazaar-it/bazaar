@@ -289,19 +289,25 @@ export function PreviewPanelG({
 
   // (moved below selectedSceneRange definition to avoid TDZ)
   
-  // Memoized scene fingerprint to prevent unnecessary re-renders - order-aware
+  // Helper: fast string hash (djb2)
+  const hashString = useCallback((str: string) => {
+    let hash = 5381 | 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) + hash + str.charCodeAt(i)) | 0; // hash * 33 + c
+    }
+    // Convert to unsigned for readability
+    return (hash >>> 0).toString(36);
+  }, []);
+
+  // Memoized scene fingerprint to prevent unnecessary re-renders - order-aware and content-robust
   const scenesFingerprint = useMemo(() => {
-    // Sort scenes first to ensure consistent fingerprint regardless of state order
     const sortedForFingerprint = [...scenes].sort((a: any, b: any) => ((a as any).order ?? 0) - ((b as any).order ?? 0));
-    // Check both possible code locations and use actual code content hash
     return sortedForFingerprint.map((s, idx) => {
       const code = (s.data as any)?.code || (s.data as any)?.tsxCode || '';
-      // Create stable fingerprint including id, duration, order, and code hash
-      // Include index to detect reordering
-      const codeHash = code ? `${code.length}-${code.substring(0, 200).replace(/\s+/g, '')}` : 'empty';
-      return `${idx}-${s.id}-${(s as any).order ?? 0}-${s.duration || 150}-${codeHash}`;
-    }).join('|');
-  }, [scenes]);
+      const codeHash = code ? hashString(code) : 'empty';
+      return `${idx}|${s.id}|${(s as any).order ?? 0}|${s.duration || 150}|${codeHash}`;
+    }).join('~');
+  }, [scenes, hashString]);
   
   // Memoized audio fingerprint to prevent unnecessary re-renders
   const audioFingerprint = useMemo(() => {
@@ -2227,6 +2233,7 @@ export default function FallbackComposition() {
   const compilationTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastCompiledFingerprintRef = useRef<string>('');
   const isCompilingRef = useRef<boolean>(false);
+  const pendingFingerprintRef = useRef<string | null>(null);
   
   useEffect(() => {
     const currentFingerprint = `${scenesFingerprint}-${audioFingerprint}-len:${scenes.length}`;
@@ -2242,20 +2249,27 @@ export default function FallbackComposition() {
       if (compilationTimerRef.current) clearTimeout(compilationTimerRef.current);
       lastCompiledFingerprintRef.current = currentFingerprint;
       (async () => {
-        if (isCompilingRef.current) return; // avoid overlap
+        if (isCompilingRef.current) {
+          // Queue this fingerprint to compile next
+          pendingFingerprintRef.current = currentFingerprint;
+          return;
+        }
         isCompilingRef.current = true;
         try {
           await compileMultiSceneComposition();
         } finally {
           isCompilingRef.current = false;
+          // If something arrived while compiling, immediately compile again
+          if (pendingFingerprintRef.current && pendingFingerprintRef.current !== lastCompiledFingerprintRef.current) {
+            const next = pendingFingerprintRef.current;
+            pendingFingerprintRef.current = null;
+            lastCompiledFingerprintRef.current = next;
+            isCompilingRef.current = true;
+            try { await compileMultiSceneComposition(); } finally { isCompilingRef.current = false; }
+          }
         }
       })();
       return;
-    }
-
-    // Skip if already compiling
-    if (isCompilingRef.current) {
-      console.log('[PreviewPanelG] ⏳ Already compiling, will queue next compilation');
     }
 
     // Clear existing timer
@@ -2272,9 +2286,10 @@ export default function FallbackComposition() {
         return;
       }
       
-      // Prevent overlapping compilations
+      // If a compile is in progress, queue this fingerprint and exit. It will compile right after.
       if (isCompilingRef.current) {
-        console.log('[PreviewPanelG] ⏳ Still compiling previous, skipping this update');
+        console.log('[PreviewPanelG] ⏳ Compiling; queuing next compile');
+        pendingFingerprintRef.current = latestFingerprint;
         return;
       }
       
@@ -2289,6 +2304,14 @@ export default function FallbackComposition() {
         await compileMultiSceneComposition();
       } finally {
         isCompilingRef.current = false;
+        // Immediately run any pending compile that arrived during this one
+        if (pendingFingerprintRef.current && pendingFingerprintRef.current !== lastCompiledFingerprintRef.current) {
+          const next = pendingFingerprintRef.current;
+          pendingFingerprintRef.current = null;
+          lastCompiledFingerprintRef.current = next;
+          isCompilingRef.current = true;
+          try { await compileMultiSceneComposition(); } finally { isCompilingRef.current = false; }
+        }
       }
     }, 600); // Increased to 600ms to better batch rapid updates
 
@@ -2308,6 +2331,42 @@ export default function FallbackComposition() {
       compileMultiSceneComposition();
     }
   }, [compileMultiSceneComposition]);
+
+  // Listen to explicit code-saved events (immediate recompile signal from editor)
+  useEffect(() => {
+    const onCodeSaved = async (ev: Event) => {
+      const e = ev as CustomEvent;
+      if (!e?.detail || e.detail.projectId !== projectId) return;
+      const latestFingerprint = `${scenesFingerprint}-${audioFingerprint}-len:${scenes.length}`;
+      if (isCompilingRef.current) {
+        pendingFingerprintRef.current = latestFingerprint;
+        return;
+      }
+      isCompilingRef.current = true;
+      lastCompiledFingerprintRef.current = latestFingerprint;
+      try { await compileMultiSceneComposition(); } finally { isCompilingRef.current = false; }
+    };
+    window.addEventListener('code-saved', onCodeSaved as EventListener);
+    return () => window.removeEventListener('code-saved', onCodeSaved as EventListener);
+  }, [projectId, scenesFingerprint, audioFingerprint, scenes.length, compileMultiSceneComposition]);
+
+  // Honor global project refresh token by nudging local refresh and compile
+  useEffect(() => {
+    if (!projectRefreshToken) return;
+    // Nudge player remount
+    setRefreshToken(`store-${projectRefreshToken}-${Date.now()}`);
+    // Kick a compile cycle if idle
+    const latestFingerprint = `${scenesFingerprint}-${audioFingerprint}-len:${scenes.length}`;
+    if (isCompilingRef.current) {
+      pendingFingerprintRef.current = latestFingerprint;
+      return;
+    }
+    (async () => {
+      isCompilingRef.current = true;
+      lastCompiledFingerprintRef.current = latestFingerprint;
+      try { await compileMultiSceneComposition(); } finally { isCompilingRef.current = false; }
+    })();
+  }, [projectRefreshToken]);
 
   // Listen for playback speed change events from header
   useEffect(() => {

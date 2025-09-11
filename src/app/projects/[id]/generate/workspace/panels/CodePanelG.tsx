@@ -205,7 +205,13 @@ export function CodePanelG({
             scenes: updatedScenes
           };
         });
-        
+
+        // Broadcast a direct event so Preview can recompile immediately
+        try {
+          const ev = new CustomEvent('code-saved', { detail: { projectId, sceneId: selectedScene.id } });
+          window.dispatchEvent(ev);
+        } catch {}
+
         // Add system message to chat when scene is saved
         const sceneName = getSceneName(selectedScene, scenes.findIndex(s => s.id === selectedScene.id));
         useVideoState.getState().addSystemMessage(
