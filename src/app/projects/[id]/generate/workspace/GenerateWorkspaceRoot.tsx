@@ -33,6 +33,26 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
   const [userProjects, setUserProjects] = useState(initialProjects);
   const [isCreateTemplateModalOpen, setIsCreateTemplateModalOpen] = useState(false);
   const [isTimelineVisible, setIsTimelineVisible] = useState(false);
+  const [isTimelineMounted, setIsTimelineMounted] = useState(false);
+  const TIMELINE_ANIM_MS = 320;
+  const [timelineAnim, setTimelineAnim] = useState<'enter' | 'exit' | null>(null);
+  useEffect(() => {
+    let t: number | null = null;
+    if (isTimelineVisible) {
+      // Mount and play enter animation
+      setIsTimelineMounted(true);
+      setTimelineAnim('enter');
+      t = window.setTimeout(() => setTimelineAnim(null), TIMELINE_ANIM_MS);
+    } else if (isTimelineMounted) {
+      // Play exit animation, then unmount
+      setTimelineAnim('exit');
+      t = window.setTimeout(() => {
+        setIsTimelineMounted(false);
+        setTimelineAnim(null);
+      }, TIMELINE_ANIM_MS);
+    }
+    return () => { if (t) window.clearTimeout(t); };
+  }, [isTimelineVisible, isTimelineMounted]);
   const workspaceContentAreaRef = useRef<WorkspaceContentAreaGHandle>(null);
   
   const { data: session } = useSession();
@@ -295,8 +315,16 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
             </div>
             
             {/* Timeline panel - fixed height based on content - ADMIN ONLY */}
-            {isTimelineVisible && user?.isAdmin && (
-              <div className="mt-2">
+            {isTimelineMounted && user?.isAdmin && (
+              <div
+                className="mt-2"
+                style={{
+                  transition: `transform ${TIMELINE_ANIM_MS}ms cubic-bezier(0.25, 1, 0.5, 1), opacity ${TIMELINE_ANIM_MS}ms cubic-bezier(0.25, 1, 0.5, 1)` ,
+                  transform: timelineAnim === 'enter' ? 'scale(0.96)' : timelineAnim === 'exit' ? 'scale(0.96)' : 'scale(1)',
+                  opacity: timelineAnim === 'enter' ? 0 : timelineAnim === 'exit' ? 0 : 1,
+                  willChange: 'transform, opacity'
+                }}
+              >
                 <TimelinePanel
                   key={`timeline-${projectId}`}
                   projectId={projectId}

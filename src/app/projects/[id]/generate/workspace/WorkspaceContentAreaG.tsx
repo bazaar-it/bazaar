@@ -284,11 +284,91 @@ const dropAnimationConfig: DropAnimation = {
 // Main workspace content area component
 const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceContentAreaGProps>(
   ({ projectId, userId, initialProps, projects = [], onProjectRename, isAdmin = false }, ref) => {
-    // Initial open panels - start with chat and preview
+    const PANEL_ANIM_MS = 320;
+    // Initial open panels - default to chat and preview, restore from localStorage if available
     const [openPanels, setOpenPanels] = useState<OpenPanelG[]>([
       { id: 'chat', type: 'chat' },
       { id: 'preview', type: 'preview' },
     ]);
+    // Per-panel transient animation state
+    const [panelAnim, setPanelAnim] = useState<Record<string, 'enter' | 'exit' | null>>({});
+
+    // Persist/restore workspace layout per project (panels + sizes)
+    const [panelLayout, setPanelLayout] = useState<number[] | null>(null);
+    useEffect(() => {
+      if (typeof window === 'undefined') return;
+      const key = `bazaar:workspace:${projectId}`;
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const cfg = JSON.parse(raw);
+          if (Array.isArray(cfg.openPanels)) {
+            const valid = cfg.openPanels.filter((p: any) => p && PANEL_COMPONENTS_G[p.type as PanelTypeG]);
+            if (valid.length > 0) setOpenPanels(valid as OpenPanelG[]);
+          }
+          if (Array.isArray(cfg.layout) && cfg.layout.every((n: any) => typeof n === 'number')) {
+            setPanelLayout(cfg.layout as number[]);
+          }
+        }
+      } catch {}
+    }, [projectId]);
+
+    // Debounced saver to avoid excessive writes during resize drags
+    const saveTimerRef = useRef<number | null>(null);
+    useEffect(() => {
+      if (typeof window === 'undefined') return;
+      const key = `bazaar:workspace:${projectId}`;
+      // Round sizes to integers to keep payload tiny
+      const roundedLayout = panelLayout?.map((n) => Math.max(1, Math.min(100, Math.round(n))));
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      saveTimerRef.current = window.setTimeout(() => {
+        try {
+          const payload = { openPanels, layout: roundedLayout };
+          localStorage.setItem(key, JSON.stringify(payload));
+        } catch {}
+      }, 250); // trailing debounce
+      return () => {
+        if (saveTimerRef.current) {
+          window.clearTimeout(saveTimerRef.current);
+          saveTimerRef.current = null;
+        }
+      };
+    }, [openPanels, panelLayout, projectId]);
+
+    // Keep layout array in sync with panel count
+    useEffect(() => {
+      const count = openPanels.length;
+      if (count === 0) return;
+      if (!panelLayout || panelLayout.length !== count) {
+        // Distribute sizes evenly as a starting point
+        const even = Array.from({ length: count }, () => Math.round(100 / count));
+        setPanelLayout(even);
+      }
+    }, [openPanels.length]);
+
+    // Cross-tab sync: update layout if another tab changes it
+    useEffect(() => {
+      if (typeof window === 'undefined') return;
+      const key = `bazaar:workspace:${projectId}`;
+      const onStorage = (e: StorageEvent) => {
+        if (e.key !== key || !e.newValue) return;
+        try {
+          const cfg = JSON.parse(e.newValue);
+          if (Array.isArray(cfg.openPanels)) {
+            const valid = cfg.openPanels.filter((p: any) => p && PANEL_COMPONENTS_G[p.type as PanelTypeG]);
+            if (valid.length > 0) setOpenPanels(valid as OpenPanelG[]);
+          }
+          if (Array.isArray(cfg.layout) && cfg.layout.every((n: any) => typeof n === 'number')) {
+            setPanelLayout(cfg.layout as number[]);
+          }
+        } catch {}
+      };
+      window.addEventListener('storage', onStorage);
+      return () => window.removeEventListener('storage', onStorage);
+    }, [projectId]);
     
     // Playback speed state from Zustand (persistent across sessions)
     const { setPlaybackSpeed } = useVideoState();
@@ -661,6 +741,11 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
         };
         
         setOpenPanels((panels) => [...panels, newPanel]);
+        // Animate enter
+        setPanelAnim((prev) => ({ ...prev, [newPanel.id]: 'enter' }));
+        window.setTimeout(() => {
+          setPanelAnim((prev) => ({ ...prev, [newPanel.id]: null }));
+        }, PANEL_ANIM_MS);
         
         if (openPanels.length === 0) {
           setTimeout(() => {
@@ -685,7 +770,16 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
 
     // Remove panel
     const removePanel = useCallback((id: string) => {
-      setOpenPanels((panels) => panels.filter((p) => p.id !== id));
+      // Play exit animation, then remove for real
+      setPanelAnim((prev) => ({ ...prev, [id]: 'exit' }));
+      window.setTimeout(() => {
+        setOpenPanels((panels) => panels.filter((p) => p.id !== id));
+        setPanelAnim((prev) => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
+      }, PANEL_ANIM_MS);
     }, []);
 
     // Memoize current scenes to avoid recalculation on every render
@@ -693,6 +787,14 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
       const props = getCurrentProps();
       return props?.scenes || [];
     }, [getCurrentProps, projectId]);
+
+    // Smoothly animate to restored layout on first mount
+    const [animateLayout, setAnimateLayout] = useState(false);
+    useEffect(() => {
+      // Enable transitions after first paint so default -> saved layout animates
+      const id = window.requestAnimationFrame(() => setAnimateLayout(true));
+      return () => window.cancelAnimationFrame(id);
+    }, []);
 
     // Generate panel content - memoized to prevent unnecessary re-renders
   const renderPanelContent = useCallback((panel: OpenPanelG | null | undefined) => {
@@ -821,18 +923,48 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
               
               {/* Panel layout */}
               {openPanels.length > 0 && (
-                <PanelGroup direction="horizontal" className="h-full">
+                <PanelGroup 
+                  direction="horizontal" 
+                  className="h-full"
+                  layout={panelLayout || undefined}
+                  onLayout={(layout) => setPanelLayout(layout)}
+                >
                   {openPanels.map((panel, idx) => (
                       <React.Fragment key={panel?.id || `panel-${idx}`}>
                         <Panel 
                           minSize={10} 
-                          defaultSize={100 / (openPanels.length || 1)}
+                          defaultSize={(panelLayout && panelLayout[idx]) || (100 / (openPanels.length || 1))}
                           className="transition-all duration-300"
                           style={{
                             transformOrigin: 'center',
-                            transition: 'all 250ms cubic-bezier(0.25, 1, 0.5, 1)'
+                            // Animate flex-basis changes when restored layout applies
+                            transition: animateLayout 
+                              ? 'flex-basis 320ms cubic-bezier(0.25, 1, 0.5, 1)'
+                              : undefined,
+                            willChange: animateLayout ? 'flex-basis' : undefined,
                           }}
                         >
+                          <div
+                            className="h-full w-full"
+                            style={{
+                              transition: `transform ${PANEL_ANIM_MS}ms cubic-bezier(0.25, 1, 0.5, 1), opacity ${PANEL_ANIM_MS}ms cubic-bezier(0.25, 1, 0.5, 1), box-shadow ${PANEL_ANIM_MS}ms` ,
+                              transform: panelAnim[panel?.id || ''] === 'enter' 
+                                ? 'scale(0.96)' 
+                                : panelAnim[panel?.id || ''] === 'exit'
+                                  ? 'scale(0.96)'
+                                  : 'scale(1)',
+                              opacity: panelAnim[panel?.id || ''] === 'enter' 
+                                ? 0 
+                                : panelAnim[panel?.id || ''] === 'exit' 
+                                  ? 0 
+                                  : 1,
+                              willChange: 'transform, opacity',
+                              pointerEvents: panelAnim[panel?.id || ''] === 'exit' ? 'none' : undefined,
+                              boxShadow: panelAnim[panel?.id || ''] === 'enter' ? '0 8px 24px rgba(15, 23, 42, 0.06)' : undefined,
+                              borderRadius: 15,
+                              overflow: 'hidden'
+                            }}
+                          >
                           <SortablePanelG 
                             id={panel?.id || `panel-${idx}`}
                             onRemove={() => panel?.id ? removePanel(panel.id) : null}
@@ -847,6 +979,7 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
                           >
                             {renderPanelContent(panel)}
                           </SortablePanelG>
+                          </div>
                         </Panel>
                         {/* Add resize handle between panels but not after the last one */}
                         {idx < openPanels.length - 1 && (
