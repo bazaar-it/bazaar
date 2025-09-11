@@ -127,7 +127,9 @@ BRAND MATCHING INSTRUCTIONS:
         allImageUrls.push(input.webContext.screenshotUrls.mobile);
       }
       if (input.imageUrls?.length) {
-        allImageUrls.push(...input.imageUrls);
+        // Only accept HTTPS URLs here; ignore placeholders like MOST_RECENT_* or icon:*
+        const httpsOnly = input.imageUrls.filter((u) => /^https?:\/\//i.test(u));
+        allImageUrls.push(...httpsOnly);
       }
       
       if (allImageUrls.length > 0) {

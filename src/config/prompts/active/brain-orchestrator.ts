@@ -44,6 +44,11 @@ IMAGE DECISION CRITERIA (and imageAction field):
 - If user uploads photo/illustration with no instruction → addScene and set imageAction: "embed"
 - CRITICAL: "for scene X" + image ALWAYS means editScene with targetSceneId; include imageAction based on phrasing (default "recreate" for UI, "embed" for photos)
 
+DEFAULT BIAS (advisory):
+- UI/screenshots → prefer RECREATE
+- Photos/logos → prefer EMBED
+Metadata hints are advisory; user intent and context take precedence.
+
 IMPORTANT - "THIS IMAGE" REFERENCE HANDLING:
 - When user says "this image" or "the image" → they mean the MOST RECENTLY uploaded image (LAST in imageUrls array)
 - When multiple images exist in the project, "add this image" means the newest one just uploaded

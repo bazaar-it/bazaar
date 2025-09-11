@@ -4,6 +4,7 @@ import { AIClientService } from "~/server/services/ai/aiClient.service";
 import { getModel } from "~/config/models.config";
 import { SYSTEM_PROMPTS } from "~/config/prompts.config";
 import type { OrchestrationInput, ToolSelectionResult, ContextPacket } from "~/lib/types/ai/brain.types";
+import { FEATURES } from "~/config/features";
 
 export class IntentAnalyzer {
   private modelConfig = getModel("brain");
@@ -39,7 +40,27 @@ export class IntentAnalyzer {
       // Debug log to see what brain actually returned
       console.log('🎯 [NEW INTENT ANALYZER] Raw parsed JSON:', JSON.stringify(parsed, null, 2));
       
-      const result = this.processBrainDecision(parsed, input);
+      let result = this.processBrainDecision(parsed, input);
+
+      // Soft tie-breaker: if imageAction is undefined and attached images look like UI, prefer 'recreate'
+      try {
+        if (!result.imageAction && Array.isArray(input.userContext?.imageUrls) && input.userContext!.imageUrls!.length > 0) {
+          const urls: string[] = (input.userContext!.imageUrls as string[]) || [];
+          const assets = (contextPacket as any)?.assetContext?.allAssets || [];
+          const looksLikeUI = urls.some((u) => {
+            const a = assets.find((x: any) => x.url === u);
+            if (!a) return false;
+            const tags: string[] = a.tags || [];
+            const isPhotoOrLogo = tags.includes('kind:photo') || tags.includes('kind:logo');
+            const uiHints = tags.includes('kind:ui') || tags.includes('layout:dashboard') || tags.includes('layout:screenshot') || tags.includes('layout:mobile-ui') || tags.includes('layout:code-editor');
+            return uiHints || !isPhotoOrLogo;
+          });
+          if (looksLikeUI) {
+            result.imageAction = 'recreate';
+            console.log('🎯 [INTENT] Defaulting imageAction to "recreate" for UI-like assets (soft tie-breaker)');
+          }
+        }
+      } catch {}
       
       console.log('🎯 [NEW INTENT ANALYZER] Decision:', {
         toolName: result.toolName,
@@ -163,11 +184,11 @@ NOTE: All tools are multimodal. When images are referenced, include them in the 
                 imageInfo += `\nImage ${index + 1} metadata: ${relevantTags.join(', ')}`;
                 
                 // Add specific guidance based on metadata
-                if (hasEmbedHint || isPhoto) {
-                  imageInfo += ` → BEST FOR: backgrounds, decorative elements, direct display`;
-                }
-                if (hasRecreateHint || isUI) {
+                // Conservative default: prefer recreate for UI/unknown; embed only for photos/logos
+                if (hasRecreateHint || isUI || (!isPhoto && !relevantTags.some((t: string) => t.includes('logo')))) {
                   imageInfo += ` → BEST FOR: recreating as components, NOT backgrounds`;
+                } else if (hasEmbedHint || isPhoto) {
+                  imageInfo += ` → BEST FOR: backgrounds, decorative elements, direct display`;
                 }
                 
                 console.log('✅ [INTENT] Added metadata hints with guidance:', relevantTags);
@@ -293,7 +314,7 @@ Respond with JSON only.`;
     }
 
     // Single tool operation
-    const result: ToolSelectionResult = {
+    let result: ToolSelectionResult = {
       success: true,
       toolName: parsed.toolName,
       reasoning: parsed.reasoning,
@@ -305,6 +326,18 @@ Respond with JSON only.`;
       imageDirectives: parsed.imageDirectives, // Optional per-image actions
       userFeedback: parsed.userFeedback,
     };
+
+    // Guard: disable website tool when the feature flag is off
+    if (!FEATURES.WEBSITE_TO_VIDEO_ENABLED && result.toolName === 'websiteToVideo') {
+      // Fallback to a safe default (addScene) and strip website specifics
+      result = {
+        ...result,
+        toolName: 'addScene',
+        websiteUrl: undefined,
+        reasoning: (parsed.reasoning ? `${parsed.reasoning} ` : '') + '[Website tool disabled] Proceeding with standard scene generation.',
+        userFeedback: parsed.userFeedback || 'Proceeding with a standard scene (website pipeline is temporarily disabled).'
+      };
+    }
 
     // Extract requested duration
     const requestedDurationSeconds = this.extractRequestedDuration(input.prompt);

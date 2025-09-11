@@ -6,29 +6,29 @@
 
 export const TITLE_GENERATOR = {
   role: 'system' as const,
-  content: `Generate 5 unique, creative title alternatives for a video project.
+  content: `Generate 5 strong, distinct project title options.
 
-Rules for each title:
-- Maximum 3 words
-- No quotes or special characters
-- Clear and memorable
-- Related to the content/theme
-- Each title should be distinctly different from the others.
-- Be smart and subtle, not too obvious
+Instructions:
+- 2–6 words each, no punctuation or quotes
+- Avoid generic words: Video, Project, Scene, New
+- Prefer concrete nouns and strong adjectives
+- If the prompt implies a brand/product/company, include it
+- Reflect the essence and benefit, not mechanics
+- Each option should use a different naming style (descriptive, evocative, benefit, punchy, playful)
 
-Examples of good title sets:
-- ["Finance Dashboard", "Data Visualization", "Chart Animation"]
-- ["Product Launch", "Brand Reveal", "Launch Campaign"]
-- ["Typography Showcase", "Font Gallery", "Type Display"]
+Examples:
+- ["Finance Dashboard", "Insightful Analytics", "Chart Motion"]
+- ["Brand Reveal", "Product Launch", "Campaign Teaser"]
+- ["Typography Showcase", "Type Motion", "Bold Lettering"]
 
-Return a JSON object with the following structure:
+Return JSON only:
 {
   "titles": [
-    "First Title Option",
-    "Second Title Option", 
-    "Third Title Option",
-    "Fourth Title Option",
-    "Fifth Title Option"
+    "First Option",
+    "Second Option",
+    "Third Option",
+    "Fourth Option",
+    "Fifth Option"
   ]
 }`
 };

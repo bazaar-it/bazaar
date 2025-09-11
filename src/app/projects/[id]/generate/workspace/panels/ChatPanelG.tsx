@@ -85,8 +85,9 @@ export default function ChatPanelG({
   userId,
 }: ChatPanelGProps) {
   // Get draft message and attachments from store to persist across panel changes
+  const EMPTY_ATTACHMENTS: DraftAttachment[] = React.useMemo(() => [], []);
   const draftMessage = useVideoState((state) => state.projects[projectId]?.draftMessage || '');
-  const draftAttachments = useVideoState((state) => state.projects[projectId]?.draftAttachments || []);
+  const draftAttachments = useVideoState((state) => state.projects[projectId]?.draftAttachments ?? EMPTY_ATTACHMENTS);
   const setDraftMessage = useVideoState((state) => state.setDraftMessage);
   const setDraftAttachments = useVideoState((state) => state.setDraftAttachments);
   const clearDraft = useVideoState((state) => state.clearDraft);
@@ -181,6 +182,20 @@ export default function ChatPanelG({
   }, [dbMessages, projectId, syncDbMessages]);
 
 
+  // Helper: sanitize content for display (hide machine-only tokens)
+  const sanitizeForDisplay = useCallback((text: string, isUser: boolean) => {
+    if (!text) return text;
+    let out = text;
+    if (isUser) {
+      // Remove scene targeting hints from display
+      out = out.replace(/\n?Use these specific scenes:[^\n]*\n?/gi, '\n');
+      out = out.replace(/\[scene:[^\]]+\]/gi, '');
+      // Collapse extra whitespace
+      out = out.replace(/\n{3,}/g, '\n\n').replace(/\s{2,}/g, ' ').trim();
+    }
+    return out;
+  }, []);
+
   // Convert VideoState messages to component format for rendering
   const componentMessages: ComponentMessage[] = useMemo(() => {
     // ✅ DEDUPLICATE: Remove duplicate messages by ID to prevent React key errors
@@ -192,7 +207,7 @@ export default function ChatPanelG({
     
     return uniqueMessages.map(msg => ({
       id: msg.id,
-      content: msg.message,
+      content: sanitizeForDisplay(msg.message, msg.isUser),
       isUser: msg.isUser,
       timestamp: new Date(msg.timestamp),
       status: msg.status,
@@ -201,7 +216,7 @@ export default function ChatPanelG({
       videoUrls: msg.videoUrls,
       audioUrls: msg.audioUrls,
     }));
-  }, [messages]);
+  }, [messages, sanitizeForDisplay]);
 
   // ✅ BATCH LOADING: Get iterations for all messages at once
   const messageIds = componentMessages
@@ -548,20 +563,23 @@ export default function ChatPanelG({
     // Use finalMessage if it's a YouTube follow-up, otherwise use trimmedMessage (which includes icon info for backend)
     const backendMessage = finalMessage !== trimmedMessage ? finalMessage : trimmedMessage;
     
-    // ✨ NEW: Extract website URL from message
-    const urlRegex = /https?:\/\/[^\s]+/g;
-    const urls = backendMessage.match(urlRegex);
-    const websiteUrl = urls?.find(url => 
-      !url.includes('youtube.com') && 
-      !url.includes('youtu.be') &&
-      !url.includes('localhost') &&
-      !url.includes('127.0.0.1')
-    );
+    // Website-to-video pipeline is temporarily disabled.
+    // Keep URL extraction commented for future re-enable.
+    // const urlRegex = /https?:\/\/[^\s]+/g;
+    // const urls = backendMessage.match(urlRegex);
+    // const websiteUrl = urls?.find(url => 
+    //   !url.includes('youtube.com') && 
+    //   !url.includes('youtu.be') &&
+    //   !url.includes('localhost') &&
+    //   !url.includes('127.0.0.1')
+    // );
+    const websiteUrl = undefined;
     
     // Pass both GitHub and Figma modes to generation, plus website URL
     // Use backendMessage which contains icon information for the LLM
     console.log('[ChatPanelG] Backend message with icon info:', backendMessage);
-    generateSSE(backendMessage, imageUrls, videoUrls, audioUrls, sceneUrls, selectedModel, isGitHubMode || isFigmaMode, websiteUrl);
+    // Do not pass websiteUrl while the pipeline is disabled
+    generateSSE(backendMessage, imageUrls, videoUrls, audioUrls, sceneUrls, selectedModel, isGitHubMode || isFigmaMode, undefined);
     
     // Create display message for chat that includes icon information
     let userDisplayMessage = originalMessage;
@@ -1650,7 +1668,7 @@ export default function ChatPanelG({
   return (
     <div className="flex flex-col h-full">
       {/* Messages container */}
-      <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4" onScroll={handleScroll}>
+      <div ref={chatContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden p-4" onScroll={handleScroll}>
         <div className="space-y-4">
           {messages.map((msg, index) => {
             // Find all scene plan messages
@@ -1692,7 +1710,7 @@ export default function ChatPanelG({
           {/* Show pulsating message UI when generating */}
           {isGenerating && (
             <div className="flex justify-start mb-4">
-              <div className="bg-gray-100 text-gray-900 rounded-2xl px-4 py-3 max-w-[80%]">
+              <div className="bg-gray-100 text-gray-900 rounded-2xl px-4 py-3 max-w-[80%] break-words">
                 <GeneratingMessage phase={generationPhase} />
               </div>
             </div>

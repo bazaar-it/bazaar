@@ -1,5 +1,9 @@
 # 🏆 Bazaar-Vid Progress Summary
 
+## 📝 Latest Update (Sep 11, 2025)
+- Sprint 107: Fixed intermittent horizontal scrollbar in ChatPanel by enforcing word wrapping and hiding horizontal overflow. Changes in `ChatPanelG.tsx` and `ChatMessage.tsx`. See `memory-bank/sprints/sprint107_general_reliability/analysis/chat-horizontal-overflow.md`.
+- Sprint 107: Disabled unfinished Website→Video pipeline behind feature flag. Orchestrator/Intent/Context updated to ignore website tool; chat no longer passes `websiteUrl`. Safe to paste URLs without triggering that workflow.
+
 ## 📝 Latest Update (Sep 08, 2025)
 - Sprint 116: Kickstarted “Unified Images” plan. New sprint docs under `memory-bank/sprints/sprint116_images/`. Strategy: remove separate image tool; Brain emits `imageAction`/`imageDirectives`; Sonnet 4 multimodal handles add/edit with minimal prompts; upload-time media metadata informs decisions.
 - Sprint 98: Added a full image upload → generation pipeline audit. See `memory-bank/sprints/sprint98_autofix_analysis/image-upload-pipeline-analysis.md`. Documented why tool choice (add vs image recreator) can vary for ambiguous prompts like “animate this”, and proposed deterministic pre-rules + lower Brain temperature for stability.

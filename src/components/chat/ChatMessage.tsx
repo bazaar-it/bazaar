@@ -475,7 +475,7 @@ function ChatMessageComponent({ message, onImageClick, projectId, onRevert, hasI
       className={`flex ${message.isUser ? "justify-end" : "justify-start"} mb-4`}
     >
       <div
-        className={`max-w-[80%] ${
+        className={`max-w-[80%] break-words ${
           message.isUser
             ? "bg-black text-white rounded-2xl px-4 py-3"
             : isScenePlan && scenePlanData
@@ -604,7 +604,7 @@ function ChatMessageComponent({ message, onImageClick, projectId, onRevert, hasI
                   )}
                   
                   {/* Show text content */}
-                  <div className="text-sm leading-relaxed">
+                  <div className="text-sm leading-relaxed whitespace-pre-wrap break-words">
                     {/* Always use GeneratingMessage component for "Generating code" messages */}
                     {!message.isUser && 
                      cleanText.toLowerCase().includes("generating code") && 

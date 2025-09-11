@@ -1586,25 +1586,51 @@ export const useVideoState = create<VideoState>()(
     {
       name: 'bazaar-video-state',
       storage: createJSONStorage(() => localStorage),
-      // Only persist essential data, exclude real-time state
-      partialize: (state) => ({
-        projects: state.projects,
-        currentProjectId: state.currentProjectId,
-        selectedScenes: state.selectedScenes,
-        undoStacks: state.undoStacks,
-        redoStacks: state.redoStacks,
-        undoSavedAt: state.undoSavedAt,
-        // Don't persist chat history (too large), refreshTokens, or generating state
-      }),
-      // Handle Sets in generatingScenes by not persisting them
+      // Persist only durable UI state. DO NOT persist chatHistory/streaming/refresh tokens.
+      partialize: (state) => {
+        const projects: Record<string, ProjectState> = {} as any;
+        for (const [pid, p] of Object.entries(state.projects)) {
+          projects[pid] = {
+            // Persist props, audio, and a few UI prefs
+            props: p.props,
+            chatHistory: [], // never persist messages
+            dbMessagesLoaded: false,
+            activeStreamingMessageId: null,
+            refreshToken: undefined,
+            audio: p.audio ?? null,
+            shouldOpenAudioPanel: p.shouldOpenAudioPanel ?? false,
+            draftMessage: p.draftMessage ?? '',
+            draftAttachments: p.draftAttachments ?? [],
+            playbackSpeed: p.playbackSpeed ?? 1,
+          };
+        }
+        return {
+          projects,
+          currentProjectId: state.currentProjectId,
+          selectedScenes: state.selectedScenes,
+          undoStacks: state.undoStacks,
+          redoStacks: state.redoStacks,
+          undoSavedAt: state.undoSavedAt,
+        };
+      },
       onRehydrateStorage: () => (state) => {
         if (state) {
-          // Reset non-persistent state
+          // Reset global ephemeral state
           state.chatHistory = {};
           state.refreshTokens = {};
           state.lastSyncTime = 0;
           state.pendingDbSync = {};
           state.generatingScenes = {};
+          // Ensure per-project ephemerals are reset to avoid duplicate messages after refresh
+          try {
+            for (const pid of Object.keys(state.projects || {})) {
+              const p = state.projects[pid]! as ProjectState;
+              p.chatHistory = [];
+              p.activeStreamingMessageId = null;
+              p.refreshToken = undefined;
+              p.dbMessagesLoaded = false;
+            }
+          } catch {}
           // TTL prune undo/redo (24h)
           try {
             const ttlMs = 24 * 60 * 60 * 1000;
@@ -1614,12 +1640,12 @@ export const useVideoState = create<VideoState>()(
             const redo = state.redoStacks || {};
             Object.keys(savedAt).forEach((pid) => {
               if (now - (savedAt[pid] || 0) > ttlMs) {
-                undo[pid] = [];
-                redo[pid] = [];
+                undo[pid] = [] as any;
+                redo[pid] = [] as any;
               }
             });
-            state.undoStacks = undo;
-            state.redoStacks = redo;
+            state.undoStacks = undo as any;
+            state.redoStacks = redo as any;
           } catch {}
         }
       },

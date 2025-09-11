@@ -58,6 +58,8 @@ export class MediaMetadataService {
       const meta = JSON.parse(raw) as MediaMetadata;
       console.log('🔍 [MediaMetadata] Parsed metadata:', meta);
 
+      // Do not hard-enforce hints here; the Brain may override based on user intent.
+
       // Derive compact tags for phase 1 (no schema change)
       const tags: string[] = [];
       if (meta.kind) {

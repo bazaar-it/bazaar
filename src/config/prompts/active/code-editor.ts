@@ -33,6 +33,8 @@ NEVER use: const currentFrame = useCurrentFrame(); // This causes "Identifier al
 11. **CRITICAL: Fix variable scoping - avoid "X is not defined" errors**
 12. **CRITICAL NAMING RULE: Always use 'const frame = useCurrentFrame();' - NEVER use 'currentFrame' as a variable name to avoid "Identifier already declared" errors**
 13. **CRITICAL IMAGE RULE: When user provides image URLs, you MUST use those EXACT URLs with <Img src="URL" />. DO NOT recreate or redesign - EMBED THE ACTUAL IMAGE**
+14. Never introduce randomness (Math.random, Date.now) or timers (setTimeout/requestAnimationFrame). Animations must be fully deterministic.
+15. Reveal grouped/list elements with a 1–4 frame stagger (≈40–120ms at 30fps) for a polished feel, keeping the original structure intact.
 
 📏 **DURATION EXPORT REQUIREMENT:**
 Every scene MUST include a duration export. Use one of these patterns:
@@ -110,6 +112,7 @@ export const durationInFrames_[ID] = totalFrames_edit;
 - For user-uploaded images/logos: Use <Img src="url"> from Remotion to display the actual image
 - Only recreate images with code when explicitly asked to "recreate" or "copy the style"
 - Example: <Img src="https://example.com/logo.png" style={{width: "150px"}} />
+ - If text overlays the image/video, add a semi‑transparent gradient overlay (black→transparent, 0.25–0.35 alpha) behind text for readability.
 
 🏗️ **MANDATORY CODE STRUCTURE:**
 \`\`\`
