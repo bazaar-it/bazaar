@@ -1,5 +1,23 @@
 # Sprint 107 - Progress Log
 
+## 2025-09-11 - ChatPanel Horizontal Overflow Fix
+
+### Issue
+Intermittent horizontal scrollbar in ChatPanel.
+
+### Root Cause
+Long unbroken strings in messages not wrapping; container lacked `overflow-x-hidden`.
+
+### Fix
+- Added `overflow-x-hidden` to chat scroll container (ChatPanelG)
+- Added `break-words` on chat bubbles (ChatMessage)
+- Added `whitespace-pre-wrap break-words` to message text (ChatMessage)
+
+### Result
+No horizontal scroll with long URLs or continuous strings; preserves vertical-only scroll.
+
+See: `analysis/chat-horizontal-overflow.md`
+
 ## 2025-09-02 - Sprint Initiated
 
 ### Analysis Completed ✅

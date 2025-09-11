@@ -55,6 +55,47 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
   }, [isTimelineVisible, isTimelineMounted]);
   const workspaceContentAreaRef = useRef<WorkspaceContentAreaGHandle>(null);
   
+  // Persist/restore timeline visibility with the same workspace key
+  useEffect(() => {
+    try {
+      const key = `bazaar:workspace:${projectId}`;
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(key) : null;
+      if (raw) {
+        const cfg = JSON.parse(raw);
+        if (cfg && cfg.timeline && typeof cfg.timeline.visible === 'boolean') {
+          setIsTimelineVisible(Boolean(cfg.timeline.visible));
+        }
+      }
+    } catch {}
+  }, [projectId]);
+  
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const key = `bazaar:workspace:${projectId}`;
+    try {
+      const raw = localStorage.getItem(key);
+      const existing = raw ? (() => { try { return JSON.parse(raw) || {}; } catch { return {}; } })() : {};
+      const payload = { ...existing, timeline: { ...(existing.timeline || {}), visible: isTimelineVisible } };
+      localStorage.setItem(key, JSON.stringify(payload));
+    } catch {}
+  }, [isTimelineVisible, projectId]);
+  
+  // Cross-tab sync for timeline visibility
+  useEffect(() => {
+    const key = `bazaar:workspace:${projectId}`;
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== key || !e.newValue) return;
+      try {
+        const cfg = JSON.parse(e.newValue);
+        if (cfg && cfg.timeline && typeof cfg.timeline.visible === 'boolean') {
+          setIsTimelineVisible(Boolean(cfg.timeline.visible));
+        }
+      } catch {}
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [projectId]);
+  
   const { data: session } = useSession();
   const { setProject, getCurrentProps } = useVideoState();
   const breakpoint = useBreakpoint();

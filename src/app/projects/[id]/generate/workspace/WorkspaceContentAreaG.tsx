@@ -326,7 +326,13 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
       }
       saveTimerRef.current = window.setTimeout(() => {
         try {
-          const payload = { openPanels, layout: roundedLayout };
+          // Merge with any existing settings (e.g., timeline visibility saved elsewhere)
+          const existingRaw = localStorage.getItem(key);
+          let existing: any = {};
+          if (existingRaw) {
+            try { existing = JSON.parse(existingRaw) || {}; } catch { existing = {}; }
+          }
+          const payload = { ...existing, openPanels, layout: roundedLayout };
           localStorage.setItem(key, JSON.stringify(payload));
         } catch {}
       }, 250); // trailing debounce

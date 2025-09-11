@@ -1650,7 +1650,7 @@ export default function ChatPanelG({
   return (
     <div className="flex flex-col h-full">
       {/* Messages container */}
-      <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4" onScroll={handleScroll}>
+      <div ref={chatContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden p-4" onScroll={handleScroll}>
         <div className="space-y-4">
           {messages.map((msg, index) => {
             // Find all scene plan messages
@@ -1692,7 +1692,7 @@ export default function ChatPanelG({
           {/* Show pulsating message UI when generating */}
           {isGenerating && (
             <div className="flex justify-start mb-4">
-              <div className="bg-gray-100 text-gray-900 rounded-2xl px-4 py-3 max-w-[80%]">
+              <div className="bg-gray-100 text-gray-900 rounded-2xl px-4 py-3 max-w-[80%] break-words">
                 <GeneratingMessage phase={generationPhase} />
               </div>
             </div>
