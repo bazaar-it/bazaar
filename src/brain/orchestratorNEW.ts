@@ -269,7 +269,7 @@ export class Orchestrator {
         hasTemplateContext: !!contextPacket.templateContext,
         templateCount: contextPacket.templateContext?.examples?.length || 0,
         templateNames: contextPacket.templateContext?.examples?.map(t => t.name) || [],
-      });
+      }); 
       
       // Log actual image URLs being passed to tools
       if ((input.userContext?.imageUrls as string[])?.length) {
