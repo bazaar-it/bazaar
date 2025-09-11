@@ -197,6 +197,13 @@ export class ContextBuilder {
 
   private async buildWebContext(input: OrchestrationInput) {
     try {
+      // Respect feature flag: disable website analysis entirely when off
+      const { FEATURES } = await import('~/config/features');
+      if (!FEATURES.WEBSITE_TO_VIDEO_ENABLED) {
+        // console.log('📚 [CONTEXT BUILDER] Website analysis disabled by feature flag');
+        return undefined;
+      }
+
       // ONLY analyze websites if explicitly provided with http/https
       let targetUrl = extractFirstValidUrl(input.prompt);
       

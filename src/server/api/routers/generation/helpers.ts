@@ -119,6 +119,17 @@ export async function executeToolFromDecision(
         });
       }
 
+      // Normalize/merge image sources
+      const normalizedImageUrls: string[] | undefined = (() => {
+        const isHttp = (u: any) => typeof u === 'string' && /^https?:\/\//i.test(u);
+        const fromContext = (decision.toolContext.imageUrls || []).filter(isHttp);
+        const fromDirectives = ((decision.toolContext as any).imageDirectives || [])
+          .map((d: any) => d?.url)
+          .filter(isHttp);
+        const merged = [...fromContext, ...fromDirectives];
+        return merged.length > 0 ? Array.from(new Set(merged)) : undefined;
+      })();
+
       toolInput = {
         userPrompt: decision.toolContext.userPrompt,
         projectId,
@@ -126,7 +137,7 @@ export async function executeToolFromDecision(
         requestedDurationFrames: decision.toolContext.requestedDurationFrames, // ADD THIS
         sceneNumber: storyboard.length + 1,
         storyboardSoFar: storyboard,
-        imageUrls: decision.toolContext.imageUrls,
+        imageUrls: normalizedImageUrls,
         videoUrls: decision.toolContext.videoUrls,
         audioUrls: decision.toolContext.audioUrls,
         assetUrls: decision.toolContext.assetUrls, // Pass persistent asset URLs
@@ -155,7 +166,7 @@ export async function executeToolFromDecision(
         // TEMPLATE CONTEXT: Pass template examples for better first-scene generation
         templateContext: decision.toolContext.templateContext,
         imageAction: (decision.toolContext as any)?.imageAction,
-        imageDirectives: (decision.toolContext as any)?.imageDirectives,
+        // Do NOT pass raw imageDirectives; add tool doesn't consume them and schema is strict
       } as AddToolInput;
       
       const addResult = await addTool.run(toolInput);
@@ -375,6 +386,17 @@ export async function executeToolFromDecision(
       targetSelector = extractTargetSelectorFromDirectives((decision.toolContext as any)?.imageDirectives, decision.toolContext?.targetSceneId);
       if (targetSelector) console.log('🧭 [HELPERS] Using selector from directives:', targetSelector);
 
+      // Normalize/merge image sources for EDIT as well (icons may be referenced without real URLs)
+      const normalizedEditImageUrls: string[] | undefined = (() => {
+        const isHttp = (u: any) => typeof u === 'string' && /^https?:\/\//i.test(u);
+        const fromContext = (decision.toolContext.imageUrls || []).filter(isHttp);
+        const fromDirectives = ((decision.toolContext as any).imageDirectives || [])
+          .map((d: any) => d?.url)
+          .filter(isHttp);
+        const merged = [...fromContext, ...fromDirectives];
+        return merged.length > 0 ? Array.from(new Set(merged)) : undefined;
+      })();
+
       // Log what we're about to pass to edit tool
       if (decision.toolContext.imageUrls?.length) {
         console.log('📸 [HELPERS] Image URLs being passed to EDIT tool:', decision.toolContext.imageUrls);
@@ -389,7 +411,7 @@ export async function executeToolFromDecision(
         tsxCode: sceneToEdit.tsxCode, // ✓ Fixed: Using correct field name
         sceneName: sceneToEdit.name, // Pass current scene name to preserve it
         currentDuration: sceneToEdit.duration,
-        imageUrls: decision.toolContext.imageUrls,
+        imageUrls: normalizedEditImageUrls,
         videoUrls: decision.toolContext.videoUrls,
         audioUrls: decision.toolContext.audioUrls,
         targetSelector,
@@ -398,7 +420,7 @@ export async function executeToolFromDecision(
         formatContext: projectFormat,
         modelOverride: decision.toolContext.modelOverride, // Pass model override if provided
         imageAction: (decision.toolContext as any)?.imageAction,
-        imageDirectives: (decision.toolContext as any)?.imageDirectives,
+        // Do NOT pass raw imageDirectives; EDIT tool doesn't consume them and schema is strict.
       } as EditToolInput;
       
       const editResult = await editTool.run(toolInput as EditToolInput);
@@ -816,6 +838,31 @@ export async function executeToolFromDecision(
 
     case 'websiteToVideo':
       console.log('🌐 [HELPERS] Processing websiteToVideo tool');
+      {
+        const { FEATURES } = await import('~/config/features');
+        if (!FEATURES.WEBSITE_TO_VIDEO_ENABLED) {
+          console.log('🌐 [HELPERS] Website pipeline disabled by feature flag, falling back to addScene');
+          // Fallback: treat as a standard addScene using the same prompt/context
+          const fallbackDecision: BrainDecision = {
+            success: true,
+            toolName: 'addScene',
+            toolContext: {
+              ...decision.toolContext,
+              websiteUrl: undefined,
+            },
+            reasoning: (decision.reasoning ? `${decision.reasoning} ` : '') + '[Website tool disabled] Fallback to addScene.',
+            chatResponse: decision.chatResponse,
+          };
+          return await executeToolFromDecision(
+            fallbackDecision,
+            projectId,
+            userId,
+            storyboard,
+            messageId,
+            onSceneComplete
+          );
+        }
+      }
       
       const websiteInput = {
         userPrompt: decision.toolContext.userPrompt,

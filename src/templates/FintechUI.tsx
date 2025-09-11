@@ -8,8 +8,8 @@ import {
   useVideoConfig,
 } from 'remotion';
 
-// @ts-ignore - Window globals from Remotion Player
-const IconifyIcon = (window as any).IconifyIcon;
+// @ts-ignore - Window globals from Remotion Player (guard SSR)
+const IconifyIcon = typeof window !== 'undefined' ? (window as any).IconifyIcon : undefined;
 
 const ChatMessage = ({ text, isUser, delay }: { text: string; isUser: boolean; delay: number }) => {
   const frame = useCurrentFrame();

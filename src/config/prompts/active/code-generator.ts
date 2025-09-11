@@ -60,6 +60,7 @@ User says: "use this image", "add the screenshot", "insert my logo", "put the ph
    • DO NOT use placeholder text like "[USE THE PROVIDED IMAGE URL]" - use the ACTUAL URL
    • DO NOT generate broken URLs like "image-hWjqJKCQ..." patterns
    • Example: <Img src="https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/4ea08b31.../image.jpg" style={{width: "100%", height: "100%", objectFit: "contain"}} />
+   • If text overlays the image/video, add a semi‑transparent gradient overlay (black→transparent, 0.25–0.35 alpha) behind text for readability.
 
 **INTENT B: RECREATE FROM IMAGE**
 User says: "make something like this", "recreate this design", "build a similar layout", "use as inspiration"
@@ -71,6 +72,9 @@ User says: "make something like this", "recreate this design", "build a similar 
 **Decision keywords:**
 - EMBED: "use", "insert", "add", "put", "embed", "place", "show"
 - RECREATE: "like", "similar", "recreate", "inspire", "based on", "copy the style"
+
+
+If imageAction or imageDirectives are provided in context, follow them exactly (override keyword heuristics).
 
 
 You can recreate the design
@@ -251,8 +255,8 @@ Example: "Welcome" = 20f (animate in) + 20f (read) + 20f (hold) = 60 frames tota
 const { AbsoluteFill, Sequence, spring, interpolate, useCurrentFrame, useVideoConfig, Img, Video } = window.Remotion;
 • Immediately call the frame hook:
 const frame = useCurrentFrame();  (Never use currentFrame.)
-• Get fps from useVideoConfig:
-const { fps } = useVideoConfig();  // REQUIRED for spring animations
+• Get fps and canvas size from useVideoConfig:
+const { fps, width, height } = useVideoConfig();  // REQUIRED for spring animations and responsive layout
 • Component declaration:
 export default function Scene_[ID]() – use a unique 8-character ID.
 • Top-level script array: const script_[ID] = [...]
@@ -283,6 +287,10 @@ ANIMATION AND CSS ESSENTIALS
   fontFamily: "Inter" // or "DM Sans", "Playfair Display", etc.
   fontWeight: "700" // use string values for weights
 
+• Reveal grouped/list elements with a 1–4 frame stagger (≈40–120ms at 30fps), consistent per group.
+• Apply subtle depth: background parallax (scale 1.03–1.08 or 4–8px slow translate over the scene); optional 1–3px micro-motion on foreground elements.
+• Use easing presets by role: hero elements spring config { damping: 20, stiffness: 170 }; secondary elements { damping: 18, stiffness: 140 }. Always clamp interpolate outputs.
+
 
 ⸻
 
@@ -290,6 +298,7 @@ HARD PROHIBITIONS (ABSOLUTE)
 • NEVER use import, require, or dynamic import. Do not import from 'react', 'remotion', or any other module.
 • Use ONLY the ALLOWED WINDOW GLOBALS below for all APIs.
 • Always export the component as the single default export. Do NOT assign to window.__REMOTION_COMPONENT, and do NOT use module.exports or named exports.
+• NEVER use Math.random(), Date.now(), setTimeout, requestAnimationFrame, fetch, or any non‑deterministic source. All animations must be deterministic.
 
 ⸻
 
