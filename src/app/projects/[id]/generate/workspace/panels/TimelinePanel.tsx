@@ -983,7 +983,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     const scrollLeft = el.scrollLeft;
     const clickX = clientX - rect.left;
     const actualClickX = clickX + scrollLeft;
-    const contentScrollWidth = (innerContentRef.current?.scrollWidth || rect.width * zoomScale) - END_SPACER_PX;
+    const contentScrollWidth = (innerContentRef.current?.scrollWidth || rect.width * zoomScale) - TIMELINE_END_SPACER_PX;
     const actualWidth = Math.max(1, contentScrollWidth);
     const percentage = Math.max(0, Math.min(1, actualClickX / actualWidth));
     const newFrame = Math.round(percentage * totalDuration);
@@ -1425,7 +1425,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     
     // AUDIO: Move or trim operations mapped by seconds across content width
     if (dragInfo.action === 'audio-move' || dragInfo.action === 'audio-resize-start' || dragInfo.action === 'audio-resize-end') {
-      const contentWidth = (innerContentRef.current?.scrollWidth || rect.width * zoomScale) - END_SPACER_PX;
+      const contentWidth = (innerContentRef.current?.scrollWidth || rect.width * zoomScale) - TIMELINE_END_SPACER_PX;
       const deltaPx = e.clientX - dragInfo.startX;
       const secondsPerPixel = (totalDuration / FPS) / Math.max(1, contentWidth);
       const deltaSec = deltaPx * secondsPerPixel;
@@ -1471,7 +1471,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
 
     // Compute mouse frame with zoom + scroll like playhead logic
     const mouseX = e.clientX - rect.left + (timelineRef.current?.scrollLeft || 0);
-    const contentScrollWidth = (innerContentRef.current?.scrollWidth || rect.width * zoomScale) - END_SPACER_PX;
+    const contentScrollWidth = (innerContentRef.current?.scrollWidth || rect.width * zoomScale) - TIMELINE_END_SPACER_PX;
     const actualWidth = Math.max(1, contentScrollWidth);
     // Allow dragging beyond the current timeline width to extend last scene
     const percentage = actualWidth > 0 ? mouseX / actualWidth : 0; // intentionally NOT clamped
@@ -3099,7 +3099,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                 beyond the last block without altering how block percentages are computed. */}
             <div
               className="absolute top-0 bottom-0"
-              style={{ left: '100%', width: `${END_SPACER_PX}px` }}
+              style={{ left: '100%', width: `${TIMELINE_END_SPACER_PX}px` }}
             />
 
             {/* Playhead - with Bazaar orange gradient */}
