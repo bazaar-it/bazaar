@@ -961,10 +961,19 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
               {/* Panel layout */}
               {openPanels.length > 0 && (
                 <PanelGroup 
-                  key={`pg-${openPanels.map(p=>p.id).join('-')}-${(panelLayout||[]).join('-')}`}
+                  // Keep key stable across layout changes to avoid remount loops
+                  key={`pg-${openPanels.map(p=>p.id).join('-')}`}
                   direction="horizontal" 
                   className="h-full"
-                  onLayout={(layout) => setPanelLayout(layout)}
+                  onLayout={(layout) => {
+                    // Avoid update storms: only set if changed
+                    if (!Array.isArray(layout)) return;
+                    const prev = panelLayout || [];
+                    if (prev.length === layout.length && prev.every((n, i) => n === layout[i])) {
+                      return;
+                    }
+                    setPanelLayout(layout);
+                  }}
                 >
                   {openPanels.map((panel, idx) => (
                       <React.Fragment key={panel?.id || `panel-${idx}`}>
