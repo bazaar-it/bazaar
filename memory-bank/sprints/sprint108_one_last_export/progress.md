@@ -53,4 +53,15 @@ This affects all 5 chunks in the video export, happening in VideoComposition com
   - Composition: `MainCompositionSimple`
   - Frames: 0–149 (5s @ 30fps), 1920x1080
   - Output: S3 public URL (see CLI output)
-  - Result: ✅ Success (mp4 ~266kB)
+- Result: ✅ Success (mp4 ~266kB)
+
+## 2025-09-12 (refactor + DX)
+- SceneErrorBoundary: Dev vs Prod behavior
+  - In dev, show verbose overlay (no masking); in prod, friendly placeholder
+  - File: `src/remotion/MainCompositionSimple.tsx`
+- Icon replacer refactor for maintainability
+  - Extracted helpers:
+    - `icon-replacement/extract-icon-names.ts`
+    - `icon-replacement/visitors.ts` (JSX/CallExpression visitors)
+  - Orchestrator remains `replace-iconify-icons.ts`
+  - No runtime behavior change intended; improves readability and ownership boundaries

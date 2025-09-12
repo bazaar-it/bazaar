@@ -6,6 +6,8 @@ import { Composition, AbsoluteFill, useCurrentFrame, interpolate, spring, Sequen
 import './fonts.css';
 
 // Error Boundary Component for Scene Isolation
+// SceneErrorBoundary: In production, render a friendly placeholder.
+// In development, render a verbose overlay so issues are visible during iteration.
 class SceneErrorBoundary extends React.Component<
   { children: React.ReactNode; sceneId: string; sceneName: string; index: number },
   { hasError: boolean; error?: Error }
@@ -29,8 +31,30 @@ class SceneErrorBoundary extends React.Component<
   }
 
   render() {
+    const isProd = process.env.NODE_ENV === 'production';
     if (this.state.hasError) {
-      // Error placeholder that matches video dimensions
+      // Development: verbose overlay helps surface issues; Production: friendly placeholder
+      if (!isProd) {
+        return (
+          <AbsoluteFill style={{
+            backgroundColor: '#1a1a1a',
+            color: '#ff9e9e',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 24,
+            fontFamily: 'Inter, system-ui, monospace'
+          }}>
+            <div style={{ fontSize: 22, fontWeight: 600, marginBottom: 8 }}>Scene Error (DEV)</div>
+            <div style={{ fontSize: 16, opacity: 0.8, marginBottom: 6 }}>{this.props.sceneName || `Scene ${this.props.index + 1}`}</div>
+            <div style={{ fontSize: 14, opacity: 0.9, maxWidth: '80%', textAlign: 'center', whiteSpace: 'pre-wrap' }}>
+              {this.state.error?.message || 'Unknown error'}
+            </div>
+          </AbsoluteFill>
+        );
+      }
+      // Production placeholder that matches video dimensions
       return (
         <AbsoluteFill style={{ 
           backgroundColor: '#0f0f0f', 

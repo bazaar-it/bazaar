@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { api } from "~/trpc/react";
@@ -11,6 +11,7 @@ export default function QuickCreatePage() {
   const { data: session, status } = useSession();
   const { lastFormat } = useLastUsedFormat();
   const hasRedirectedRef = useRef(false);
+  const [storedLastId, setStoredLastId] = useState<string | null>(null);
   
   // Create project mutation
   const createProjectMutation = api.project.create.useMutation({
@@ -26,6 +27,18 @@ export default function QuickCreatePage() {
   });
   const pruneMutation = api.project.pruneEmpty.useMutation();
   const listQuery = api.project.list.useQuery(undefined, { enabled: status === 'authenticated' });
+  const lastProjectQuery = api.project.getById.useQuery(
+    { id: storedLastId || '' },
+    { enabled: status === 'authenticated' && !!storedLastId, retry: false }
+  );
+
+  // Load lastProjectId from localStorage once
+  useEffect(() => {
+    try {
+      const id = localStorage.getItem('lastProjectId');
+      if (id) setStoredLastId(id);
+    } catch {}
+  }, []);
 
   useEffect(() => {
     // Simple, direct logic - no complex dependencies
@@ -49,15 +62,20 @@ export default function QuickCreatePage() {
       return;
     }
 
-    // 4. Try fast path: redirect to last opened project from localStorage
-    try {
-      const lastId = localStorage.getItem('lastProjectId');
-      if (lastId && !hasRedirectedRef.current) {
+    // 4. Try fast path: validate last opened project before redirecting
+    if (storedLastId && !hasRedirectedRef.current) {
+      if (lastProjectQuery.isLoading || lastProjectQuery.isFetching) {
+        console.log('[QuickCreate] Validating lastProjectId...');
+        return; // wait until validated
+      }
+      if (lastProjectQuery.data?.id) {
         hasRedirectedRef.current = true;
-        router.replace(`/projects/${lastId}/generate`);
+        router.replace(`/projects/${lastProjectQuery.data.id}/generate`);
         return;
       }
-    } catch {}
+      // Not found or error: clear the key and continue to latest/new flow
+      try { localStorage.removeItem('lastProjectId'); } catch {}
+    }
 
     // 5. First, prune empty projects in background (non-blocking)
     if (!pruneMutation.isPending && !pruneMutation.isSuccess) {
@@ -70,7 +88,7 @@ export default function QuickCreatePage() {
       return;
     }
 
-    // 7. If we have projects already, redirect to most recent (list is already ordered)
+    // 7. If we have projects already, redirect to most recent (list is ordered by updatedAt desc server-side)
     const projects = listQuery.data;
     if (projects && projects.length > 0) {
       const latest = projects[0];
