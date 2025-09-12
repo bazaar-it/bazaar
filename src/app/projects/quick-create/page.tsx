@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { api } from "~/trpc/react";
@@ -10,6 +10,7 @@ export default function QuickCreatePage() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const { lastFormat } = useLastUsedFormat();
+  const hasRedirectedRef = useRef(false);
   
   // Create project mutation
   const createProjectMutation = api.project.create.useMutation({
@@ -23,6 +24,8 @@ export default function QuickCreatePage() {
       router.push("/");
     }
   });
+  const pruneMutation = api.project.pruneEmpty.useMutation();
+  const listQuery = api.project.list.useQuery(undefined, { enabled: status === 'authenticated' });
 
   useEffect(() => {
     // Simple, direct logic - no complex dependencies
@@ -46,12 +49,44 @@ export default function QuickCreatePage() {
       return;
     }
 
-    // 4. Create project immediately - don't wait for existing projects list
-    console.log('[QuickCreate] Creating new project with format:', lastFormat);
-    createProjectMutation.mutate({
-      format: lastFormat
-    });
-  }, [status, session, createProjectMutation.isPending, createProjectMutation.isSuccess, lastFormat, router]);
+    // 4. Try fast path: redirect to last opened project from localStorage
+    try {
+      const lastId = localStorage.getItem('lastProjectId');
+      if (lastId && !hasRedirectedRef.current) {
+        hasRedirectedRef.current = true;
+        router.replace(`/projects/${lastId}/generate`);
+        return;
+      }
+    } catch {}
+
+    // 5. First, prune empty projects in background (non-blocking)
+    if (!pruneMutation.isPending && !pruneMutation.isSuccess) {
+      pruneMutation.mutate();
+    }
+
+    // 6. Wait for projects to load
+    if (listQuery.isLoading || listQuery.isFetching) {
+      console.log('[QuickCreate] Waiting for projects list...');
+      return;
+    }
+
+    // 7. If we have projects already, redirect to most recent (list is already ordered)
+    const projects = listQuery.data;
+    if (projects && projects.length > 0) {
+      const latest = projects[0];
+      if (latest?.id && !hasRedirectedRef.current) {
+        hasRedirectedRef.current = true;
+        router.replace(`/projects/${latest.id}/generate`);
+        return;
+      }
+    }
+
+    // 8. Otherwise, create a new project
+    if (!createProjectMutation.isPending && !createProjectMutation.isSuccess) {
+      console.log('[QuickCreate] No existing projects found, creating new with format:', lastFormat);
+      createProjectMutation.mutate({ format: lastFormat });
+    }
+  }, [status, session, createProjectMutation.isPending, createProjectMutation.isSuccess, lastFormat, router, listQuery.isLoading, listQuery.isFetching, listQuery.data, pruneMutation.isPending, pruneMutation.isSuccess]);
 
   // Loading state
   return (
