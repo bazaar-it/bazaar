@@ -9,6 +9,7 @@ import type {
   OrchestrationInput, 
   OrchestrationOutput 
 } from "~/lib/types/ai/brain.types";
+import { FEATURES } from "~/config/features";
 
 export class Orchestrator {
   private contextBuilder = new ContextBuilder();
@@ -29,17 +30,21 @@ export class Orchestrator {
     let enhancedPrompt = input.prompt;
     
     try {
-      // Check for website URL first (before YouTube)
-      const { WebsiteToVideoTool } = await import("~/tools/website/websiteToVideo");
-      if (WebsiteToVideoTool.isWebsiteRequest(input.prompt)) {
-        const websiteUrl = WebsiteToVideoTool.extractUrl(input.prompt);
-        if (websiteUrl && !websiteUrl.includes('youtube.com') && !websiteUrl.includes('youtu.be')) {
-          console.log('🧠 [NEW ORCHESTRATOR] Website URL detected:', websiteUrl);
-          
-          // For website requests, we'll let the intent analyzer decide to use the website tool
-          // But we'll add a hint to the context
-          enhancedPrompt = `${input.prompt}\n\n[CONTEXT: User provided website URL: ${websiteUrl}]`;
+      // Check for website URL first (before YouTube) — DISABLED via feature flag
+      if (FEATURES.WEBSITE_TO_VIDEO_ENABLED) {
+        const { WebsiteToVideoTool } = await import("~/tools/website/websiteToVideo");
+        if (WebsiteToVideoTool.isWebsiteRequest(input.prompt)) {
+          const websiteUrl = WebsiteToVideoTool.extractUrl(input.prompt);
+          if (websiteUrl && !websiteUrl.includes('youtube.com') && !websiteUrl.includes('youtu.be')) {
+            console.log('🧠 [NEW ORCHESTRATOR] Website URL detected:', websiteUrl);
+            // For website requests, we could let the intent analyzer decide to use the website tool
+            // Add a hint to the context
+            enhancedPrompt = `${input.prompt}\n\n[CONTEXT: User provided website URL: ${websiteUrl}]`;
+          }
         }
+      } else {
+        // Explicitly skip website detection when disabled
+        // console.log('🧠 [NEW ORCHESTRATOR] Website pipeline disabled by feature flag');
       }
       
       // Check if this is a YouTube URL with time specification
@@ -236,7 +241,8 @@ export class Orchestrator {
             targetDuration: toolSelection.targetDuration,
             requestedDurationFrames, // ADD THIS - explicit duration from prompt
             referencedSceneIds: toolSelection.referencedSceneIds,
-            websiteUrl: toolSelection.websiteUrl, // Pass website URL for websiteToVideo tool
+            // Website pipeline disabled: do not pass websiteUrl
+            websiteUrl: FEATURES.WEBSITE_TO_VIDEO_ENABLED ? toolSelection.websiteUrl : undefined,
             imageUrls: (input.userContext?.imageUrls as string[]) || undefined,
             videoUrls: (input.userContext?.videoUrls as string[]) || undefined,
             audioUrls: (input.userContext?.audioUrls as string[]) || undefined,
@@ -247,7 +253,9 @@ export class Orchestrator {
             // Add YouTube analysis flag
             isYouTubeAnalysis: hasYouTube && hasTimeSpec,
             // Include template context for better first-scene generation
-            templateContext: contextPacket.templateContext
+            templateContext: contextPacket.templateContext,
+            imageAction: toolSelection.imageAction,
+            imageDirectives: toolSelection.imageDirectives
           },
           workflow: toolSelection.workflow,
         }
@@ -261,7 +269,12 @@ export class Orchestrator {
         hasTemplateContext: !!contextPacket.templateContext,
         templateCount: contextPacket.templateContext?.examples?.length || 0,
         templateNames: contextPacket.templateContext?.examples?.map(t => t.name) || [],
-      });
+      }); 
+      
+      // Log actual image URLs being passed to tools
+      if ((input.userContext?.imageUrls as string[])?.length) {
+        console.log('📸 [NEW ORCHESTRATOR] Image URLs being passed to tool:', input.userContext?.imageUrls);
+      }
       
       console.log('🧠 [NEW ORCHESTRATOR] === ORCHESTRATION COMPLETE ===\n');
       return result;

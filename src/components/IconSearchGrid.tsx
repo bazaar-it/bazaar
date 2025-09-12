@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { Icon } from '@iconify/react';
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, ChevronsUpDown, ChevronLeft, ChevronRight, X, Check } from "lucide-react";
@@ -20,6 +20,14 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 
+
+// Type definitions
+interface IconData {
+  name: string;
+  prefix: string;
+  fullName: string;
+}
+
 // IconButton component to avoid code duplication
 interface IconButtonProps {
   iconName: string;
@@ -33,13 +41,13 @@ function IconButton({ iconName, onClick }: IconButtonProps) {
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-                     <button
-             onClick={onClick}
-             className="group rounded-2xl border p-1 hover:shadow-sm transition flex flex-col items-center gap-1 cursor-pointer w-full aspect-square"
-           >
-             <div className="w-full h-full grid place-items-center">
-               <Icon icon={iconName} className="w-full h-full max-w-full max-h-full" />
-             </div>
+          <button
+            onClick={onClick}
+            className="group rounded-2xl border p-1 hover:shadow-sm transition flex flex-col items-center gap-1 cursor-pointer w-full aspect-square"
+          >
+            <div className="w-full h-full grid place-items-center">
+              <Icon icon={iconName} className="w-full h-full max-w-full max-h-full" />
+            </div>
           </button>
         </TooltipTrigger>
         <TooltipContent>
@@ -47,14 +55,13 @@ function IconButton({ iconName, onClick }: IconButtonProps) {
             <span className="font-medium">{name}</span>
             <span className="text-muted-foreground"> ({prefix})</span>
           </p>
-          <p className="text-xs text-muted-foreground">Click to insert into chat</p>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );
 }
 
-export function IconSearchGrid({ pageSize = 40, onInsertToChat }: { pageSize?: number, onInsertToChat?: (iconCode: string) => void }) {
+export function IconSearchGrid({ onInsertToChat }: { onInsertToChat?: (iconCode: string) => void }) {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [collections, setCollections] = useState<Record<string, { name: string }>>({});
@@ -63,12 +70,12 @@ export function IconSearchGrid({ pageSize = 40, onInsertToChat }: { pageSize?: n
   const [openCollections, setOpenCollections] = useState(false);
   const [collectionsSearch, setCollectionsSearch] = useState("");
   const [recentlyUsed, setRecentlyUsed] = useState<string[]>([]);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  const [page, setPage] = useState(1);
-  const [allIcons, setAllIcons] = useState<{ name: string; prefix: string }[]>([]);
+  const [allIcons, setAllIcons] = useState<IconData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasMoreResults, setHasMoreResults] = useState(false);
 
   // Get project ID from URL params
   const params = useParams();
@@ -90,6 +97,30 @@ export function IconSearchGrid({ pageSize = 40, onInsertToChat }: { pageSize?: n
     if (stored) {
       setRecentlyUsed(JSON.parse(stored));
     }
+  }, []);
+
+  // Track container width for dynamic columns
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const updateWidth = () => {
+      setContainerWidth(container.clientWidth);
+    };
+
+    // Initial measurement
+    updateWidth();
+
+    // Use ResizeObserver for real-time width tracking
+    const resizeObserver = new ResizeObserver(() => {
+      updateWidth();
+    });
+
+    resizeObserver.observe(container);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
   }, []);
 
   // Save icon to recently used
@@ -215,8 +246,8 @@ export function IconSearchGrid({ pageSize = 40, onInsertToChat }: { pageSize?: n
           params.set("query", "a");
         }
         
-        // Fetch maximum results (200 is the limit for Iconify API)
-        params.set("limit", "200");
+        // Set high limit to get as many results as possible
+        params.set("limit", "999");
         if (selectedPrefixes.length > 0) params.set("prefixes", selectedPrefixes.join(","));
         
         // Iconify v2 search endpoint
@@ -226,23 +257,28 @@ export function IconSearchGrid({ pageSize = 40, onInsertToChat }: { pageSize?: n
         const res = await fetch(url);
         if (!res.ok) throw new Error(`Search HTTP ${res.status}`);
         const data = await res.json();
-        console.log('Response:', { iconsCount: data.icons?.length || 0 });
+        console.log('API Response:', { 
+          iconsCount: data.icons?.length || 0, 
+          total: data.total,
+          query: debouncedQuery,
+          url: url
+        });
         
         // Expected shape: { total: number, icons: Array<string> } (v2 API)
         if (!cancelled) {
           // Convert string array to {name, prefix} objects
-          const list = (data.icons ?? []).map((iconName: string) => {
+          const list: IconData[] = (data.icons ?? []).map((iconName: string) => {
             const [prefix, name] = iconName.split(':');
-            return { name, prefix };
-          }).filter((d: any) => d.name && d.prefix);
-          setAllIcons(list);
+            return { name, prefix, fullName: iconName };
+          }).filter((d: IconData) => d.name && d.prefix);
           
-          // Check if there are more results than we can show on one page
-          const hasMore = list.length > pageSize;
-          setHasMoreResults(hasMore);
+          // Remove duplicates based on full icon name (prefix:name)
+          const uniqueIcons = list.filter((icon: IconData, index: number, self: IconData[]) => 
+            index === self.findIndex((i: IconData) => i.fullName === icon.fullName)
+          );
           
-          // Reset to page 1 when search changes
-          setPage(1);
+          setAllIcons(uniqueIcons);
+          console.log('Icons set for display:', uniqueIcons.length, 'from', list.length, 'total');
         }
       } catch (e: any) {
         if (!cancelled) setError(e?.message ?? "Something went wrong with the search");
@@ -252,17 +288,11 @@ export function IconSearchGrid({ pageSize = 40, onInsertToChat }: { pageSize?: n
     }
 
     fetchSearch();
-    // re-run when query or selected libraries change (not page)
-  }, [debouncedQuery, pageSize, selectedPrefixes]);
+    // re-run when query or selected libraries change
+  }, [debouncedQuery, selectedPrefixes]);
 
-  // Calculate current page icons from all icons
-  const currentPageIcons = useMemo(() => {
-    const startIndex = (page - 1) * pageSize;
-    return allIcons.slice(startIndex, startIndex + pageSize);
-  }, [allIcons, page, pageSize]);
-
-  const canGoNext = hasMoreResults && page * pageSize < allIcons.length;
-  const canGoPrevious = page > 1;
+  // Show all icons for scrolling (no pagination)
+  const displayIcons = allIcons;
 
   const togglePrefix = (p: string) => {
     setSelectedPrefixes((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
@@ -272,9 +302,27 @@ export function IconSearchGrid({ pageSize = 40, onInsertToChat }: { pageSize?: n
   const [showAllBadges, setShowAllBadges] = useState(false);
   const maxVisibleBadges = 4;
 
+  // Calculate columns based on container width
+  const calculateColumns = useCallback((width: number) => {
+    // Each icon needs roughly 50-60px (reduced by 20% from 70px)
+    // Let's use 56px as the base size per column (70px * 0.8)
+    const baseColumnWidth = 56;
+    const minColumns = 3;
+    const maxColumns = 8;
+    
+    const calculatedColumns = Math.floor(width / baseColumnWidth);
+    return Math.max(minColumns, Math.min(maxColumns, calculatedColumns));
+  }, []);
+
+  const columns = useMemo(() => {
+    const cols = calculateColumns(containerWidth);
+    console.log('Dynamic columns calculated:', cols, 'for width:', containerWidth);
+    return cols;
+  }, [calculateColumns, containerWidth]);
+
   return (
-    <div className="w-full max-w-7xl mx-auto p-4 space-y-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center">
+    <div ref={containerRef} className="w-full max-w-7xl mx-auto p-4 flex flex-col h-full">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center mb-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 opacity-60" />
           <Input
@@ -374,7 +422,7 @@ export function IconSearchGrid({ pageSize = 40, onInsertToChat }: { pageSize?: n
 
        {/* Selected prefixes badges under search field */}
        {selectedPrefixes.length > 0 && !allLibrariesSelected && (
-         <div className="flex flex-wrap items-center gap-2">
+         <div className="flex flex-wrap items-center gap-2 mb-4">
            {selectedPrefixes
              .slice(0, showAllBadges ? undefined : maxVisibleBadges)
              .map((p) => {
@@ -414,12 +462,12 @@ export function IconSearchGrid({ pageSize = 40, onInsertToChat }: { pageSize?: n
          </div>
        )}
 
-        <div className="py-2">
+        <div className="py-2 flex flex-col flex-1 min-h-0">
           {/* Recently used section */}
           {recentlyUsed.length > 0 && !debouncedQuery && (
             <div className="mb-6">
               <h3 className="text-xs font-semibold text-muted-foreground mb-3">Recently used</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
+              <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
                 {recentlyUsed
                   .slice(0, 16)
                   .map((iconName) => (
@@ -435,34 +483,7 @@ export function IconSearchGrid({ pageSize = 40, onInsertToChat }: { pageSize?: n
 
             <div className="flex items-center justify-between mb-3">
              <div className="text-sm opacity-70">
-               {loading ? "Loading…" : allIcons.length > 0 ? `Results` : "No results"}
-             </div>
-             <div className="flex items-center gap-2">
-               {(canGoPrevious || canGoNext) && (
-                 <>
-                   <Button
-                     variant="outline"
-                     size="icon"
-                     disabled={!canGoPrevious || loading}
-                     onClick={() => setPage((p) => Math.max(1, p - 1))}
-                     title="Previous page"
-                   >
-                     <ChevronLeft className="h-4 w-4" />
-                   </Button>
-                   <span className="text-sm tabular-nums">
-                     {page}
-                   </span>
-                   <Button
-                     variant="outline"
-                     size="icon"
-                     disabled={!canGoNext || loading}
-                     onClick={() => setPage((p) => p + 1)}
-                     title="Next page"
-                   >
-                     <ChevronRight className="h-4 w-4" />
-                   </Button>
-                 </>
-               )}
+               {loading ? "Loading…" : allIcons.length > 0 ? `${allIcons.length} results` : "No results"}
              </div>
            </div>
 
@@ -470,33 +491,33 @@ export function IconSearchGrid({ pageSize = 40, onInsertToChat }: { pageSize?: n
             <div className="text-sm text-red-600 mb-3">{error}</div>
           )}
 
-                     <AnimatePresence mode="popLayout">
-             <motion.div
-               key={`${debouncedQuery}-${selectedPrefixes.join(",")}-${page}`}
-               initial={{ opacity: 0, y: 6 }}
-               animate={{ opacity: 1, y: 0 }}
-               exit={{ opacity: 0, y: -6 }}
-               transition={{ duration: 0.2 }}
-             >
-               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
-                 {currentPageIcons.map((it) => {
-                   const full = `${it.prefix}:${it.name}`;
-                   return (
-                     <IconButton
-                       key={full}
-                       iconName={full}
-                       onClick={() => insertIcon(full)}
-                     />
-                   );
-                 })}
-               </div>
-             </motion.div>
-           </AnimatePresence>
+          {/* Scrollable icon grid container - fill remaining height */}
+          <div className="flex-1 overflow-y-auto">
+            <AnimatePresence mode="popLayout">
+              <motion.div
+                key={`${debouncedQuery}-${selectedPrefixes.join(",")}`}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
+                  {displayIcons.map((it) => {
+                    return (
+                      <IconButton
+                        key={it.fullName}
+                        iconName={it.fullName}
+                        onClick={() => insertIcon(it.fullName)}
+                      />
+                    );
+                  })}
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          </div>
         </div>
 
-      <div className="text-xs opacity-60">
-        Data source: Iconify public API. Click an icon to insert it into chat.
-      </div>
+
     </div>
   );
 }

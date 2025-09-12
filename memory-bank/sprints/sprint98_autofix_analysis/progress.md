@@ -58,3 +58,27 @@ Date: 2025-09-01
 - Preview wrapper cache hygiene:
   - Clear the namespace wrapper cache when the ordered-scenes fingerprint changes.
   - Purpose: Avoid any possibility of stale wrapped code after reorder/insert, even though namespaces are now ID-based.
+
+---
+
+Date: 2025-09-08
+
+- Image upload → generation deep dive documented.
+  - File: `memory-bank/sprints/sprint98_autofix_analysis/image-upload-pipeline-analysis.md`
+  - Covers: UI upload, SSE, tRPC router, Brain orchestration, tool execution, prompts used.
+  - Identified ambiguity: “animate this” + image can map to `addScene` or `imageRecreatorScene` depending on LLM interpretation.
+  - Proposed stabilizers:
+    - Pre-LMM deterministic rules for common patterns (recreate/for scene N/animate this).
+    - Lower Brain temperature to 0.2 for intent classification.
+    - Optional UX hint toggle when images attached (“recreate vs reference”).
+
+—
+
+Date: 2025-09-08 (cont.)
+
+- Began unifying image handling into add/edit:
+  - Brain types extended to include `imageAction` (embed|recreate) in decision.
+  - Brain prompt updated to require `imageAction` when images present and stop recommending a separate image tool.
+  - Router maps legacy `imageRecreatorScene` → `addScene` + `imageAction='recreate'` (soft deprecation).
+  - AddTool now routes image generation by `imageAction` (embed → CodeGenerator; recreate → ImageRecreator prompt path).
+  - Upload route: added async MediaMetadataService hook to tag assets (kind/layout/colors/text hints) for future intent accuracy without prompt-time latency.

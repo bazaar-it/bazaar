@@ -33,7 +33,83 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
   const [userProjects, setUserProjects] = useState(initialProjects);
   const [isCreateTemplateModalOpen, setIsCreateTemplateModalOpen] = useState(false);
   const [isTimelineVisible, setIsTimelineVisible] = useState(false);
+  const [isTimelineMounted, setIsTimelineMounted] = useState(false);
+  const TIMELINE_ANIM_MS = 320;
+  const [timelineAnim, setTimelineAnim] = useState<'enter' | 'exit' | null>(null);
+  useEffect(() => {
+    let t: number | null = null;
+    if (isTimelineVisible) {
+      // Mount and play enter animation
+      setIsTimelineMounted(true);
+      setTimelineAnim('enter');
+      t = window.setTimeout(() => setTimelineAnim(null), TIMELINE_ANIM_MS);
+    } else if (isTimelineMounted) {
+      // Play exit animation, then unmount
+      setTimelineAnim('exit');
+      t = window.setTimeout(() => {
+        setIsTimelineMounted(false);
+        setTimelineAnim(null);
+      }, TIMELINE_ANIM_MS);
+    }
+    return () => { if (t) window.clearTimeout(t); };
+  }, [isTimelineVisible, isTimelineMounted]);
   const workspaceContentAreaRef = useRef<WorkspaceContentAreaGHandle>(null);
+  
+  // Persist/restore timeline visibility with the same workspace key
+  useEffect(() => {
+    try {
+      const key = `bazaar:workspace:${projectId}`;
+      const lastKey = `bazaar:workspace:__last`;
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(key) : null;
+      if (raw) {
+        const cfg = JSON.parse(raw);
+        if (cfg && cfg.timeline && typeof cfg.timeline.visible === 'boolean') {
+          setIsTimelineVisible(Boolean(cfg.timeline.visible));
+        }
+      } else {
+        // Fallback to last-used workspace if no project-specific config yet
+        const lastRaw = typeof window !== 'undefined' ? localStorage.getItem(lastKey) : null;
+        if (lastRaw) {
+          try {
+            const lastCfg = JSON.parse(lastRaw);
+            if (lastCfg && lastCfg.timeline && typeof lastCfg.timeline.visible === 'boolean') {
+              setIsTimelineVisible(Boolean(lastCfg.timeline.visible));
+            }
+          } catch {}
+        }
+      }
+    } catch {}
+  }, [projectId]);
+  
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const key = `bazaar:workspace:${projectId}`;
+    try {
+      const raw = localStorage.getItem(key);
+      const existing = raw ? (() => { try { return JSON.parse(raw) || {}; } catch { return {}; } })() : {};
+      const payload = { ...existing, timeline: { ...(existing.timeline || {}), visible: isTimelineVisible } };
+      localStorage.setItem(key, JSON.stringify(payload));
+      // Also update global snapshot so new projects can inherit timeline state
+      const lastKey = `bazaar:workspace:__last`;
+      try { localStorage.setItem(lastKey, JSON.stringify(payload)); } catch {}
+    } catch {}
+  }, [isTimelineVisible, projectId]);
+  
+  // Cross-tab sync for timeline visibility
+  useEffect(() => {
+    const key = `bazaar:workspace:${projectId}`;
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== key || !e.newValue) return;
+      try {
+        const cfg = JSON.parse(e.newValue);
+        if (cfg && cfg.timeline && typeof cfg.timeline.visible === 'boolean') {
+          setIsTimelineVisible(Boolean(cfg.timeline.visible));
+        }
+      } catch {}
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [projectId]);
   
   const { data: session } = useSession();
   const { setProject, getCurrentProps } = useVideoState();
@@ -204,38 +280,49 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
   // Get current scenes for template creation
   const currentScenes = getCurrentProps()?.scenes || [];
 
-  // Use mobile layout for mobile breakpoint
-  if (breakpoint === 'mobile') {
-    return (
-      <div className="h-[100dvh] flex flex-col overflow-hidden bg-white dark:bg-gray-900">
-        {/* Mobile Header - Compact version */}
-        <div className="sticky top-0 z-40 w-full">
-          <MobileAppHeader
-            projectTitle={title}
-            projectId={projectId}
-            userId={userId}
-            onRename={handleRename}
-            isRenaming={renameMutation.isPending}
-          />
-        </div>
-        
-        {/* Mobile Workspace */}
-        <div className="flex-1 overflow-hidden">
-          <MobileWorkspaceLayout
-            projectId={projectId}
-            userId={userId}
-            initialProps={initialProps}
-            projects={userProjects}
-            onProjectRename={handleProjectRenamed}
-          />
-        </div>
-      </div>
-    );
-  }
+  const isMobile = breakpoint === 'mobile';
 
   // Desktop/Tablet layout
+  // Prevent two-finger horizontal swipe from triggering browser Back/Forward
+  useEffect(() => {
+    const onWheel = (e: WheelEvent) => {
+      if (e.defaultPrevented) return;
+      // Ignore pinch/zoom gestures
+      if (e.ctrlKey || e.metaKey) return;
+      // Treat strong horizontal intent as navigation gesture; block it globally on this page
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        try { e.preventDefault(); } catch {}
+      }
+    };
+    window.addEventListener('wheel', onWheel, { passive: false });
+    return () => window.removeEventListener('wheel', onWheel as any);
+  }, []);
+
   return (
-    <div className="h-[100dvh] flex flex-col overflow-hidden relative bg-white dark:bg-gray-900">
+    <div className="h-[100dvh] flex flex-col overflow-hidden relative bg-white dark:bg-gray-900 overscroll-x-none">
+      {isMobile ? (
+        <>
+          <div className="sticky top-0 z-40 w-full">
+            <MobileAppHeader
+              projectTitle={title}
+              projectId={projectId}
+              userId={userId}
+              onRename={handleRename}
+              isRenaming={renameMutation.isPending}
+            />
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <MobileWorkspaceLayout
+              projectId={projectId}
+              userId={userId}
+              initialProps={initialProps}
+              projects={userProjects}
+              onProjectRename={handleProjectRenamed}
+            />
+          </div>
+        </>
+      ) : (
+        <>
       {/* App Header - Fixed at top with proper z-index and rounded bottom corners */}
       <div className="sticky top-0 z-40 w-full bg-white dark:bg-gray-900 shadow-sm border-b border-gray-100 dark:border-gray-800 rounded-bl-[15px] rounded-br-[15px]">
         <AppHeader
@@ -279,9 +366,17 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
               />
             </div>
             
-            {/* Timeline panel - fixed height based on content */}
-            {isTimelineVisible && (
-              <div className="bg-gray-900 border-t border-gray-200">
+            {/* Timeline panel - fixed height based on content - ADMIN ONLY */}
+            {isTimelineMounted && user?.isAdmin && (
+              <div
+                className="mt-2"
+                style={{
+                  transition: `transform ${TIMELINE_ANIM_MS}ms cubic-bezier(0.25, 1, 0.5, 1), opacity ${TIMELINE_ANIM_MS}ms cubic-bezier(0.25, 1, 0.5, 1)` ,
+                  transform: timelineAnim === 'enter' ? 'scale(0.96)' : timelineAnim === 'exit' ? 'scale(0.96)' : 'scale(1)',
+                  opacity: timelineAnim === 'enter' ? 0 : timelineAnim === 'exit' ? 0 : 1,
+                  willChange: 'transform, opacity'
+                }}
+              >
                 <TimelinePanel
                   key={`timeline-${projectId}`}
                   projectId={projectId}
@@ -321,6 +416,8 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
           updatedAt: new Date()
         }))}
       />
+        </>
+      )}
     </div>
   );
-} 
+}

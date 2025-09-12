@@ -12,6 +12,7 @@ import { AddAudioTool } from "~/tools/addAudio/addAudio";
 import { WebsiteToVideoHandler } from "~/tools/website/websiteToVideoHandler";
 import { SceneOrderBuffer } from "./scene-buffer";
 import type { BrainDecision } from "~/lib/types/ai/brain.types";
+import { extractTargetSelectorFromDirectives } from "./util";
 import type { AddToolInput, EditToolInput, DeleteToolInput, TrimToolInput, ScenePlannerToolInput, ScenePlan } from "~/tools/helpers/types";
 import type { AddAudioInput } from "~/tools/addAudio/addAudio";
 import type { SceneEntity } from "~/generated/entities";
@@ -52,6 +53,14 @@ export async function executeToolFromDecision(
   onSceneComplete?: (scene: SceneEntity) => void  // NEW: Callback for real-time delivery
 ): Promise<{ success: boolean; scene?: SceneEntity; scenes?: SceneEntity[]; partialFailures?: string[]; additionalMessageIds?: string[] }> {
   const startTime = Date.now(); // Track generation time
+
+  console.log('🧭 [HELPERS] Tool execution start:', {
+    tool: decision.toolName,
+    hasContext: !!decision.toolContext,
+    imageAction: (decision.toolContext as any)?.imageAction,
+    directives: (decision.toolContext as any)?.imageDirectives?.length || 0,
+    hasImages: !!decision.toolContext?.imageUrls?.length
+  });
   
   // Get project format for AI context
   const project = await db.query.projects.findFirst({
@@ -72,6 +81,7 @@ export async function executeToolFromDecision(
   let toolInput: AddToolInput | EditToolInput | DeleteToolInput | TrimToolInput;
 
   // Prepare tool input based on tool type
+
   switch (decision.toolName) {
     case 'addScene':
       // SAFETY OVERRIDE: If audio URLs are present, this is an audio add request.
@@ -108,7 +118,7 @@ export async function executeToolFromDecision(
       if (decision.toolContext?.referencedSceneIds?.length && decision.toolContext.referencedSceneIds.length > 0) {
         // Safety: Only include scenes that exist in storyboard
         referenceScenes = storyboard.filter(s => 
-          decision.toolContext.referencedSceneIds!.includes(s.id)
+          decision.toolContext?.referencedSceneIds?.includes(s.id) || false
         );
         
         console.log(`📝 [ROUTER] Including ${referenceScenes.length} reference scenes for ADD operation`);
@@ -134,6 +144,17 @@ export async function executeToolFromDecision(
         });
       }
 
+      // Normalize/merge image sources
+      const normalizedImageUrls: string[] | undefined = (() => {
+        const isHttp = (u: any) => typeof u === 'string' && /^https?:\/\//i.test(u);
+        const fromContext = (decision.toolContext.imageUrls || []).filter(isHttp);
+        const fromDirectives = ((decision.toolContext as any).imageDirectives || [])
+          .map((d: any) => d?.url)
+          .filter(isHttp);
+        const merged = [...fromContext, ...fromDirectives];
+        return merged.length > 0 ? Array.from(new Set(merged)) : undefined;
+      })();
+
       toolInput = {
         userPrompt: decision.toolContext.userPrompt,
         projectId,
@@ -141,14 +162,16 @@ export async function executeToolFromDecision(
         requestedDurationFrames: decision.toolContext.requestedDurationFrames, // ADD THIS
         sceneNumber: storyboard.length + 1,
         storyboardSoFar: storyboard,
-        imageUrls: decision.toolContext.imageUrls,
+        imageUrls: normalizedImageUrls,
         videoUrls: decision.toolContext.videoUrls,
         audioUrls: decision.toolContext.audioUrls,
         assetUrls: decision.toolContext.assetUrls, // Pass persistent asset URLs
         isYouTubeAnalysis: decision.toolContext.isYouTubeAnalysis, // Pass YouTube analysis flag
         // Pass previous scene for style continuity (but not for first scene, GitHub, or Figma components)
         // GitHub and Figma components should have clean styling without previous scene influence
-        previousSceneContext: (storyboard.length > 0 && !decision.toolContext.useGitHub && !decision.toolContext.figmaComponentData) ? {
+        // Only include previous scene context when a previous scene exists.
+        // Guard deprecated/optional fields from earlier pipelines (useGitHub/figmaComponentData).
+        previousSceneContext: (storyboard.length > 0 && !((decision.toolContext as any)?.useGitHub) && !((decision.toolContext as any)?.figmaComponentData)) ? {
           tsxCode: storyboard[storyboard.length - 1].tsxCode,
           style: undefined
         } : undefined,
@@ -163,9 +186,12 @@ export async function executeToolFromDecision(
         // Pass project format for AI context
         projectFormat: projectFormat,
         // FIGMA: Pass Figma component data if available
-        figmaComponentData: decision.toolContext.figmaComponentData,
+        // Pass-through for Figma when available (optional in current schema)
+        figmaComponentData: (decision.toolContext as any)?.figmaComponentData,
         // TEMPLATE CONTEXT: Pass template examples for better first-scene generation
         templateContext: decision.toolContext.templateContext,
+        imageAction: (decision.toolContext as any)?.imageAction,
+        // Do NOT pass raw imageDirectives; add tool doesn't consume them and schema is strict
       } as AddToolInput;
       
       const addResult = await addTool.run(toolInput);
@@ -277,9 +303,12 @@ export async function executeToolFromDecision(
           const idx = parseInt(String(decision.toolContext.targetSceneId).match(/scene-(\d+)-id/i)?.[1] || '0', 10) - 1;
           if (!Number.isNaN(idx) && storyboard[idx]) {
             decision.toolContext.targetSceneId = storyboard[idx].id;
-            sceneToEdit = await db.query.scenes.findFirst({
-              where: eq(scenes.id, decision.toolContext.targetSceneId),
-            });
+            const targetSceneId = decision.toolContext.targetSceneId;
+            if (targetSceneId) {
+              sceneToEdit = await db.query.scenes.findFirst({
+                where: eq(scenes.id, targetSceneId),
+              });
+            }
           }
         } catch {}
       }
@@ -290,7 +319,7 @@ export async function executeToolFromDecision(
       
       // IMPROVED: Always provide neighboring scenes for better context
       // Find the index of the scene being edited
-      const targetSceneIndex = storyboard.findIndex(s => s.id === decision.toolContext.targetSceneId);
+      const targetSceneIndex = storyboard.findIndex(s => s.id === decision.toolContext?.targetSceneId);
       let editReferenceScenes: Array<{id: string, name: string, tsxCode: string}> = [];
       
       // Add explicitly referenced scenes if any
@@ -387,6 +416,27 @@ export async function executeToolFromDecision(
         });
       }
       
+      // Try to derive selector hint from imageDirectives if present
+      let targetSelector: string | undefined;
+      targetSelector = extractTargetSelectorFromDirectives((decision.toolContext as any)?.imageDirectives, decision.toolContext?.targetSceneId);
+      if (targetSelector) console.log('🧭 [HELPERS] Using selector from directives:', targetSelector);
+
+      // Normalize/merge image sources for EDIT as well (icons may be referenced without real URLs)
+      const normalizedEditImageUrls: string[] | undefined = (() => {
+        const isHttp = (u: any) => typeof u === 'string' && /^https?:\/\//i.test(u);
+        const fromContext = (decision.toolContext.imageUrls || []).filter(isHttp);
+        const fromDirectives = ((decision.toolContext as any).imageDirectives || [])
+          .map((d: any) => d?.url)
+          .filter(isHttp);
+        const merged = [...fromContext, ...fromDirectives];
+        return merged.length > 0 ? Array.from(new Set(merged)) : undefined;
+      })();
+
+      // Log what we're about to pass to edit tool
+      if (decision.toolContext.imageUrls?.length) {
+        console.log('📸 [HELPERS] Image URLs being passed to EDIT tool:', decision.toolContext.imageUrls);
+      }
+      
       toolInput = {
         userPrompt: decision.toolContext.userPrompt,
         projectId,
@@ -394,14 +444,18 @@ export async function executeToolFromDecision(
         requestedDurationFrames: decision.toolContext.requestedDurationFrames, // ADD THIS
         sceneId: decision.toolContext.targetSceneId,
         tsxCode: sceneToEdit.tsxCode, // ✓ Fixed: Using correct field name
+        sceneName: sceneToEdit.name, // Pass current scene name to preserve it
         currentDuration: sceneToEdit.duration,
-        imageUrls: decision.toolContext.imageUrls,
+        imageUrls: normalizedEditImageUrls,
         videoUrls: decision.toolContext.videoUrls,
         audioUrls: decision.toolContext.audioUrls,
+        targetSelector,
         errorDetails: decision.toolContext.errorDetails,
         referenceScenes: editReferenceScenes,
         formatContext: projectFormat,
         modelOverride: decision.toolContext.modelOverride, // Pass model override if provided
+        imageAction: (decision.toolContext as any)?.imageAction,
+        // Do NOT pass raw imageDirectives; EDIT tool doesn't consume them and schema is strict.
       } as EditToolInput;
       
       const editResult = await editTool.run(toolInput as EditToolInput);
@@ -429,7 +483,9 @@ export async function executeToolFromDecision(
       
       // Preserve manual trims by default: ONLY change duration if explicitly requested
       const setFields: any = {
+        // Keep tsx and compiled js updates from compilation service
         ...compiledEdit,
+        name: editResult.data.name || sceneToEdit.name, // Preserve scene name
         props: editResult.data.props || sceneToEdit.props,
         updatedAt: new Date(),
       };
@@ -453,9 +509,14 @@ export async function executeToolFromDecision(
         durationChanged,
       });
 
+      const targetSceneIdForUpdate = decision.toolContext.targetSceneId;
+      if (!targetSceneIdForUpdate) {
+        throw new Error('No target scene ID for update');
+      }
+      
       const [updatedScene] = await db.update(scenes)
         .set(setFields)
-        .where(eq(scenes.id, decision.toolContext.targetSceneId))
+        .where(eq(scenes.id, targetSceneIdForUpdate))
         .returning();
       
       if (!updatedScene) {
@@ -469,10 +530,10 @@ export async function executeToolFromDecision(
         
         // Create scene iteration record
         await db.insert(sceneIterations).values({
-          sceneId: decision.toolContext.targetSceneId,
+          sceneId: targetSceneIdForUpdate, // Use the validated ID from above
           projectId,
           operationType: 'edit',
-          userPrompt: decision.toolContext.userPrompt,
+          userPrompt: decision.toolContext.userPrompt || '',
           brainReasoning: decision.reasoning,
           codeBefore: sceneToEdit.tsxCode,
           codeAfter: editResult.data.tsxCode,
@@ -644,13 +705,138 @@ export async function executeToolFromDecision(
         scene: sceneToDelete as any // Cast to any to avoid props type issue
       };
 
-      // [SCENEPLANNER DISABLED] - All scenePlanner logic commented out
-      // console.log(`📋 [HELPERS] Created plan with ${plannerResult.data.scenePlans.length} scenes`);
-      // ... (scenePlanner case logic removed for simplicity)
+    // Typography scenes are handled by addScene
+    case 'typographyScene' as any:
+      // Typography is now handled by addScene tool
+      console.log('🎨 [HELPERS] Typography now handled by ADD tool');
       
-      // Fallback: redirect to addScene for multi-scene requests
-      console.log('⚠️ [HELPERS] scenePlanner disabled - falling back to addScene');
-      throw new Error('scenePlanner is temporarily disabled. Please create scenes one at a time using addScene.');
+      // Build add tool input for text scenes
+      const typographyInput: AddToolInput = {
+        userPrompt: decision.toolContext.userPrompt,
+        projectId,
+        userId,
+        sceneNumber: storyboard.length + 1,
+        storyboardSoFar: storyboard,
+        projectFormat,
+      };
+      
+      const typographyResult = await addTool.run(typographyInput);
+      
+      if (!typographyResult.success || !typographyResult.data) {
+        throw new Error(typographyResult.error?.message || 'Text scene generation failed');
+      }
+      
+      // Save to database
+      const [typographyScene] = await db.insert(scenes).values({
+        projectId,
+        name: typographyResult.data.name,
+        tsxCode: typographyResult.data.tsxCode,
+        duration: typographyResult.data.duration || 90, // Default for text scenes
+        order: storyboard.length,
+        props: {},
+      }).returning();
+      
+      return { success: true, scene: typographyScene as any };
+
+    // Note: legacy imageRecreatorScene removed from ToolName; no case here
+    /* Deprecated implementation kept below for reference
+      
+      // Build image recreator input with proper type checking
+      const imageRecreatorInput: ImageRecreatorToolInput = {
+        userPrompt: decision.toolContext.userPrompt,
+        projectId,
+        userId,
+        imageUrls: decision.toolContext.imageUrls || [], // Ensure it's always an array
+        projectFormat: projectFormat,
+        recreationType: 'full' // Default recreation type
+      };
+      
+      try {
+        const imageResult = await imageRecreatorTool.run(imageRecreatorInput);
+        
+        if (!imageResult.success) {
+          // 🚨 CRITICAL FIX: Don't fallback if image recreator explicitly failed validation
+          // This indicates the generated code has syntax errors or missing patterns
+          // Falling back to addTool would likely generate the same invalid code
+          console.error('🚨 [HELPERS] Image recreator tool failed validation - returning error to prevent app crash');
+          console.error('🚨 [HELPERS] Error details:', imageResult.error);
+          
+          // Return the error directly instead of trying a fallback that might also fail
+          const errorMessage = typeof imageResult.error === 'string' 
+            ? imageResult.error 
+            : imageResult.error?.message || 'Image recreation validation failed - code would crash the app';
+          throw new Error(errorMessage);
+        }
+        
+        if (!imageResult.data) {
+          console.warn('🔄 [HELPERS] Image recreator succeeded but returned no data, falling back to code-generator');
+          throw new Error('Image recreation succeeded but returned no data');
+        }
+        
+        // Save to database (same pattern as addScene)
+        const [imageScene] = await db.insert(scenes).values({
+          projectId,
+          name: imageResult.data.name,
+          tsxCode: imageResult.data.tsxCode,
+          duration: imageResult.data.duration || 150,
+          order: storyboard.length,
+          props: {},
+        }).returning();
+        
+        if (!imageScene) {
+          throw new Error('Failed to save image recreation scene to database');
+        }
+        
+        console.log('✅ [HELPERS] Image recreation successful:', imageScene.name);
+        return { success: true, scene: imageScene as any };
+        
+      } catch (error) {
+        // 🚨 CRITICAL FIX: Only use fallback for unexpected errors, not validation failures
+        if (error instanceof Error && error.message.includes('validation failed')) {
+          // Don't fallback for validation failures - rethrow to prevent app crashes
+          console.error('🚨 [HELPERS] Validation failure detected - not using fallback to prevent crashes');
+          throw error;
+        }
+        
+        console.warn('🔄 [HELPERS] Image recreator tool had unexpected error, falling back to code-generator:', error);
+        
+        // Fall back to code-generator with images (only for unexpected errors)
+        const fallbackInput: AddToolInput = {
+          userPrompt: decision.toolContext.userPrompt,
+          projectId,
+          userId,
+          sceneNumber: storyboard.length + 1,
+          storyboardSoFar: storyboard,
+          imageUrls: decision.toolContext.imageUrls,
+          projectFormat,
+          // FIGMA: Pass Figma component data to fallback
+          figmaComponentData: decision.toolContext.figmaComponentData,
+        };
+        
+        const fallbackResult = await addTool.run(fallbackInput);
+        
+        if (!fallbackResult.success || !fallbackResult.data) {
+          throw new Error(fallbackResult.error?.message || 'Both image recreation and fallback generation failed');
+        }
+        
+        // Save to database with fallback result
+        const [fallbackScene] = await db.insert(scenes).values({
+          projectId,
+          name: fallbackResult.data.name,
+          tsxCode: fallbackResult.data.tsxCode,
+          duration: fallbackResult.data.duration || 150,
+          order: storyboard.length,
+          props: {},
+        }).returning();
+        
+        if (!fallbackScene) {
+          throw new Error('Failed to save fallback scene to database');
+        }
+        
+        console.log('✅ [HELPERS] Fallback to addTool successful:', fallbackScene.name);
+      return { success: true, scene: fallbackScene as any };
+      }
+      */
 
     case 'addAudio':
       console.log('🎵 [HELPERS] Processing addAudio tool');
@@ -696,6 +882,31 @@ export async function executeToolFromDecision(
 
     case 'websiteToVideo':
       console.log('🌐 [HELPERS] Processing websiteToVideo tool');
+      {
+        const { FEATURES } = await import('~/config/features');
+        if (!FEATURES.WEBSITE_TO_VIDEO_ENABLED) {
+          console.log('🌐 [HELPERS] Website pipeline disabled by feature flag, falling back to addScene');
+          // Fallback: treat as a standard addScene using the same prompt/context
+          const fallbackDecision: BrainDecision = {
+            success: true,
+            toolName: 'addScene',
+            toolContext: {
+              ...decision.toolContext,
+              websiteUrl: undefined,
+            },
+            reasoning: (decision.reasoning ? `${decision.reasoning} ` : '') + '[Website tool disabled] Fallback to addScene.',
+            chatResponse: decision.chatResponse,
+          };
+          return await executeToolFromDecision(
+            fallbackDecision,
+            projectId,
+            userId,
+            storyboard,
+            messageId,
+            onSceneComplete
+          );
+        }
+      }
       
       const websiteInput = {
         userPrompt: decision.toolContext.userPrompt,
@@ -732,7 +943,7 @@ export async function executeToolFromDecision(
       return {
         success: true,
         scenes: generatedScenes as any,
-        debugData: websiteResult.debugData, // Pass debug data for admin panel
+        // debugData removed - not part of ToolExecutionResult type
       };
 
     default:
@@ -903,19 +1114,34 @@ async function executeIndividualScene(
         break;
         
       case 'recreate':
-        // Use addTool for image recreation - it handles both embed and recreate intents
-        toolResult = await addTool.run({
-          userPrompt: plan.prompt,
-          projectId,
-          userId,
-          sceneNumber: sceneOrder + 1,
-          storyboardSoFar: storyboard,
-          imageUrls: plan.context.imageUrls || [],
-          projectFormat,
-        });
-        
-        if (!toolResult.success || !toolResult.data) {
-          throw new Error(toolResult.error?.message || 'Image recreation failed');
+        try {
+          toolResult = await addTool.run({
+            userPrompt: plan.prompt,
+            projectId,
+            userId,
+            sceneNumber: sceneOrder + 1,
+            storyboardSoFar: storyboard,
+            imageUrls: plan.context.imageUrls || [],
+            projectFormat,
+            imageAction: 'recreate'
+          });
+          
+          if (!toolResult.success || !toolResult.data) {
+            throw new Error(toolResult.error?.message || 'Recreate plan failed via addTool');
+          }
+        } catch (error) {
+          console.warn(`🔄 [MULTI-SCENE] Image recreation tool failed for scene ${sceneOrder}, falling back to code-generator:`, error);
+          
+          // Fall back to code-generator with images
+          toolResult = await addTool.run({
+            userPrompt: plan.prompt,
+            projectId,
+            userId,
+            sceneNumber: sceneOrder + 1,
+            storyboardSoFar: storyboard,
+            imageUrls: plan.context.imageUrls,
+            projectFormat,
+          });
         }
         break;
         

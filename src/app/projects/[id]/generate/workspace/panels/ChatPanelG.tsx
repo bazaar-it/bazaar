@@ -85,8 +85,9 @@ export default function ChatPanelG({
   userId,
 }: ChatPanelGProps) {
   // Get draft message and attachments from store to persist across panel changes
-  const draftMessage = useVideoState((state) => state.getDraftMessage(projectId));
-  const draftAttachments = useVideoState((state) => state.getDraftAttachments(projectId));
+  const EMPTY_ATTACHMENTS: DraftAttachment[] = React.useMemo(() => [], []);
+  const draftMessage = useVideoState((state) => state.projects[projectId]?.draftMessage || '');
+  const draftAttachments = useVideoState((state) => state.projects[projectId]?.draftAttachments ?? EMPTY_ATTACHMENTS);
   const setDraftMessage = useVideoState((state) => state.setDraftMessage);
   const setDraftAttachments = useVideoState((state) => state.setDraftAttachments);
   const clearDraft = useVideoState((state) => state.clearDraft);
@@ -114,6 +115,7 @@ export default function ChatPanelG({
   );
   const [selectedIcons, setSelectedIcons] = useState<string[]>([]); // Track selected icons
   const [selectedScenes, setSelectedScenes] = useState<{ id: string; index: number; name: string }[]>([]); // Dragged scene mentions
+  const [hiddenAttachments, setHiddenAttachments] = useState<{type: 'icon' | 'media', data: string, name?: string}[]>([]); // Hidden attachments not shown in message text
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -180,6 +182,20 @@ export default function ChatPanelG({
   }, [dbMessages, projectId, syncDbMessages]);
 
 
+  // Helper: sanitize content for display (hide machine-only tokens)
+  const sanitizeForDisplay = useCallback((text: string, isUser: boolean) => {
+    if (!text) return text;
+    let out = text;
+    if (isUser) {
+      // Remove scene targeting hints from display
+      out = out.replace(/\n?Use these specific scenes:[^\n]*\n?/gi, '\n');
+      out = out.replace(/\[scene:[^\]]+\]/gi, '');
+      // Collapse extra whitespace
+      out = out.replace(/\n{3,}/g, '\n\n').replace(/\s{2,}/g, ' ').trim();
+    }
+    return out;
+  }, []);
+
   // Convert VideoState messages to component format for rendering
   const componentMessages: ComponentMessage[] = useMemo(() => {
     // ✅ DEDUPLICATE: Remove duplicate messages by ID to prevent React key errors
@@ -191,7 +207,7 @@ export default function ChatPanelG({
     
     return uniqueMessages.map(msg => ({
       id: msg.id,
-      content: msg.message,
+      content: sanitizeForDisplay(msg.message, msg.isUser),
       isUser: msg.isUser,
       timestamp: new Date(msg.timestamp),
       status: msg.status,
@@ -200,7 +216,7 @@ export default function ChatPanelG({
       videoUrls: msg.videoUrls,
       audioUrls: msg.audioUrls,
     }));
-  }, [messages]);
+  }, [messages, sanitizeForDisplay]);
 
   // ✅ BATCH LOADING: Get iterations for all messages at once
   const messageIds = componentMessages
@@ -397,7 +413,12 @@ export default function ChatPanelG({
       toast.info('Figma mode auto-enabled for design');
     }
     
-    // Extract icon references from the message
+    // Process hidden attachments (icons from MediaPanel)
+    const hiddenIconRefs = hiddenAttachments
+      .filter(att => att.type === 'icon')
+      .map(att => att.data);
+    
+    // Extract any icon references that might still be in the message text (legacy)
     const iconPattern = /\[icon:([^\]]+)\]/g;
     const iconRefs: string[] = [];
     let iconMatch;
@@ -407,10 +428,17 @@ export default function ChatPanelG({
       }
     }
     
-    // If we have icons, append them to the message in a clear format
-    if (iconRefs.length > 0) {
-      trimmedMessage = trimmedMessage.replace(iconPattern, ''); // Remove icon markers
-      trimmedMessage = `${trimmedMessage.trim()}\n\nUse these specific icons: ${iconRefs.map(icon => `<window.IconifyIcon icon="${icon}" />`).join(', ')}`;
+    // Combine hidden icons with any icons in message text
+    const allIconRefs = [...hiddenIconRefs, ...iconRefs];
+    
+    // Remove icon markers from message text for backend processing (they're visual only)
+    const cleanedMessage = trimmedMessage.replace(iconPattern, '').trim();
+    
+    // If we have icons, append them to the backend message in a clear format
+    if (allIconRefs.length > 0) {
+      trimmedMessage = `${cleanedMessage}\n\nUse these specific icons: ${allIconRefs.map(icon => `<window.IconifyIcon icon="${icon}" />`).join(', ')}`.trim();
+    } else {
+      trimmedMessage = cleanedMessage;
     }
     
     // 🚨 NEW: Get image, video, and audio URLs from uploaded media
@@ -498,6 +526,7 @@ export default function ChatPanelG({
     setDraftAttachments(projectId, []); // Clear draft attachments in store too
     setSelectedIcons([]); // Clear icon previews after sending
     setSelectedScenes([]); // Clear scene mentions after sending
+    setHiddenAttachments([]); // Clear hidden attachments after sending
     setIsGenerating(true);
     setGenerationPhase('thinking'); // Start in thinking phase
     
@@ -531,24 +560,37 @@ export default function ChatPanelG({
     }
     
     // Let SSE handle DB sync in background
-    // Use finalMessage if it's a YouTube follow-up, otherwise use original message with @mentions
-    const displayMessage = finalMessage !== trimmedMessage ? finalMessage : originalMessage;
+    // Use finalMessage if it's a YouTube follow-up, otherwise use trimmedMessage (which includes icon info for backend)
+    const backendMessage = finalMessage !== trimmedMessage ? finalMessage : trimmedMessage;
     
-    // ✨ NEW: Extract website URL from message
-    const urlRegex = /https?:\/\/[^\s]+/g;
-    const urls = displayMessage.match(urlRegex);
-    const websiteUrl = urls?.find(url => 
-      !url.includes('youtube.com') && 
-      !url.includes('youtu.be') &&
-      !url.includes('localhost') &&
-      !url.includes('127.0.0.1')
-    );
+    // Website-to-video pipeline is temporarily disabled.
+    // Keep URL extraction commented for future re-enable.
+    // const urlRegex = /https?:\/\/[^\s]+/g;
+    // const urls = backendMessage.match(urlRegex);
+    // const websiteUrl = urls?.find(url => 
+    //   !url.includes('youtube.com') && 
+    //   !url.includes('youtu.be') &&
+    //   !url.includes('localhost') &&
+    //   !url.includes('127.0.0.1')
+    // );
+    const websiteUrl = undefined;
     
     // Pass both GitHub and Figma modes to generation, plus website URL
-    generateSSE(displayMessage, imageUrls, videoUrls, audioUrls, sceneUrls, selectedModel, isGitHubMode || isFigmaMode, websiteUrl);
+    // Use backendMessage which contains icon information for the LLM
+    console.log('[ChatPanelG] Backend message with icon info:', backendMessage);
+    // Do not pass websiteUrl while the pipeline is disabled
+    generateSSE(backendMessage, imageUrls, videoUrls, audioUrls, sceneUrls, selectedModel, isGitHubMode || isFigmaMode, undefined);
+    
+    // Create display message for chat that includes icon information
+    let userDisplayMessage = originalMessage;
+    if (allIconRefs.length > 0) {
+      // Add icon markers to the display message for the chat
+      const iconMarkersText = allIconRefs.map(icon => `[icon:${icon}]`).join(' ');
+      userDisplayMessage = originalMessage ? `${originalMessage} ${iconMarkersText}` : iconMarkersText;
+    }
     
     // Show user message AFTER sending to backend to prevent overwriting
-    addUserMessage(projectId, originalMessage, imageUrls, videoUrls, audioUrls, sceneUrls);
+    addUserMessage(projectId, userDisplayMessage, imageUrls, videoUrls, audioUrls, sceneUrls);
   };
 
   // Handle selecting an asset mention - moved before handleKeyDown to fix ReferenceError
@@ -634,20 +676,6 @@ export default function ChatPanelG({
     // Persist to store for panel switching
     setDraftMessage(projectId, newValue);
     
-    // Extract icon references from the message
-    const iconPattern = /\[icon:([^\]]+)\]/g;
-    const icons: string[] = [];
-    let match;
-    while ((match = iconPattern.exec(newValue)) !== null) {
-      if (match[1]) {
-        icons.push(match[1]);
-      }
-    }
-    if (icons.length > 0) {
-      console.log('[ChatPanelG] Extracted icons:', icons);
-    }
-    setSelectedIcons(icons);
-    
     // Check for @mention context
     if (textareaRef.current && userAssets?.assets) {
       const cursorPosition = textareaRef.current.selectionStart;
@@ -676,6 +704,8 @@ export default function ChatPanelG({
     // Clear attachments when editing scene plan
     setUploadedImages([]);
     setDraftAttachments(projectId, []);
+    setHiddenAttachments([]); // Clear hidden attachments
+    setSelectedIcons([]); // Clear selected icons
     // Focus the textarea after setting the message
     setTimeout(() => {
       if (textareaRef.current) {
@@ -874,28 +904,15 @@ export default function ChatPanelG({
     const handler = (e: Event) => {
       const { url, name } = (e as CustomEvent).detail || {};
       if (typeof url === 'string' && url.length > 0) {
-        // Check if this is an icon reference - handle differently than media files
+        // Check if this is an icon reference - add to hidden attachments instead of message text
         if (url.startsWith('[icon:')) {
-          // Icon reference - just add to message, don't treat as uploaded media
-          const reference = url; // Use the icon reference directly
-          setMessage((prev) => {
-            const newMessage = prev ? `${prev} ${reference}` : reference;
-            // Extract and update icon list for preview
-            const iconPattern = /\[icon:([^\]]+)\]/g;
-            const icons: string[] = [];
-            let match;
-            while ((match = iconPattern.exec(newMessage)) !== null) {
-              if (match[1]) {
-                icons.push(match[1]);
-              }
-            }
-            setSelectedIcons(icons);
-            return newMessage;
-          });
+          const iconName = url.replace(/^\[icon:/, '').replace(/\]$/, '');
+          setHiddenAttachments((prev) => [...prev, { type: 'icon', data: iconName, name: iconName }]);
+          setSelectedIcons((prev) => [...prev, iconName]);
           return;
         }
         
-        // Regular media file - add as uploadedMedia entry
+        // Regular media file - add as uploadedMedia entry (this stays visible as a preview)
         const cleanUrl = url.split('?')[0]?.split('#')[0] || url;
         const ext = cleanUrl.split('.').pop()?.toLowerCase() || '';
         const isVideo = /(mp4|webm|mov|m4v)$/i.test(ext);
@@ -909,7 +926,7 @@ export default function ChatPanelG({
     };
     window.addEventListener('chat-insert-media-url', handler as EventListener);
     return () => window.removeEventListener('chat-insert-media-url', handler as EventListener);
-  }, [setSelectedIcons]);
+  }, []);
 
   // Wrap drag handlers to manage isDragOver state
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -1068,6 +1085,8 @@ export default function ChatPanelG({
     setGenerationPhase('thinking');
     setGenerationComplete(false);
     setUploadedImages(draftAttachments.map(convertFromDraftAttachment)); // Restore draft attachments when switching projects
+    setHiddenAttachments([]); // Clear hidden attachments when switching projects
+    setSelectedIcons([]); // Clear selected icons when switching projects
     
     console.log('[ChatPanelG] Reset state for new project:', projectId);
   }, [projectId]);
@@ -1649,7 +1668,7 @@ export default function ChatPanelG({
   return (
     <div className="flex flex-col h-full">
       {/* Messages container */}
-      <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4" onScroll={handleScroll}>
+      <div ref={chatContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden p-4" onScroll={handleScroll}>
         <div className="space-y-4">
           {messages.map((msg, index) => {
             // Find all scene plan messages
@@ -1691,7 +1710,7 @@ export default function ChatPanelG({
           {/* Show pulsating message UI when generating */}
           {isGenerating && (
             <div className="flex justify-start mb-4">
-              <div className="bg-gray-100 text-gray-900 rounded-2xl px-4 py-3 max-w-[80%]">
+              <div className="bg-gray-100 text-gray-900 rounded-2xl px-4 py-3 max-w-[80%] break-words">
                 <GeneratingMessage phase={generationPhase} />
               </div>
             </div>
@@ -1758,7 +1777,6 @@ export default function ChatPanelG({
               {/* Icon previews */}
               {selectedIcons.length > 0 && (
                 <div className="flex flex-wrap gap-2 px-3 py-2 border-b border-gray-200 bg-gray-50 rounded-t-2xl">
-                  <span className="text-xs text-gray-500 mr-2">Icons:</span>
                   {selectedIcons.map((iconName, index) => (
                     <div 
                       key={`${iconName}-${index}`}
@@ -1774,11 +1792,14 @@ export default function ChatPanelG({
                       <button
                         type="button"
                         onClick={() => {
-                          // Remove icon from message
+                          // Remove icon from both hidden attachments and selected icons
+                          setHiddenAttachments(prev => prev.filter(att => !(att.type === 'icon' && att.data === iconName)));
+                          setSelectedIcons(prev => prev.filter((_, i) => i !== index));
+                          
+                          // Also remove from message text if it exists there (legacy support)
                           const pattern = `[icon:${iconName}]`;
                           const newMessage = message.replace(pattern, '').trim();
                           setMessage(newMessage);
-                          setSelectedIcons(prev => prev.filter((_, i) => i !== index));
                         }}
                         className="ml-1 text-gray-400 hover:text-red-500 transition-colors"
                         aria-label={`Remove ${iconName}`}

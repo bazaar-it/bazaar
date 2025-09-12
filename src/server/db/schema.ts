@@ -106,6 +106,7 @@ export const projects = createTable(
     props: d.jsonb().$type<InputProps>().notNull(),
     audio: d.jsonb().$type<AudioTrack>(),
     audioUpdatedAt: d.timestamp("audio_updated_at", { withTimezone: true }),
+    revision: d.bigint("revision", { mode: 'number' }).default(0).notNull(),
     isWelcome: d.boolean().default(true).notNull(),
     isFavorite: d.boolean().default(false).notNull(),
     createdAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
@@ -284,6 +285,24 @@ export const sceneIterationsRelations = relations(sceneIterations, ({ one }) => 
   project: one(projects, { fields: [sceneIterations.projectId], references: [projects.id] }),
   message: one(messages, { fields: [sceneIterations.messageId], references: [messages.id] }),
 }));
+
+// Scene operations for idempotency and auditing (Phase 2)
+export const sceneOperations = createTable(
+  "scene_operation",
+  (d) => ({
+    id: d.uuid().primaryKey().defaultRandom(),
+    projectId: d.uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    idempotencyKey: d.varchar("idempotency_key", { length: 255 }).notNull(),
+    operationType: d.varchar("operation_type", { length: 50 }).notNull(),
+    payload: d.jsonb(),
+    result: d.jsonb(),
+    createdAt: d.timestamp("created_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  }),
+  (t) => [
+    index("scene_operation_project_idx").on(t.projectId),
+    uniqueIndex("scene_operation_unique_idx").on(t.projectId, t.idempotencyKey),
+  ],
+);
 
 // --- Scene Specs table ---
 // Stores SceneSpec JSON for MCP architecture

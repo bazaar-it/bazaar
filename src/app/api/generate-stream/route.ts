@@ -8,6 +8,7 @@ import { messageService } from '~/server/services/data/message.service';
 import { generateTitle } from '~/server/services/ai/titleGenerator.service';
 import { WebsiteToVideoHandler } from '~/tools/website/websiteToVideoHandler';
 import type { StreamingEvent } from '~/tools/website/websiteToVideoHandler';
+import { FEATURES } from "~/config/features";
 
 // SSE helper to format messages
 function formatSSE(data: any): string {
@@ -183,8 +184,8 @@ export async function GET(request: NextRequest) {
         console.error('[SSE] Title generation setup failed:', titleError);
       }
       
-      // ✨ NEW: Check if this is a website-to-video request
-      if (websiteUrl) {
+      // ✨ Check if this is a website-to-video request (feature-gated)
+      if (websiteUrl && FEATURES.WEBSITE_TO_VIDEO_ENABLED) {
         console.log('[SSE] Website-to-video pipeline detected:', websiteUrl);
         
         // Send initial analysis message

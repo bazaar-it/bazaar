@@ -105,7 +105,8 @@ export class ContextBuilder {
           allAssets: projectAssets.assets.map(a => ({
             url: a.url,
             type: a.type,
-            originalName: a.originalName
+            originalName: a.originalName,
+            tags: a.tags || []
           })),
           logos: projectAssets.logos.map(l => l.url),
           assetUrls: projectAssets.assets.map(a => a.url)
@@ -196,6 +197,13 @@ export class ContextBuilder {
 
   private async buildWebContext(input: OrchestrationInput) {
     try {
+      // Respect feature flag: disable website analysis entirely when off
+      const { FEATURES } = await import('~/config/features');
+      if (!FEATURES.WEBSITE_TO_VIDEO_ENABLED) {
+        // console.log('📚 [CONTEXT BUILDER] Website analysis disabled by feature flag');
+        return undefined;
+      }
+
       // ONLY analyze websites if explicitly provided with http/https
       let targetUrl = extractFirstValidUrl(input.prompt);
       

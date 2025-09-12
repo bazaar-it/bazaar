@@ -12,6 +12,7 @@ import {
   users,
   userCredits,
 } from "~/server/db/schema";
+import { sendNewUserNotification } from "~/server/services/email/notifications";
 
 /**
  * Module augmentation for `next-auth` types. Allows us to add custom properties to the `session`
@@ -133,8 +134,7 @@ export const authConfig = {
         // Import the notification function
         const { sendNewUserNotification } = await import('~/server/services/email/notifications');
         
-        // Try to determine the provider from recent account entries
-        // Fixed: accounts table doesn't have createdAt column, just get the first account
+        // Try to determine the provider from recent account entries (no createdAt column)
         const recentAccount = await db.query.accounts.findFirst({
           where: eq(accounts.userId, user.id),
         });

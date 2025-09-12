@@ -1,9 +1,10 @@
 /**
  * Media Validation for Code Generation
  * Ensures generated code only uses real uploaded media URLs
+ *
+ * Note: Avoid heavyweight imports at module scope to keep this file testable
+ * without bringing in server-only DB code. Dynamic import when needed.
  */
-
-import { mediaContextIntegration } from '~/brain/orchestrator_functions/mediaContextIntegration';
 
 export class MediaValidation {
   /**
@@ -33,10 +34,11 @@ export class MediaValidation {
     
     // If we have provided URLs, use them to replace placeholders
     if (providedUrls && providedUrls.length > 0) {
-      placeholderPatterns.forEach(pattern => {
+      const urls = providedUrls as string[];
+      placeholderPatterns.forEach((pattern) => {
         let matchIndex = 0;
-        fixedCode = fixedCode.replace(pattern, (match) => {
-          const replacement = providedUrls[matchIndex % providedUrls.length];
+        fixedCode = fixedCode.replace(pattern, (match: string) => {
+          const replacement = urls[matchIndex % urls.length]!;
           if (match !== replacement) {
             fixes.push(`Replaced placeholder "${match}" with real URL`);
           }
@@ -48,6 +50,7 @@ export class MediaValidation {
     
     // Second pass: Validate against project media context
     // Pass the provided URLs so validation knows these are valid
+    const { mediaContextIntegration } = await import('~/brain/orchestrator_functions/mediaContextIntegration');
     const validation = await mediaContextIntegration.validateGeneratedCode(
       fixedCode, 
       projectId,
@@ -140,7 +143,7 @@ export class MediaValidation {
     while ((match = srcPattern.exec(code)) !== null) {
       const url = match[1];
       // Only include HTTP(S) URLs, not data: or relative paths
-      if (url.startsWith('http://') || url.startsWith('https://')) {
+      if (typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
         urls.push(url);
       }
     }
@@ -149,7 +152,7 @@ export class MediaValidation {
     const styleUrlPattern = /url\(["']?([^"')]+)["']?\)/g;
     while ((match = styleUrlPattern.exec(code)) !== null) {
       const url = match[1];
-      if (url.startsWith('http://') || url.startsWith('https://')) {
+      if (typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
         urls.push(url);
       }
     }

@@ -30,14 +30,7 @@ export function Footer() {
             >
               Terms of Service
             </Link>
-            <a 
-              href="https://bazaar.featurebase.app/roadmap" 
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-gray-900 transition-colors"
-            >
-              Roadmap
-            </a>
+
             <a 
               href="mailto:jack@bazaar.it" 
               className="hover:text-gray-900 transition-colors"

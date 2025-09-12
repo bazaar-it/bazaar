@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { PromptUsageDropdown } from "~/components/usage/PromptUsageDropdown";
 import { generateCleanFilename } from "~/lib/utils/filename";
 import React from "react";
+import LiveBadge from "~/components/marketing/LiveBadge";
 
 // Function to generate a consistent color based on the user's name
 function stringToColor(string: string) {
@@ -331,10 +332,14 @@ export default function AppHeader({
   return (
     <header className="flex items-center px-6 py-3 w-full bg-background z-10" style={{ height: 68 }}>
       {/* Left: Logo */}
-      <div className="flex items-center flex-shrink-0">
+      <div className="flex items-center flex-shrink-0 gap-3">
         <a href="/" className="flex items-center" aria-label="Go to homepage">
           <Image src="/bazaar-logo.png" alt="Bazaar" width={79} height={30} className="object-contain" priority />
         </a>
+        {/* Site-wide Live indicator */}
+        <div className="hidden sm:inline-flex">
+          <LiveBadge pollMs={60000} />
+        </div>
       </div>
 
       {/* Center: Project Title - Responsive */}

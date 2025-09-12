@@ -6,7 +6,7 @@
 import { createTRPCRouter } from "~/server/api/trpc";
 
 // Import all operations from modular files
-import { generateScene, removeScene, updateSceneName, restoreScene } from "./generation/scene-operations";
+import { generateScene, removeScene, updateSceneName, restoreScene, trimLeft } from "./generation/scene-operations";
 import { getProjectScenes } from "./generation/project-operations";
 import { 
   getMessageIterations, 
@@ -22,6 +22,7 @@ export const generationUniversalRouter = createTRPCRouter({
   removeScene,
   restoreScene,
   updateSceneName,
+  trimLeft,
   
   // Project operations
   getProjectScenes,

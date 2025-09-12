@@ -10,7 +10,7 @@
 // TOOL NAMES - Original 4 tools plus 3 new multi-scene tools
 // ============================================================================
 
-export type ToolName = 'addScene' | 'editScene' | 'deleteScene' | 'trimScene' | 'addAudio' | 'websiteToVideo'; // | 'scenePlanner'; [DISABLED]
+export type ToolName = 'addScene' | 'editScene' | 'deleteScene' | 'trimScene' | 'addAudio' | 'websiteToVideo'; // | 'scenePlanner' [DISABLED]
 
 // ============================================================================
 // TOOL TO OPERATION MAPPING - Single source of truth
@@ -41,6 +41,13 @@ export interface BrainDecision {
   // Context for the selected tool
   toolContext?: {
     userPrompt: string;
+    // Image handling intent decided by the Brain when images are present
+    imageAction?: 'embed' | 'recreate';
+    imageDirectives?: Array<{
+      url: string;
+      action: 'embed' | 'recreate';
+      target?: 'newScene' | { sceneId: string; selector?: string };
+    }>;
     targetSceneId?: string;
     targetDuration?: number; // For trim operations
     requestedDurationFrames?: number; // Explicit duration from user prompt (e.g. "5 seconds" = 150)
@@ -226,6 +233,12 @@ export interface ToolSelectionResult {
   targetDuration?: number; // For trim operations - exact frame count
   referencedSceneIds?: string[]; // For cross-scene style/color matching
   websiteUrl?: string; // For websiteToVideo tool
+  imageAction?: 'embed' | 'recreate';
+  imageDirectives?: Array<{
+    url: string;
+    action: 'embed' | 'recreate';
+    target?: 'newScene' | { sceneId: string; selector?: string };
+  }>;
   reasoning?: string;
   error?: string;
   needsClarification?: boolean;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { api } from "~/trpc/react";
@@ -9,82 +9,102 @@ import { useLastUsedFormat } from "~/hooks/use-last-used-format";
 export default function QuickCreatePage() {
   const router = useRouter();
   const { data: session, status } = useSession();
-  const { lastFormat, updateLastFormat } = useLastUsedFormat();
+  const { lastFormat } = useLastUsedFormat();
+  const hasRedirectedRef = useRef(false);
+  const [storedLastId, setStoredLastId] = useState<string | null>(null);
   
-  // Check for existing projects (for title generation and smart redirect)
-  const { data: existingProjects, isLoading: projectsLoading } = api.project.list.useQuery(undefined, {
-    enabled: !!session?.user,
-  });
-
   // Create project mutation
   const createProjectMutation = api.project.create.useMutation({
     onSuccess: (result) => {
-      console.log(`Quick created project with format: ${lastFormat}`);
-      updateLastFormat(lastFormat); // Save the format for next time
+      console.log(`[QuickCreate] Project created, redirecting to: /projects/${result.projectId}/generate`);
       router.push(`/projects/${result.projectId}/generate`);
     },
     onError: (error) => {
-      console.error("Failed to quick create project:", error);
-      // Log error but don't redirect - let user retry
+      console.error("[QuickCreate] Failed to create project:", error);
+      // Fallback to home page on error
+      router.push("/");
     }
   });
+  const pruneMutation = api.project.pruneEmpty.useMutation();
+  const listQuery = api.project.list.useQuery(undefined, { enabled: status === 'authenticated' });
+  const lastProjectQuery = api.project.getById.useQuery(
+    { id: storedLastId || '' },
+    { enabled: status === 'authenticated' && !!storedLastId, retry: false }
+  );
+
+  // Load lastProjectId from localStorage once
+  useEffect(() => {
+    try {
+      const id = localStorage.getItem('lastProjectId');
+      if (id) setStoredLastId(id);
+    } catch {}
+  }, []);
 
   useEffect(() => {
-    // Redirect to login if not authenticated
-    if (status === "loading") return;
+    // Simple, direct logic - no complex dependencies
+    
+    // 1. Wait for auth to load
+    if (status === "loading") {
+      console.log('[QuickCreate] Waiting for auth...');
+      return;
+    }
+    
+    // 2. If not authenticated, redirect to login
     if (!session?.user) {
+      console.log('[QuickCreate] No user session, redirecting to login');
       router.push("/login?redirect=/projects/quick-create");
       return;
     }
 
-    // Wait for projects to load
-    if (projectsLoading) return;
+    // 3. If already creating or created, wait
+    if (createProjectMutation.isPending || createProjectMutation.isSuccess) {
+      console.log('[QuickCreate] Already creating or created');
+      return;
+    }
 
-    // Smart redirect logic: if user has projects, redirect to latest
-    if (existingProjects && existingProjects.length > 0) {
-      console.log('[QuickCreate] User has projects, redirecting to latest');
-      const latestProject = existingProjects[0]; // Already sorted by updatedAt
-      if (latestProject?.id) {
-        router.push(`/projects/${latestProject.id}/generate`);
+    // 4. Try fast path: validate last opened project before redirecting
+    if (storedLastId && !hasRedirectedRef.current) {
+      if (lastProjectQuery.isLoading || lastProjectQuery.isFetching) {
+        console.log('[QuickCreate] Validating lastProjectId...');
+        return; // wait until validated
+      }
+      if (lastProjectQuery.data?.id) {
+        hasRedirectedRef.current = true;
+        router.replace(`/projects/${lastProjectQuery.data.id}/generate`);
+        return;
+      }
+      // Not found or error: clear the key and continue to latest/new flow
+      try { localStorage.removeItem('lastProjectId'); } catch {}
+    }
+
+    // 5. First, prune empty projects in background (non-blocking)
+    if (!pruneMutation.isPending && !pruneMutation.isSuccess) {
+      pruneMutation.mutate();
+    }
+
+    // 6. Wait for projects to load
+    if (listQuery.isLoading || listQuery.isFetching) {
+      console.log('[QuickCreate] Waiting for projects list...');
+      return;
+    }
+
+    // 7. If we have projects already, redirect to most recent (list is ordered by updatedAt desc server-side)
+    const projects = listQuery.data;
+    if (projects && projects.length > 0) {
+      const latest = projects[0];
+      if (latest?.id && !hasRedirectedRef.current) {
+        hasRedirectedRef.current = true;
+        router.replace(`/projects/${latest.id}/generate`);
         return;
       }
     }
 
-    // User has no projects, create a new one
-    console.log('[QuickCreate] User has no projects, creating new one');
-    
-    // Don't create if already creating
-    if (createProjectMutation.isPending || createProjectMutation.isSuccess) {
-      return;
+    // 8. Otherwise, create a new project
+    if (!createProjectMutation.isPending && !createProjectMutation.isSuccess) {
+      console.log('[QuickCreate] No existing projects found, creating new with format:', lastFormat);
+      createProjectMutation.mutate({ format: lastFormat });
     }
-
-    // Auto-create project with last used format (defaults to landscape)
-    const createProject = async () => {
-      // Generate unique title
-      let title = "Untitled Video";
-      if (existingProjects && existingProjects.length > 0) {
-        // Find the highest number
-        const numbers = existingProjects
-          .map((p: any) => {
-            const match = /^Untitled Video (\d+)$/.exec(p.title || '');
-            return match && match[1] ? parseInt(match[1], 10) : 0;
-          })
-          .filter((n: number) => !isNaN(n));
-        
-        const highestNumber = Math.max(0, ...numbers);
-        title = highestNumber === 0 && !existingProjects.some((p: any) => p.title === "Untitled Video") 
-          ? "Untitled Video" 
-          : `Untitled Video ${highestNumber + 1}`;
-      }
-      
-      // Create project with last used format (defaults to landscape)
-      createProjectMutation.mutate({
-        format: lastFormat
-      });
-    };
-
-    createProject();
-  }, [session, status, router, createProjectMutation, existingProjects, lastFormat, projectsLoading]);
+  }, [status, session, createProjectMutation.isPending, createProjectMutation.isSuccess, lastFormat, router, listQuery.isLoading, listQuery.isFetching, listQuery.data, pruneMutation.isPending, pruneMutation.isSuccess]);
 
   // Loading state
   return (
@@ -155,20 +175,16 @@ export default function QuickCreatePage() {
           {/* Text content with monospace font */}
           <div className="space-y-3 max-w-sm mx-auto">
             <h1 className="text-xl font-mono font-light text-white tracking-wide">
-              {projectsLoading ? "INITIALIZING..." : 
-               existingProjects && existingProjects.length > 0 ? "LOADING PROJECT..." :
-               "CREATING WORKSPACE..."}
+              CREATING WORKSPACE...
             </h1>
             
             {/* Format indicator - tech style */}
-            {(!projectsLoading && (!existingProjects || existingProjects.length === 0)) && (
-              <div className="flex items-center justify-center gap-2">
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/20 rounded text-xs font-mono">
-                  <span className="text-white/60">FORMAT:</span>
-                  <span className="text-white uppercase">{lastFormat}</span>
-                </div>
+            <div className="flex items-center justify-center gap-2">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/20 rounded text-xs font-mono">
+                <span className="text-white/60">FORMAT:</span>
+                <span className="text-white uppercase">{lastFormat}</span>
               </div>
-            )}
+            </div>
             
             {/* Progress indicator - terminal style */}
             <div className="flex items-center justify-center gap-1 mt-6 font-mono text-white/40 text-xs">
@@ -190,4 +206,4 @@ export default function QuickCreatePage() {
       `}</style>
     </div>
   );
-} 
+}

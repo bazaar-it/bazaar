@@ -4,6 +4,7 @@ import { AIClientService } from "~/server/services/ai/aiClient.service";
 import { getModel } from "~/config/models.config";
 import { SYSTEM_PROMPTS } from "~/config/prompts.config";
 import type { OrchestrationInput, ToolSelectionResult, ContextPacket } from "~/lib/types/ai/brain.types";
+import { FEATURES } from "~/config/features";
 
 export class IntentAnalyzer {
   private modelConfig = getModel("brain");
@@ -39,7 +40,27 @@ export class IntentAnalyzer {
       // Debug log to see what brain actually returned
       console.log('🎯 [NEW INTENT ANALYZER] Raw parsed JSON:', JSON.stringify(parsed, null, 2));
       
-      const result = this.processBrainDecision(parsed, input);
+      let result = this.processBrainDecision(parsed, input);
+
+      // Soft tie-breaker: if imageAction is undefined and attached images look like UI, prefer 'recreate'
+      try {
+        if (!result.imageAction && Array.isArray(input.userContext?.imageUrls) && input.userContext!.imageUrls!.length > 0) {
+          const urls: string[] = (input.userContext!.imageUrls as string[]) || [];
+          const assets = (contextPacket as any)?.assetContext?.allAssets || [];
+          const looksLikeUI = urls.some((u) => {
+            const a = assets.find((x: any) => x.url === u);
+            if (!a) return false;
+            const tags: string[] = a.tags || [];
+            const isPhotoOrLogo = tags.includes('kind:photo') || tags.includes('kind:logo');
+            const uiHints = tags.includes('kind:ui') || tags.includes('layout:dashboard') || tags.includes('layout:screenshot') || tags.includes('layout:mobile-ui') || tags.includes('layout:code-editor');
+            return uiHints || !isPhotoOrLogo;
+          });
+          if (looksLikeUI) {
+            result.imageAction = 'recreate';
+            console.log('🎯 [INTENT] Defaulting imageAction to "recreate" for UI-like assets (soft tie-breaker)');
+          }
+        }
+      } catch {}
       
       console.log('🎯 [NEW INTENT ANALYZER] Decision:', {
         toolName: result.toolName,
@@ -117,10 +138,73 @@ export class IntentAnalyzer {
 NOTE: All tools are multimodal. When images are referenced, include them in the tool's imageUrls parameter.`;
     }
     
-    // Check if current prompt has images  
+    // Check if current prompt has images and add metadata hints
     const currentImageUrls = (input.userContext?.imageUrls as string[]) || [];
     if (currentImageUrls.length > 0) {
       imageInfo += `\n\nCURRENT MESSAGE: Includes ${currentImageUrls.length} image(s) uploaded with this request.`;
+      
+      // Be explicit about which image is "this image" and add metadata-based intelligence
+      if (currentImageUrls.length > 1) {
+        imageInfo += `\n\n🚨 MULTIPLE IMAGES UPLOADED - USE METADATA FOR INTELLIGENT DECISIONS:`;
+        imageInfo += `\nWhen user says "this image" without specifics:`;
+        imageInfo += `\n- If context suggests background/embed → choose image with hint:embed or kind:photo`;
+        imageInfo += `\n- If context suggests UI/interface → choose image with hint:recreate or kind:ui`;
+        imageInfo += `\n- If ambiguous → use the LAST image (most recent)\n`;
+        
+        imageInfo += `\nImage list with metadata:`;
+        currentImageUrls.forEach((url, index) => {
+          const isLast = index === currentImageUrls.length - 1;
+          const label = isLast ? ' <- MOST RECENT' : '';
+          imageInfo += `\n  ${index + 1}. ${url.split('/').pop()?.substring(0, 50)}${label}`;
+        });
+      }
+      
+      // Check if we have metadata hints for these images
+      console.log('🔍 [INTENT] Looking for metadata hints for', currentImageUrls.length, 'images');
+      if (contextPacket.assetContext && (contextPacket.assetContext as any).allAssets) {
+        const assets = (contextPacket.assetContext as any).allAssets || [];
+        console.log('🔍 [INTENT] Found', assets.length, 'assets in context');
+        
+        currentImageUrls.forEach((url, index) => {
+          console.log('🔍 [INTENT] Searching for metadata for URL:', url);
+          const asset = assets.find((a: any) => a.url === url);
+          
+          if (asset) {
+            console.log('🔍 [INTENT] Found asset with tags:', asset.tags);
+            if (asset.tags?.length > 0) {
+              const relevantTags = asset.tags.filter((t: string) => 
+                t.startsWith('kind:') || t.startsWith('layout:') || t.startsWith('hint:')
+              );
+              if (relevantTags.length > 0) {
+                const hasEmbedHint = relevantTags.some((t: string) => t.includes('embed'));
+                const hasRecreateHint = relevantTags.some((t: string) => t.includes('recreate'));
+                const isPhoto = relevantTags.some((t: string) => t.includes('photo'));
+                const isUI = relevantTags.some((t: string) => t.includes('ui'));
+                
+                imageInfo += `\nImage ${index + 1} metadata: ${relevantTags.join(', ')}`;
+                
+                // Add specific guidance based on metadata
+                // Conservative default: prefer recreate for UI/unknown; embed only for photos/logos
+                if (hasRecreateHint || isUI || (!isPhoto && !relevantTags.some((t: string) => t.includes('logo')))) {
+                  imageInfo += ` → BEST FOR: recreating as components, NOT backgrounds`;
+                } else if (hasEmbedHint || isPhoto) {
+                  imageInfo += ` → BEST FOR: backgrounds, decorative elements, direct display`;
+                }
+                
+                console.log('✅ [INTENT] Added metadata hints with guidance:', relevantTags);
+              } else {
+                console.log('⚠️ [INTENT] Asset has tags but none are relevant:', asset.tags);
+              }
+            } else {
+              console.log('⚠️ [INTENT] Asset found but has no tags');
+            }
+          } else {
+            console.log('❌ [INTENT] No asset found for URL:', url);
+          }
+        });
+      } else {
+        console.log('❌ [INTENT] No asset context available');
+      }
     }
     
     // Add conversation context with recent action detection
@@ -149,22 +233,21 @@ Analyzed: ${new Date(web.analyzedAt).toLocaleString()}
 The AI has access to visual screenshots of this website and can reference them for brand matching, design inspiration, and style consistency.`;
     }
     
-    // Add project assets context
+    // Add project assets context (with tags/hints if available)
     let assetInfo = "";
     if (contextPacket.assetContext && contextPacket.assetContext.assetUrls.length > 0) {
-      assetInfo = `\n\nPROJECT ASSETS (Previously uploaded):
-${contextPacket.assetContext.assetUrls.length} assets available in this project:`;
-      
-      // Show first few assets as examples
-      contextPacket.assetContext.allAssets.slice(0, 5).forEach((asset, idx) => {
-        assetInfo += `\n${idx + 1}. ${asset.originalName} (${asset.type})`;
+      const assets = (contextPacket.assetContext as any).allAssets || [];
+      const logos = (contextPacket.assetContext as any).logos || [];
+      assetInfo = `\n\nPROJECT ASSETS (Previously uploaded): ${assets.length} asset(s)`;
+
+      assets.slice(0, 5).forEach((asset: any, index: number) => {
+        const tags = Array.isArray(asset.tags) && asset.tags.length ? ` [tags: ${asset.tags.slice(0,5).join(', ')}]` : '';
+        assetInfo += `\n${index + 1}. ${asset.originalName} (${asset.type})${tags}`;
       });
-      
-      if (contextPacket.assetContext.logos.length > 0) {
-        assetInfo += `\n\nLOGOS: ${contextPacket.assetContext.logos.length} logo(s) detected in project`;
+      if (logos.length > 0) {
+        assetInfo += `\nLOGOS: ${logos.length} logo(s) available`;
       }
-      
-      assetInfo += `\n\nWhen user references "the logo", "my image", "that file from before", they likely mean one of these project assets.`;
+      assetInfo += `\nHint tags may include kind:logo/ui, layout:*, color:#xxxxxx, hasText, hint:embed/hint:recreate.`;
     }
 
     return `USER: "${prompt}"
@@ -231,7 +314,7 @@ Respond with JSON only.`;
     }
 
     // Single tool operation
-    const result: ToolSelectionResult = {
+    let result: ToolSelectionResult = {
       success: true,
       toolName: parsed.toolName,
       reasoning: parsed.reasoning,
@@ -239,8 +322,22 @@ Respond with JSON only.`;
       targetDuration: parsed.targetDuration, // Pass through targetDuration for trim
       referencedSceneIds: parsed.referencedSceneIds, // Pass through referenced scenes
       websiteUrl: parsed.websiteUrl, // Pass through website URL for websiteToVideo tool
+      imageAction: parsed.imageAction, // Brain-driven image intent
+      imageDirectives: parsed.imageDirectives, // Optional per-image actions
       userFeedback: parsed.userFeedback,
     };
+
+    // Guard: disable website tool when the feature flag is off
+    if (!FEATURES.WEBSITE_TO_VIDEO_ENABLED && result.toolName === 'websiteToVideo') {
+      // Fallback to a safe default (addScene) and strip website specifics
+      result = {
+        ...result,
+        toolName: 'addScene',
+        websiteUrl: undefined,
+        reasoning: (parsed.reasoning ? `${parsed.reasoning} ` : '') + '[Website tool disabled] Proceeding with standard scene generation.',
+        userFeedback: parsed.userFeedback || 'Proceeding with a standard scene (website pipeline is temporarily disabled).'
+      };
+    }
 
     // Extract requested duration
     const requestedDurationSeconds = this.extractRequestedDuration(input.prompt);

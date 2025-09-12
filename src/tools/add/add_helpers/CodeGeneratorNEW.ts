@@ -3,7 +3,9 @@ import { getModel } from "~/config/models.config";
 import { getParameterizedPrompt } from "~/config/prompts.config";
 import { extractDurationFromCode, analyzeDuration } from "~/lib/utils/codeDurationExtractor";
 import { getSmartTransitionContext } from "~/lib/utils/transitionContext";
-import { IMAGE_RECREATOR } from "~/config/prompts/active/image-recreator";
+import { TECHNICAL_GUARDRAILS_BASE } from "~/config/prompts/active/bases/technical-guardrails";
+import { IMAGE_EMBED_MODE } from "~/config/prompts/active/modes/image-embed";
+import { IMAGE_RECREATE_MODE } from "~/config/prompts/active/modes/image-recreate";
 import type { CodeGenerationInput, CodeGenerationOutput, ImageToCodeInput } from "~/tools/helpers/types";
 import { MediaValidation } from "./mediaValidation";
 import { validateAndFixCode } from "~/lib/utils/codeValidator";
@@ -53,7 +55,7 @@ export class UnifiedCodeProcessor {
     
     // 🚨 CRITICAL FIX: Remove mysterious "x" prefix bug - check multiple patterns
     // This bug causes "x is not defined" errors and is one of the most common failures
-    const firstLine = cleanCode.split('\n')[0].trim();
+    const firstLine = (cleanCode.split('\n')[0] || '').trim();
     if (firstLine === 'x' || firstLine === 'x;' || firstLine === 'x ') {
       console.error('🚨🚨🚨 [UNIFIED PROCESSOR] DETECTED "X" BUG - Removing standalone "x" from first line');
       console.error('First line was:', firstLine);
@@ -105,7 +107,7 @@ export class UnifiedCodeProcessor {
     
     // 🚨 CRITICAL: Apply comprehensive validation and fixes
     console.log('[UNIFIED PROCESSOR] Applying validation pipeline...');
-    const validationResult = validateAndFixCode(cleanCode);
+    const validationResult: any = validateAndFixCode(cleanCode);
     
     if (!validationResult.isValid && validationResult.fixedCode) {
       console.warn('[UNIFIED PROCESSOR] Code had issues, applying fixes:', validationResult.fixesApplied);
@@ -115,8 +117,8 @@ export class UnifiedCodeProcessor {
       // Continue with the code anyway - better to try than fail completely
     }
     
-    if (validationResult.fixesApplied.length > 0) {
-      console.log('[UNIFIED PROCESSOR] Applied fixes:', validationResult.fixesApplied.join(', '));
+    if ((validationResult.fixesApplied?.length || 0) > 0) {
+      console.log('[UNIFIED PROCESSOR] Applied fixes:', (validationResult.fixesApplied as string[]).join(', '));
     }
     
     // Extract duration
@@ -164,100 +166,76 @@ export class UnifiedCodeProcessor {
    * UNIFIED: Generate scene name based on tool type and content
    */
   private generateSceneName(toolName: string, userPrompt: string, code: string): string {
-    // First, try to extract meaningful content from the prompt regardless of tool type
-    
-    // Check for quoted text which often indicates the main content
+    const clamp = (s: string) => s.trim().substring(0, 40);
+    const titleCase = (words: string[]) => words
+      .slice(0, 5)
+      .map((w, i) => i === 0 || w.length > 3 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w.toLowerCase())
+      .join(' ');
+
+    // 1) Quoted phrases usually carry essence
     const quotedMatch = userPrompt.match(/["']([^"']+)["']/);
-    if (quotedMatch?.[1] && quotedMatch[1].length > 2 && quotedMatch[1].length < 50) {
-      // Clean up and format the quoted text
-      const cleanText = quotedMatch[1]
-        .split(' ')
-        .slice(0, 4)
-        .map((word, i) => i === 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word)
-        .join(' ');
-      return cleanText.substring(0, 40);
+    if (quotedMatch?.[1] && quotedMatch[1].length >= 3) {
+      return clamp(titleCase(quotedMatch[1].split(/\s+/)));
     }
-    
-    // Look for specific content types
+
+    // 2) Prefer prominent text found in generated code (first large text node)
+    const textNodes = Array.from(code.matchAll(/>([^<>{}\n][^<>{}]*)</g))
+      .map((m) => (m[1] ? m[1].trim() : ''))
+      .filter((t) => t.length > 0);
+    const meaningful = textNodes
+      .map(t => t.replace(/[\s]+/g, ' ').trim())
+      .filter(t => t.length >= 3 && !/^\d+$/.test(t) && !/^[•\-–]/.test(t));
+    if (meaningful.length > 0) {
+      const candidate = meaningful.sort((a, b) => b.length - a.length)[0]!.slice(0, 30);
+      if (candidate && !/^(scene|title|text|new)$/i.test(candidate)) {
+        return clamp(candidate.charAt(0).toUpperCase() + candidate.slice(1));
+      }
+    }
+
+    // 3) Extract key content from prompt
     const contentPatterns = [
-      // Typography/Text patterns
-      { pattern: /(?:text|title|heading|label)(?:\s+(?:that\s+)?(?:says?|showing|displaying|with))?\s*[:"]?\s*(.+?)(?:["\s]|$)/i, prefix: '' },
-      { pattern: /(?:says?|showing|displaying)\s+(.+?)(?:\s+with|\s+in|\s+on|$)/i, prefix: '' },
-      
-      // Visual element patterns
-      { pattern: /(?:create|make|add|generate|show|display|animate)\s+(?:a\s+|an\s+)?(.+?)(?:\s+with|\s+that|\s+which|$)/i, prefix: '' },
-      { pattern: /(?:a|an|the)\s+(.+?)\s+(?:scene|animation|component|visual|effect|graphic)/i, prefix: '' },
-      
-      // Action-based patterns
-      { pattern: /(?:introducing|presenting|showcasing|featuring|highlighting)\s+(.+?)(?:\s+with|$)/i, prefix: '' },
-      
-      // Specific UI components
-      { pattern: /(dashboard|chart|graph|animation|particle|effect|transition|logo|button|card|slider|hero|banner|gallery|form|menu|modal|tooltip|badge|avatar|spinner|loader|progress|timeline|calendar|table|list|grid|countdown|testimonial|pricing|features?|cta|call.?to.?action)/i, prefix: '' }
+      { pattern: /(?:title|heading|label)\s*(?:that\s+)?(?:says?|showing|displaying|with)?\s*[:\"]?\s*([^\"\n]+?)(?:\s+with|\s+in|\s+on|$)/i },
+      { pattern: /(?:create|make|add|generate|show|display|animate)\s+(?:a\s+|an\s+)?([^\n]+?)(?:\s+with|\s+that|\s+which|$)/i },
+      { pattern: /(?:introducing|presenting|showcasing|featuring|highlighting)\s+([^\n]+?)(?:\s+with|$)/i },
     ];
-    
-    for (const { pattern, prefix } of contentPatterns) {
-      const match = userPrompt.match(pattern);
-      if (match?.[1]) {
-        // Clean up the extracted text
-        let cleanName = match[1]
-          .replace(/[.,!?;:'"]+$/, '') // Remove trailing punctuation
-          .replace(/^[.,!?;:'"]+/, '') // Remove leading punctuation
+    for (const { pattern } of contentPatterns) {
+      const m = userPrompt.match(pattern);
+      if (m?.[1]) {
+        const raw = m[1]
+          .replace(/[.,!?;:'\"]+$/, '')
+          .replace(/^[.,!?;:'\"]+/, '')
           .trim();
-        
-        // Skip if it's too short or generic
-        if (cleanName.length < 3 || /^(a|an|the|this|that|some|any)$/i.test(cleanName)) {
-          continue;
-        }
-        
-        // Format the name nicely
-        const words = cleanName.split(/\s+/).slice(0, 4);
-        const formatted = words
-          .map((word, i) => {
-            // Capitalize first word and important words
-            if (i === 0 || word.length > 3) {
-              return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-            }
-            return word.toLowerCase();
-          })
-          .join(' ');
-        
-        const finalName = prefix ? `${prefix}${formatted}` : formatted;
-        if (finalName.length > 2) {
-          return finalName.substring(0, 40);
+        if (raw && raw.length >= 3) {
+          return clamp(titleCase(raw.split(/\s+/)));
         }
       }
     }
-    
-    // Tool-specific fallbacks
-    switch (toolName.toLowerCase()) {
-      case 'typography':
-        // Try to extract text from the generated code if prompt didn't help
-        const codeTextMatch = code.match(/>([^<>{}\n]+)</);
-        if (codeTextMatch?.[1] && codeTextMatch[1].length > 2 && codeTextMatch[1].length < 50) {
-          const cleanText = codeTextMatch[1].trim().substring(0, 30);
-          return cleanText.charAt(0).toUpperCase() + cleanText.slice(1);
-        }
-        return 'Text Animation';
-        
-      case 'image_recreator':
-        return 'Visual Scene';
-        
-      default:
-        // Extract key action words as last resort
-        const actionWords = userPrompt.match(/\b(intro|outro|transition|overlay|background|foreground|header|footer|section|segment|clip|sequence)\b/gi);
-        if (actionWords && actionWords.length > 0) {
-          const word = actionWords[0];
-          return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase() + ' Scene';
-        }
-        
-        // Count the scene number if we can
-        const sceneNumberMatch = userPrompt.match(/scene\s*(\d+)/i);
-        if (sceneNumberMatch?.[1]) {
-          return `Scene ${sceneNumberMatch[1]}`;
-        }
-        
-        return 'Motion Scene'; // Better than just "New" or "Generated Scene"
-    }
+
+    // 4) Map common intents to expressive names with optional nouns
+    const lower = userPrompt.toLowerCase();
+    const noun = (() => {
+      const tokens = userPrompt
+        .replace(/["'`]/g, '')
+        .split(/\s+/)
+        .filter(w => w.length > 2 && !/^(create|make|add|generate|please|a|an|the|and|or|to|of|for|with|scene|video|project)$/i.test(w));
+      return tokens[0] || '';
+    })();
+    if (/\bhero|intro|opening\b/.test(lower)) return clamp(titleCase(['Hero', noun || 'Intro']));
+    if (/\bcta|call\s*to\s*action|signup|sign\s?up\b/.test(lower)) return 'Call To Action';
+    if (/\bfeature|features\b/.test(lower)) return 'Feature Highlights';
+    if (/\bmetric|kpi|stats?|statistics|numbers\b/.test(lower)) return 'Key Metrics';
+    if (/\btestimonial|quote|review\b/.test(lower)) return 'Customer Testimonial';
+    if (/\bchart|graph|dashboard\b/.test(lower)) return clamp(titleCase([noun || 'Analytics', 'Dashboard']));
+    if (/\blogo\b/.test(lower)) return 'Logo Reveal';
+
+    // 5) Last resort: distill prompt to 2–4 meaningful words
+    const distilled = userPrompt
+      .replace(/["'`]/g, '')
+      .split(/\s+/)
+      .filter(w => w.length > 2 && !/^(create|make|add|generate|please|a|an|the|and|or|to|of|for|with|scene|video|project|new|my|our)$/i.test(w))
+      .slice(0, 4);
+    const fallback = titleCase(distilled);
+    return fallback || 'Scene';
   }
 
   /**
@@ -287,7 +265,8 @@ export class UnifiedCodeProcessor {
     
     try {
       // Build message content with text and images - include URLs in prompt text too!
-      const imageUrlsList = input.imageUrls.map((url, i) => `Image ${i + 1}: ${url}`).join('\n');
+      const filteredUrls = input.imageUrls.filter((u) => /^https?:\/\//i.test(u));
+      const imageUrlsList = filteredUrls.map((url, i) => `Image ${i + 1}: ${url}`).join('\n');
       const enhancedPrompt = `${input.userPrompt}
 
 UPLOADED IMAGES TO USE:
@@ -303,7 +282,7 @@ CRITICAL: You MUST use these exact image URLs above in your generated code with 
       const supportedImages = [];
       const avifImages = [];
       
-      for (const url of input.imageUrls) {
+      for (const url of filteredUrls) {
         console.log('🖼️ [IMAGE RECREATOR] Adding image URL to message:', url);
         
         if (url.toLowerCase().includes('.avif')) {
@@ -328,11 +307,9 @@ CRITICAL: You MUST use these exact image URLs above in your generated code with 
         console.warn(`⚠️ [IMAGE RECREATOR] Skipped ${avifImages.length} AVIF images. Using ${supportedImages.length} supported images.`);
       }
       
-      // Replace placeholders in IMAGE_RECREATOR content
-      const imageRecreatorPrompt = IMAGE_RECREATOR.content
-        .replace(/{{WIDTH}}/g, input.projectFormat?.width.toString() || '1920')
-        .replace(/{{HEIGHT}}/g, input.projectFormat?.height.toString() || '1080')
-        .replace(/{{FORMAT}}/g, input.projectFormat?.format?.toUpperCase() || 'LANDSCAPE');
+      // Build system prompt from base + recreate mode + canvas context
+      const canvasLine = `Canvas: ${input.projectFormat?.width || 1920}x${input.projectFormat?.height || 1080} (${(input.projectFormat?.format || 'landscape').toUpperCase()})`;
+      const imageRecreatorPrompt = `${TECHNICAL_GUARDRAILS_BASE}\n${IMAGE_RECREATE_MODE}\n${canvasLine}`;
       
       const response = await AIClientService.generateResponse(
         getModel('codeGenerator'),
@@ -426,9 +403,12 @@ CRITICAL: You MUST use these exact image URLs above in your generated code with 
     
     // Check cache first (skip for YouTube since it's unique)
     if (!input.isYouTubeAnalysis && input.projectId) {
+      const previousScene = (input.storyboardContext && input.storyboardContext.length > 0)
+        ? input.storyboardContext[input.storyboardContext.length - 1]?.tsxCode
+        : undefined;
       const cached = codeCache.get(input.userPrompt, input.projectId, {
         format: input.projectFormat?.format,
-        previousScene: input.storyboardContext?.[input.storyboardContext.length - 1]?.tsxCode,
+        previousScene,
       });
       
       if (cached) {
@@ -539,12 +519,13 @@ FUNCTION NAME: ${input.functionName}`;
 
       // Add storyboard context if available (for consistency across scenes)
       if (input.storyboardContext && input.storyboardContext.length > 0) {
+        const storyboardScenes = input.storyboardContext.slice(-3);
         userPrompt += `\n\n📽️ EXISTING SCENES IN PROJECT (for consistency):
 You have ${input.storyboardContext.length} existing scene(s) in this project. Maintain visual consistency with them.
 
-${input.storyboardContext.slice(-3).map((scene, i) => {
+${storyboardScenes.map((scene, i) => {
   // Include full code for the most recent scene, excerpts for others
-  const isLastScene = i === input.storyboardContext.slice(-3).length - 1;
+  const isLastScene = i === storyboardScenes.length - 1;
   const codeToShow = isLastScene ? scene.tsxCode : scene.tsxCode.substring(0, 1500);
   
   return `
@@ -687,13 +668,16 @@ ${ex.code}
       
       // Cache the generated code for future use (skip YouTube)
       if (!input.isYouTubeAnalysis && input.projectId) {
+        const prevScene = (input.storyboardContext && input.storyboardContext.length > 0)
+          ? input.storyboardContext[input.storyboardContext.length - 1]?.tsxCode
+          : undefined;
         codeCache.set(input.userPrompt, input.projectId, {
           tsxCode: result.code,
           name: result.name,
           duration: result.duration,
         }, {
           format: input.projectFormat?.format,
-          previousScene: input.storyboardContext?.[input.storyboardContext.length - 1]?.tsxCode,
+          previousScene: prevScene,
         });
       }
       
@@ -905,20 +889,17 @@ export default function ${input.functionName}() {
   /**
    * Generate code directly from images
    */
-  async generateCodeFromImage(input: ImageToCodeInput & { assetUrls?: string[] }): Promise<CodeGenerationOutput> {
+  async generateCodeFromImage(input: ImageToCodeInput & { assetUrls?: string[]; imageAction?: 'embed' | 'recreate' }): Promise<CodeGenerationOutput> {
     try {
       const config = getModel('codeGenerator');
       
       console.log('==================== codeGenerator reached:');
       console.log('==================== generateCodeFromImage reached:');
       
-      // Get the IMAGE_CODE_GENERATOR prompt specifically for image-based generation
-      const systemPrompt = getParameterizedPrompt('CODE_GENERATOR', {
-        FUNCTION_NAME: input.functionName,
-        WIDTH: input.projectFormat?.width.toString() || '1920',
-        HEIGHT: input.projectFormat?.height.toString() || '1080',
-        FORMAT: input.projectFormat?.format?.toUpperCase() || 'LANDSCAPE'
-      });
+      // Build system prompt from base + mode + canvas context
+      const canvasLine = `Canvas: ${input.projectFormat?.width || 1920}x${input.projectFormat?.height || 1080} (${(input.projectFormat?.format || 'landscape').toUpperCase()})`;
+      const modeLine = input.imageAction === 'recreate' ? IMAGE_RECREATE_MODE : IMAGE_EMBED_MODE;
+      const systemPrompt = { role: 'system' as const, content: `${TECHNICAL_GUARDRAILS_BASE}\n${modeLine}\n${canvasLine}` };
       
       // Build user message for vision API - include the actual user prompt AND image URLs!
       const imageUrlsList = input.imageUrls.map((url, i) => `Image ${i + 1}: ${url}`).join('\n');
@@ -949,7 +930,9 @@ ANIMATION REQUIREMENTS:
         { type: 'text', text: userPrompt }
       ];
 
-      for (const url of input.imageUrls) {
+      // Ensure we only send HTTPS image URLs to the vision API
+      const filteredUrls2 = input.imageUrls.filter((u) => /^https?:\/\//i.test(u));
+      for (const url of filteredUrls2) {
         visionMessagesContent.push({ 
           type: 'image_url', 
           image_url: { url } 
@@ -959,39 +942,35 @@ ANIMATION REQUIREMENTS:
       const response = await AIClientService.generateResponse(
         config,
         [{ role: 'user', content: visionMessagesContent }],
-        { role: 'system', content: systemPrompt.content }
+        systemPrompt
       );
 
-      // Clean up code
-      let cleanCode = response?.content?.trim() || '';
-      cleanCode = cleanCode.replace(/^```(?:javascript|tsx|ts|js)?\n?/i, '').replace(/\n?```$/i, '');
-      
+      const rawOutput = response?.content ?? '';
+      // Robust extraction: Use the unified processor to isolate TSX code only
+      let processed = this.processAIResponse(rawOutput, 'IMAGE_TO_CODE', input.userPrompt, input.functionName);
+
       // Validate and fix any hallucinated URLs
       if (input.projectId) {
         const validation = await MediaValidation.validateAndFixCode(
-          cleanCode,
+          processed.code,
           input.projectId,
-          input.imageUrls
+          filteredUrls2
         );
-        
         if (validation.wasFixed) {
           console.log('🔧 [IMAGE-TO-CODE] Fixed hallucinated URLs:', validation.fixes);
-          cleanCode = validation.code;
+          processed.code = validation.code;
         }
       }
-      
-      // Extract duration from image-generated code
-      const durationAnalysis = analyzeDuration(cleanCode);
-      
+
       return {
-        code: cleanCode,
-        name: this.extractSceneNameFromPrompt(input.userPrompt), // Extract meaningful name from prompt
-        duration: durationAnalysis.frames,
-        reasoning: `Generated motion graphics directly from image analysis with ${durationAnalysis.frames} frames duration`,
+        code: processed.code,
+        name: this.extractSceneNameFromPrompt(input.userPrompt),
+        duration: processed.duration,
+        reasoning: `Generated motion graphics directly from image analysis with ${processed.duration} frames duration`,
         debug: {
           prompt: { system: 'Vision-based generation', user: `${input.imageUrls.length} images provided` },
-          response: response?.content || '',
-          parsed: { code: cleanCode, imageCount: input.imageUrls.length, durationAnalysis },
+          response: rawOutput,
+          parsed: { code: processed.code, imageCount: input.imageUrls.length, durationAnalysis: analyzeDuration(processed.code) },
         },
       };
     } catch (error) {

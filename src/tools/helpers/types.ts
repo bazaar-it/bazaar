@@ -71,6 +71,13 @@ export interface AddToolInput extends BaseToolInput {
   imageUrls?: string[];
   videoUrls?: string[];
   audioUrls?: string[];
+  // Brain-driven image handling intent when imageUrls present
+  imageAction?: 'embed' | 'recreate';
+  imageDirectives?: Array<{
+    url: string;
+    action: 'embed' | 'recreate';
+    target?: 'newScene' | { sceneId: string; selector?: string };
+  }>;
   isYouTubeAnalysis?: boolean; // Flag indicating this is YouTube analysis that should be followed closely
   webContext?: {
     originalUrl: string;
@@ -109,10 +116,19 @@ export interface AddToolOutput extends BaseToolOutput {
 export interface EditToolInput extends BaseToolInput {
   sceneId: string;       // Just for reference
   tsxCode: string;       // ✓ FIXED: Was existingCode
+  sceneName?: string;    // Current scene name to preserve
   currentDuration?: number;
   imageUrls?: string[];
   videoUrls?: string[];
   audioUrls?: string[];
+  targetSelector?: string; // Optional CSS-like hint for where to place/embed
+  // Brain-driven image handling intent when imageUrls present
+  imageAction?: 'embed' | 'recreate';
+  imageDirectives?: Array<{
+    url: string;
+    action: 'embed' | 'recreate';
+    target?: 'newScene' | { sceneId: string; selector?: string };
+  }>;
   errorDetails?: string;
   referenceScenes?: Array<{  // For cross-scene style/color matching
     id: string;
@@ -138,6 +154,7 @@ export interface EditToolInput extends BaseToolInput {
 
 export interface EditToolOutput extends BaseToolOutput {
   tsxCode: string;       // Updated code
+  name?: string;         // Scene name (preserved from input)
   duration?: number;     // Only if changed
   props?: Record<string, any>;
   changesApplied?: string[];
@@ -335,6 +352,12 @@ export const addToolInputSchema = baseToolInputSchema.extend({
   imageUrls: z.array(z.string()).optional().describe("Image URLs for reference"),
   videoUrls: z.array(z.string()).optional().describe("Video URLs for reference"),
   audioUrls: z.array(z.string()).optional().describe("Audio URLs for background music"),
+  imageAction: z.enum(['embed','recreate']).optional().describe('How to handle provided images'),
+  imageDirectives: z.array(z.object({
+    url: z.string(),
+    action: z.enum(['embed','recreate']),
+    target: z.union([z.literal('newScene'), z.object({ sceneId: z.string(), selector: z.string().optional() })]).optional()
+  })).optional().describe('Per-image directives for mixed intent'),
   webContext: z.object({
     originalUrl: z.string(),
     screenshotUrls: z.object({
@@ -367,6 +390,12 @@ export const editToolInputSchema = baseToolInputSchema.extend({
   imageUrls: z.array(z.string()).optional().describe("Image URLs for reference"),
   videoUrls: z.array(z.string()).optional().describe("Video URLs for reference"),
   audioUrls: z.array(z.string()).optional().describe("Audio URLs for background music"),
+  imageAction: z.enum(['embed','recreate']).optional().describe('How to handle provided images'),
+  imageDirectives: z.array(z.object({
+    url: z.string(),
+    action: z.enum(['embed','recreate']),
+    target: z.union([z.literal('newScene'), z.object({ sceneId: z.string(), selector: z.string().optional() })]).optional()
+  })).optional().describe('Per-image directives for mixed intent'),
   errorDetails: z.string().optional().describe("Error details if fixing errors"),
   referenceScenes: z.array(z.object({
     id: z.string(),
@@ -407,15 +436,7 @@ export const trimToolInputSchema = baseToolInputSchema.extend({
 // SCHEMAS FOR NEW SPECIALIZED TOOLS
 // ============================================================================
 
-export const imageRecreatorToolInputSchema = baseToolInputSchema.extend({
-  imageUrls: z.array(z.string()).min(1, "At least one image URL is required"),
-  recreationType: z.enum(['full', 'segment']).optional(),
-  projectFormat: z.object({
-    format: z.enum(['landscape', 'portrait', 'square']),
-    width: z.number(),
-    height: z.number(),
-  }).optional(),
-});
+// (Removed) ImageRecreator tool types — use Add/Edit with imageAction instead
 
 export const scenePlannerToolInputSchema = baseToolInputSchema.extend({
   storyboardSoFar: z.array(z.object({

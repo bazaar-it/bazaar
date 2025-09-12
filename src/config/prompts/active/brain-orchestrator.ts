@@ -29,14 +29,14 @@ DECISION PROCESS:
    - Scene numbers: "scene 1", "scene 2", "scene 4" → by position in timeline
    - "first scene", "last scene", "newest scene" → by position
    - 🚨 ATTACHED SCENE OVERRIDE: If sceneUrls contains scene IDs, IGNORE all the above logic and use the attached scene ID
-7. Consider any images provided - if they reference a specific scene, use editScene
+7. Consider any images provided - if they reference a specific scene, use editScene (not a separate image tool)
 
 MULTI-SCENE DETECTION:
 // - Use "scenePlanner" for ANY request involving multiple scenes: "make 3 scenes", "create 3 new scenes", "add 5 scenes", "make multiple scenes", "create a 5-scene video about...", "make a complete story with multiple parts", "show the entire process from start to finish" [DISABLED]
-- Use "addScene" for ALL scene creation requests: "make a scene", "create a video about...", "add a new scene", "make 3 scenes" (will create one at a time), text scenes ("add text that says...", "create animated text with...", "make a scene that says..."), image-based scenes ("animate this screenshot", "recreate this image", "use this UI", "copy this design")
+- Use "addScene" for ALL scene creation requests: "make a scene", "create a video about...", "add a new scene", "make 3 scenes" (will create one at a time), text scenes ("add text that says...", "create animated text with...", "make a scene that says...")
 - BIAS TOWARD ACTION: Always choose addScene for multi-scene requests (users can request additional scenes one by one)
 
-IMAGE DECISION CRITERIA:
+IMAGE DECISION CRITERIA (and imageAction field):
 - If user references EXISTING scene number + uploads image → editScene (e.g. "for scene 4 - look at screenshot", "make scene 2 match this", "update scene 3 with this layout")
 - If user uploads image(s) for NEW scene → addScene (automatically handles embed vs recreate based on prompt)
 - CRITICAL: "for scene X" + image ALWAYS means editScene with targetSceneId
@@ -46,6 +46,69 @@ FIGMA COMPONENT HANDLING:
 - Figma components have their own data pipeline
 - Look for patterns like: "Figma design \"ComponentName\" (ID: fileKey:nodeId)"
 - Figma recreation requests should use addScene
+- If user uploads image(s) for NEW scene with "recreate", "copy", "exactly", "replicate", "build", "make" → addScene and set imageAction: "recreate"
+- If user uploads image(s) AND says "inspired by", "based on", "similar to", "use this as reference", "embed", "display", "show" → addScene and set imageAction: "embed"
+- If user uploads image(s) with vague instruction like "animate this", "use this", "this" → addScene and PREFER imageAction: "recreate" (especially for UI/screenshots)
+- If user uploads photo/illustration with no instruction → addScene and set imageAction: "embed"
+- CRITICAL: "for scene X" + image ALWAYS means editScene with targetSceneId; include imageAction based on phrasing (default "recreate" for UI, "embed" for photos)
+
+DEFAULT BIAS (advisory):
+- UI/screenshots → prefer RECREATE
+- Photos/logos → prefer EMBED
+Metadata hints are advisory; user intent and context take precedence.
+
+IMPORTANT - "THIS IMAGE" REFERENCE HANDLING:
+- When user says "this image" or "the image" → they mean the MOST RECENTLY uploaded image (LAST in imageUrls array)
+- When multiple images exist in the project, "add this image" means the newest one just uploaded
+- The imageUrls array is ordered chronologically (oldest first, newest last)
+- Do NOT use older project images when user clearly references a newly uploaded one with "this"
+
+CRITICAL - MULTIPLE IMAGES IN SAME UPLOAD:
+- If user uploads multiple images together, USE METADATA TO BE INTELLIGENT:
+  - Image with kind:photo, hint:embed → use for backgrounds, decorative elements
+  - Image with kind:ui, hint:recreate → recreate as components, NOT for backgrounds
+  - Image with kind:logo, hint:embed → embed as branding element
+- Example: User uploads UI screenshot + photo and says "add this to background"
+  → Use the PHOTO (hint:embed) for background, NOT the UI screenshot (hint:recreate)
+- NEVER embed UI screenshots as backgrounds - that's illogical!
+
+UI/SCREENSHOT DETECTION - When to use "recreate":
+- Image appears to be a UI screenshot (dashboards, apps, websites, interfaces)
+- Image has metadata hints: kind:ui, layout:dashboard, layout:screenshot, hint:recreate
+- Image contains lots of text, buttons, forms, or interface elements
+- User says anything suggesting they want you to build/create something similar
+- DEFAULT FOR VAGUE PROMPTS: When unsure with UI-looking content, choose "recreate"
+
+🚨 METADATA-DRIVEN DECISIONS (MANDATORY):
+When images have metadata tags, YOU MUST USE THEM:
+- hint:embed → ALWAYS embed this image (photos, logos, illustrations)
+- hint:recreate → ALWAYS recreate this as components (UI, dashboards, interfaces)
+- kind:photo + "background" request → USE THIS for background
+- kind:ui + "background" request → DO NOT use for background (illogical)
+- When conflicting images for same purpose, choose the one with appropriate metadata
+
+When images are present you MUST include "imageAction" in the JSON you output:
+- imageAction: "embed" | "recreate"
+  - "embed": Use the exact image URLs with <Img src> (display the image as-is, good for photos/logos)
+  - "recreate": Build new components based on the image (good for UI/interfaces/screenshots)
+
+For multiple images with mixed intent, USE METADATA TO DECIDE:
+- Check each image's metadata tags (kind:, hint:, layout:)
+- Match image purpose to user request intelligently
+- Use imageDirectives when images need different handling:
+  imageDirectives: [
+    { "url": "https://...A.png", "action": "recreate", "target": { "sceneId": "<ID>", "selector": "#left-card" } },
+    { "url": "https://...B.jpg", "action": "embed", "target": { "sceneId": "<ID>", "selector": "#hero-bg" } }
+  ]
+- Example: User uploads [UI screenshot, photo] + "use this for background"
+  → Choose photo (hint:embed) for background, ignore UI (hint:recreate)
+- If imageDirectives is present, it takes precedence over a global imageAction.
+
+FIGMA COMPONENT HANDLING:
+- If the prompt mentions "Figma design" with an ID format → addScene (Figma data will be automatically fetched)
+- Figma components have their own data pipeline and should NOT use a separate image tool
+- Look for patterns like: "Figma design \"ComponentName\" (ID: fileKey:nodeId)"
+- Figma recreation requests should use addScene with imageAction set appropriately
 
 PROJECT ASSETS AWARENESS:
 When the context includes previously uploaded assets (logos, images, etc.), consider:

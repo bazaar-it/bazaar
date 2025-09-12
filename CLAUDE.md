@@ -9,9 +9,15 @@ Use MCP tools to query both dev and prod Neon databases:
 
 **All development work MUST follow these guidelines:**
 
+always find root issues, use mcp tool to query the database, either prod or dev or both, to double check when u can. never just patch things to make it work in a hacky way, but try to be smart and think long term. Often, when I state something as the porblem, its just an exmaple of the problem. So dont just make custom solution for this one exmaple, but try to find out what this exmaple, and other exmaples, are a symptomps of.
+
+
 ### Sprint-Based Workflow
-- **Current Sprint**: Sprint 98 - Auto-Fix Analysis (check `/memory-bank/sprints/sprint98_autofix_analysis/` for context)
-- **Previous Sprint**: Sprint 91 - Promo Codes & Advanced Analytics (multi-tool system planning)
+- **Active Sprints** (ALWAYS check these first):
+  - Sprint 116 - Images: Unified multimodal image workflow (`/memory-bank/sprints/sprint116_images/`)
+  - Sprint 108 - One Last Export: Reliable export pipeline (`/memory-bank/sprints/sprint108_one_last_export/`)
+  - Sprint 107 - General Reliability: Core system fixes (`/memory-bank/sprints/sprint107_general_reliability/`)
+  - Sprint 106 - Server-Side Compilation: TSX→JS on server (`/memory-bank/sprints/sprint106_server_side_compilation/`)
 - **Documentation First**: For complex tasks, create analysis docs in sprint folder before coding
 - **Progress Tracking**: Update `/memory-bank/progress.md` AND sprint-specific progress files
 - **Memory Bank**: Always check relevant docs in `/memory-bank/` before starting work
@@ -132,19 +138,26 @@ class BrainOrchestrator {
 Tools are specialized functions that generate Remotion code:
 
 - **Add Tool** (`/src/tools/add/add.ts`):
-  - Text input → Direct code generation (no layout step)
-  - Image input → Direct code generation from visual
-  - Previous scene reference → Code generation with style matching
+  - Text input → Direct code generation
+  - Image input → Branches on `imageAction` (embed vs recreate)
+  - Multi-image support with per-asset directives
+  - Template context for better first scenes
   
 - **Edit Tool** (`/src/tools/edit/edit.ts`):
   - Surgical edits: "make the button blue" → Precise code changes
   - Creative edits: "make it better" → Enhanced animations
+  - Image handling: Full URL context (not just filenames)
+  - Scene name preservation
   
 - **Delete Tool** (`/src/tools/delete/delete.ts`):
   - Removes scenes cleanly from timeline
   
 - **Trim Tool** (`/src/tools/trim/trim.ts`):
   - Adjusts scene timing and duration
+
+- **WebsiteToVideo Tool** (`/src/tools/website-to-video/`):
+  - Creates 5-scene branded videos from URLs
+  - Extracts brand colors, fonts, and style
 
 **Step 5: State Management** (`/src/stores/videoState.ts`)
 ```typescript
@@ -196,22 +209,31 @@ No circular dependencies, no confusion.
 - No duplicates (SSE + database truth)
 - Clear debugging path
 
-### System Prompts - From 40+ to 4
+### System Prompts - Unified and Modular
 
-We discovered we had 40+ system prompts scattered throughout the codebase. Through careful analysis, we reduced to 4 essential prompts:
+We've evolved from 40+ scattered prompts to a modular system:
 
 1. **Brain Orchestrator** (`/src/config/prompts/active/brain-orchestrator.ts`)
    - Understands user request
    - Selects appropriate tools
+   - Returns `imageAction` for image handling
 
 2. **Code Generator** (`/src/config/prompts/active/code-generator.ts`)
-   - Transforms text/images directly to Remotion code
+   - Base prompt for code generation
+   - Modular modes: embed vs recreate
+   - Technical guardrails base
 
 3. **Code Editor** (`/src/config/prompts/active/code-editor.ts`)
    - Makes precise edits to existing code
+   - Handles multi-image context
+   - URL preservation for images
 
 4. **Title Generator** (`/src/config/prompts/active/title-generator.ts`)
    - Generates scene names from code
+
+5. **Media Modes** (`/src/config/prompts/active/modes/`)
+   - `image-embed.ts`: Exact image placement
+   - `image-recreate.ts`: Reference-only recreation
 
 ### Key Simplifications Summary
 
@@ -248,9 +270,12 @@ npm run db:studio    # View database
 - **Database**: PostgreSQL (Neon) + Drizzle ORM
 - **Storage**: Cloudflare R2
 - **Video**: Remotion for composition and rendering
-- **AI**: OpenAI GPT-4o-mini for code generation
+- **AI**: 
+  - OpenAI GPT-5-mini for brain/orchestration
+  - Claude Sonnet 4 for multimodal code generation
+  - Model rotation for reliability
 - **Real-time**: Server-Sent Events (SSE) for chat streaming
-- **Media**: Image upload with compression, Voice-to-text input
+- **Media**: Image upload with compression, Voice-to-text input, MediaMetadataService
 
 ### Organized File Structure (Single Source of Truth)
 
@@ -309,15 +334,19 @@ Building → Storage → Preview → Chat Updates
 ### 4. Dynamic Component System
 - Built-in scenes: Text, images, shapes, animations
 - AI-generated custom components via generation tools
-- ESM loading from R2 storage
-- Automatic error detection and fixing for scene compilation
+- Server-side compilation (Sprint 106): TSX→JS on server
+- Compiled JS stored in R2 with versioning
+- Client imports pre-compiled JS (no client-side compilation)
+- Automatic error detection and progressive fixing
 
 ### 5. Enhanced Chat Features
 - **Voice Input**: Voice-to-text transcription for chat
 - **Image Upload**: Advanced image compression and R2 storage
+- **Media Panel**: Browse and select from uploaded media assets
 - **Auto-Fix**: Silent progressive error fixing (Sprint 73 - completely automatic)
 - **Modular Components**: ChatMessage, ChatWelcome, GeneratingMessage
 - **Real-time Streaming**: Live updates via SSE connection
+- **Metadata Analysis**: Automatic tagging of uploaded images (logo/ui/photo)
 
 ### 6. Multi-Format Video Support (In Development)
 - YouTube (1920x1080) - landscape
@@ -439,17 +468,19 @@ If data loss occurs:
 
 The `memory-bank/` directory contains ALL project documentation:
 - **Progress**: `/memory-bank/progress.md` + sprint-specific files
-- **Current Sprint**: `/memory-bank/sprints/sprint98_autofix_analysis/`
+- **Active Sprints**: Always check `/memory-bank/sprints/sprint116_images/`, `/memory-bank/sprints/sprint108_one_last_export/`, `/memory-bank/sprints/sprint107_general_reliability/`, `/memory-bank/sprints/sprint106_server_side_compilation/`
 - **Architecture**: System design and patterns
 - **API docs**: Service documentation
 - **Testing**: Test strategies and results
 - **Fixes**: Technical solutions and debugging
-- **Recent Sprints**: 
+- **Recent Completed Sprints**: 
+  - Sprint 111: Motion graphics principles
+  - Sprint 104: Validation testing
+  - Sprint 103: Multi-tool system
+  - Sprint 100: Evaluation suite
+  - Sprint 99: General findings & URL to video
   - Sprint 98: Auto-fix analysis and stabilization
   - Sprint 91: Promo codes & multi-tool system planning
-  - Sprint 90: Database synchronization
-  - Sprint 76: Critical bug fixes
-  - Sprint 48: Mobile/social format support
 
 **ALWAYS check memory bank before starting any work.**
 
@@ -484,22 +515,30 @@ RENDER_MODE=lambda  # Set to 'lambda' for cloud rendering
 
 ## Current Development Context
 
-### Sprint 98 Focus - Auto-Fix Analysis & Stabilization
-- Enhanced auto-fix with proper event cleanup and dependency management
-- Fixed useEffect infinite loops and memory leaks
-- Improved event validation to prevent crashes
-- Stable function references for event handlers
+### Sprint 116 - Images (Unified Multimodal Workflow) [ACTIVE]
+- Single brain, fewer tools approach
+- Brain returns `imageAction` (embed|recreate) per asset
+- Upload-time metadata analysis via MediaMetadataService
+- Multimodal prompts with Sonnet 4
+- First-class multi-image support with per-asset directives
 
-### Sprint 91 - Promo Codes & Multi-Tool System (Planning Complete)
-- **Multi-Context Tool System**: Architecture for parallel tool execution
-- **Promo Codes**: System designed but migrations not yet pushed
-- **Admin Intelligence**: Natural language SQL queries planned
-- **Progressive UI**: Bullet-point progress like Claude Code
+### Sprint 108 - One Last Export (Reliability) [ACTIVE]
+- Hybrid icon inlining (local → Iconify API → placeholder)
+- Post-transform validation to prevent React #130 errors
+- Scene isolation for failure containment
+- UI gating for icon set support
 
-### Recent Sprint Achievements
-- Sprint 90: Database synchronization and performance optimization
-- Sprint 76: Critical bug fixes and system stability
-- Sprint 48: Mobile/social format support
+### Sprint 107 - General Reliability [ACTIVE]
+- Fix component loading incompatibility
+- Reduce over-aggressive preprocessing
+- Simplify compilation layers
+- Improve error isolation
+
+### Sprint 106 - Server-Side Compilation [ACTIVE]
+- Move TSX→JS compilation from client to server
+- Store compiled JS in R2 with versioning
+- Serve unchanged JS to client for all environments
+- Single artifact across preview, share, and export
 
 ### Recent Achievements
 - **Silent Auto-Fix (Sprint 73)**: Progressive error fixing with zero user intervention

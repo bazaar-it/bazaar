@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
-import { scenes, projects, messages } from "~/server/db/schema";
+import { scenes, projects, messages, sceneOperations } from "~/server/db/schema";
 import { eq, and, desc, gte, sql } from "drizzle-orm";
 import { messageService } from "~/server/services/data/message.service";
 import { orchestrator } from "~/brain/orchestratorNEW";
@@ -14,6 +14,7 @@ import { TRPCError } from "@trpc/server";
 
 // Import universal response types and helpers
 import { ResponseBuilder, getErrorCode } from "~/lib/api/response-helpers";
+import { extractUrls } from "~/lib/utils/url-detection";
 import type { SceneCreateResponse, SceneDeleteResponse } from "~/lib/types/api/universal";
 import { ErrorCode } from "~/lib/types/api/universal";
 import { formatSceneOperationMessage } from "~/lib/utils/scene-message-formatter";
@@ -149,6 +150,55 @@ export const generateScene = protectedProcedure
         content: msg.content
       }));
 
+      // Inherit media from previous user message when the user responds to clarification
+      // If current user has no explicit media, carry forward URLs from the previous user message
+      let inheritedImageUrls: string[] = [];
+      let inheritedVideoUrls: string[] = [];
+      let inheritedAudioUrls: string[] = [];
+      let inheritedSceneUrls: string[] = [];
+      try {
+        const messagesAsc = recentMessages; // now oldest -> newest after reverse()
+        // Last message should be the current user message
+        // Find previous user message before the current one
+        for (let i = messagesAsc.length - 2; i >= 0; i--) {
+          const prev = messagesAsc[i] as any;
+          if (prev?.role === 'user') {
+            // Prefer structured imageUrls if present
+            if (Array.isArray(prev.imageUrls) && prev.imageUrls.length > 0) {
+              inheritedImageUrls = prev.imageUrls.filter(Boolean);
+            }
+            if (Array.isArray(prev.videoUrls) && prev.videoUrls.length > 0) {
+              inheritedVideoUrls = prev.videoUrls.filter(Boolean);
+            }
+            if (Array.isArray(prev.audioUrls) && prev.audioUrls.length > 0) {
+              inheritedAudioUrls = prev.audioUrls.filter(Boolean);
+            }
+            if (Array.isArray(prev.sceneUrls) && prev.sceneUrls.length > 0) {
+              inheritedSceneUrls = prev.sceneUrls.filter(Boolean);
+            }
+            // Also parse raw URLs from text (fallback when not uploaded via UI)
+            if (typeof prev.content === 'string') {
+              const urls = extractUrls(prev.content);
+              const imageLike = urls.filter(u => /\.(png|jpe?g|webp|gif|bmp|svg)$/i.test(u));
+              if (imageLike.length > 0) {
+                inheritedImageUrls = [...new Set([...(inheritedImageUrls || []), ...imageLike])];
+              }
+              const videoLike = urls.filter(u => /\.(mp4|webm|mov|m4v|avi|mkv)$/i.test(u));
+              if (videoLike.length > 0) {
+                inheritedVideoUrls = [...new Set([...(inheritedVideoUrls || []), ...videoLike])];
+              }
+              const audioLike = urls.filter(u => /\.(mp3|wav|ogg|m4a)$/i.test(u));
+              if (audioLike.length > 0) {
+                inheritedAudioUrls = [...new Set([...(inheritedAudioUrls || []), ...audioLike])];
+              }
+            }
+            break;
+          }
+        }
+      } catch (e) {
+        console.warn('[generateScene] Failed to compute inherited media:', e);
+      }
+
       // 4. User message is already created in SSE route, skip creating it here
       // This prevents duplicate messages and ensures correct sequence order
 
@@ -257,10 +307,18 @@ export const generateScene = protectedProcedure
         storyboardSoFar: storyboardForBrain,
         chatHistory,
         userContext: {
-          imageUrls: userContext?.imageUrls,
-          videoUrls: userContext?.videoUrls,
-          audioUrls: userContext?.audioUrls,
-          sceneUrls: userContext?.sceneUrls, // Pass attached scene IDs to orchestrator
+          imageUrls: (userContext?.imageUrls && userContext.imageUrls.length > 0)
+            ? userContext.imageUrls
+            : (inheritedImageUrls && inheritedImageUrls.length > 0 ? inheritedImageUrls : undefined),
+          videoUrls: (userContext?.videoUrls && userContext.videoUrls.length > 0)
+            ? userContext.videoUrls
+            : (inheritedVideoUrls && inheritedVideoUrls.length > 0 ? inheritedVideoUrls : undefined),
+          audioUrls: (userContext?.audioUrls && userContext.audioUrls.length > 0)
+            ? userContext.audioUrls
+            : (inheritedAudioUrls && inheritedAudioUrls.length > 0 ? inheritedAudioUrls : undefined),
+          sceneUrls: (userContext?.sceneUrls && userContext.sceneUrls.length > 0)
+            ? userContext.sceneUrls
+            : (inheritedSceneUrls && inheritedSceneUrls.length > 0 ? inheritedSceneUrls : undefined), // Pass attached scene IDs to orchestrator
           modelOverride: userContext?.modelOverride,
           useGitHub: userContext?.useGitHub, // Pass the explicit GitHub flag
           githubConnected,
@@ -318,6 +376,24 @@ export const generateScene = protectedProcedure
           'scene.create',
           'scene'
         ) as any as SceneCreateResponse;
+      }
+
+      // Safety: if Brain didn't return images but we inherited some, attach them
+      if (orchestratorResponse.success && orchestratorResponse.result) {
+        const ctx: any = orchestratorResponse.result.toolContext;
+        if ((!ctx.imageUrls || ctx.imageUrls.length === 0) && inheritedImageUrls.length > 0) {
+          ctx.imageUrls = inheritedImageUrls;
+          if (!ctx.imageAction) ctx.imageAction = 'embed';
+        }
+        if ((!ctx.videoUrls || ctx.videoUrls.length === 0) && inheritedVideoUrls.length > 0) {
+          ctx.videoUrls = inheritedVideoUrls;
+        }
+        if ((!ctx.audioUrls || ctx.audioUrls.length === 0) && inheritedAudioUrls.length > 0) {
+          ctx.audioUrls = inheritedAudioUrls;
+        }
+        if ((!ctx.referencedSceneIds || ctx.referencedSceneIds.length === 0) && inheritedSceneUrls.length > 0) {
+          ctx.referencedSceneIds = inheritedSceneUrls;
+        }
       }
 
       const decision: BrainDecision = {
@@ -577,6 +653,8 @@ export const removeScene = protectedProcedure
   .input(z.object({
     projectId: z.string(),
     sceneId: z.string(),
+    clientRevision: z.number().optional(),
+    idempotencyKey: z.string().optional(),
   }))
   .mutation(async ({ input, ctx }): Promise<SceneDeleteResponse> => {
     const response = new ResponseBuilder();
@@ -586,6 +664,32 @@ export const removeScene = protectedProcedure
     console.log(`[${response.getRequestId()}] Starting scene removal`, { projectId, sceneId });
 
     try {
+      // 0. Idempotency check
+      if (input.idempotencyKey) {
+        const existing = await db.query.sceneOperations.findFirst({
+          where: and(
+            eq(sceneOperations.projectId, input.projectId),
+            eq(sceneOperations.idempotencyKey, input.idempotencyKey)
+          ),
+        });
+        if (existing) {
+          // Return success with current revision (no-op)
+          const proj = await db.query.projects.findFirst({ where: eq(projects.id, input.projectId) });
+          const payload: any = existing.result || {};
+          const res = new ResponseBuilder(response.getRequestId()).success(
+            {
+              deletedId: payload.deletedId || input.sceneId,
+              deletedScene: payload.deletedScene || null,
+              newRevision: proj?.revision,
+            },
+            'scene.delete',
+            'scene',
+            [input.sceneId]
+          );
+          return res as any as SceneDeleteResponse;
+        }
+      }
+
       // 1. Verify project ownership and scene existence
       const scene = await db.query.scenes.findFirst({
         where: eq(scenes.id, sceneId),
@@ -615,14 +719,48 @@ export const removeScene = protectedProcedure
         layoutJson: scene.layoutJson,
       } as const;
 
-      // 2. Delete the scene
+      // Optional revision check
+      if (input.clientRevision !== undefined) {
+        const proj = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });
+        if (proj && proj.revision !== input.clientRevision) {
+          throw new TRPCError({ code: 'CONFLICT', message: 'Stale client revision' });
+        }
+      }
+
+      // 2. Delete the scene, then normalize order and bump revision
       await db.delete(scenes).where(eq(scenes.id, sceneId));
+
+      // Normalize orders 0..n-1
+      const ordered = await db.query.scenes.findMany({
+        where: eq(scenes.projectId, projectId),
+        orderBy: [scenes.order],
+      });
+      await Promise.all(
+        ordered.map((s, idx) => db.update(scenes).set({ order: idx }).where(eq(scenes.id, s.id)))
+      );
+
+      const projUpdated = await db
+        .update(projects)
+        .set({ revision: sql`${projects.revision} + 1` })
+        .where(eq(projects.id, projectId))
+        .returning();
 
       console.log(`[${response.getRequestId()}] Scene deleted successfully`);
 
-      // 3. Return success response (include payload for potential undo)
+      // 3. Idempotency record
+      if (input.idempotencyKey) {
+        await db.insert(sceneOperations).values({
+          projectId,
+          idempotencyKey: input.idempotencyKey,
+          operationType: 'delete',
+          payload: { sceneId },
+          result: { deletedId: sceneId, deletedScene: deletedScenePayload },
+        });
+      }
+
+      // 4. Return success response (include payload + newRevision)
       return response.success(
-        { deletedId: sceneId, deletedScene: deletedScenePayload },
+        { deletedId: sceneId, deletedScene: deletedScenePayload, newRevision: projUpdated[0]?.revision },
         'scene.delete',
         'scene',
         [sceneId]
@@ -700,6 +838,8 @@ export const updateSceneName = protectedProcedure
     projectId: z.string(),
     sceneId: z.string(),
     name: z.string().min(1).max(100),
+    clientRevision: z.number().optional(),
+    idempotencyKey: z.string().optional(),
   }))
   .mutation(async ({ input, ctx }) => {
     const { projectId, sceneId, name } = input;
@@ -723,6 +863,28 @@ export const updateSceneName = protectedProcedure
         });
       }
 
+      // 1.5. Idempotency
+      if (input.idempotencyKey) {
+        const existing = await db.query.sceneOperations.findFirst({
+          where: and(
+            eq(sceneOperations.projectId, input.projectId),
+            eq(sceneOperations.idempotencyKey, input.idempotencyKey)
+          ),
+        });
+        if (existing) {
+          const proj = await db.query.projects.findFirst({ where: eq(projects.id, input.projectId) });
+          return { success: true, scene: scene, newRevision: proj?.revision } as any;
+        }
+      }
+
+      // Optional revision check
+      if (input.clientRevision !== undefined) {
+        const proj = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });
+        if (proj && proj.revision !== input.clientRevision) {
+          throw new TRPCError({ code: 'CONFLICT', message: 'Stale client revision' });
+        }
+      }
+
       // 2. Update the scene name
       const updatedScene = await db.update(scenes)
         .set({
@@ -734,14 +896,133 @@ export const updateSceneName = protectedProcedure
 
       console.log(`[updateSceneName] Scene name updated successfully`);
 
-      // 3. Return updated scene
+      // Bump revision and record idempotent op
+      const projUpdated = await db
+        .update(projects)
+        .set({ revision: sql`${projects.revision} + 1` })
+        .where(eq(projects.id, projectId))
+        .returning();
+
+      if (input.idempotencyKey) {
+        await db.insert(sceneOperations).values({
+          projectId,
+          idempotencyKey: input.idempotencyKey,
+          operationType: 'updateName',
+          payload: { sceneId, name },
+          result: { sceneId },
+        });
+      }
+
+      // 3. Return updated scene + new revision
       return {
         success: true,
         scene: updatedScene[0],
+        newRevision: projUpdated[0]?.revision,
       };
 
     } catch (error) {
       console.error(`[updateSceneName] Scene name update error:`, error);
       throw error;
     }
+  });
+
+/**
+ * TRIM LEFT (atomic split + delete-left)
+ * Keeps the right-hand part starting at offset; deletes original left part.
+ */
+export const trimLeft = protectedProcedure
+  .input(z.object({
+    projectId: z.string(),
+    sceneId: z.string(),
+    offset: z.number().min(1),
+    clientRevision: z.number().optional(),
+    idempotencyKey: z.string().optional(),
+  }))
+  .mutation(async ({ input, ctx }) => {
+    const { projectId, sceneId, offset } = input;
+    const userId = ctx.session.user.id;
+
+    // Idempotency
+    if (input.idempotencyKey) {
+      const existing = await db.query.sceneOperations.findFirst({
+        where: and(
+          eq(sceneOperations.projectId, input.projectId),
+          eq(sceneOperations.idempotencyKey, input.idempotencyKey)
+        ),
+      });
+      if (existing) {
+        const proj = await db.query.projects.findFirst({ where: eq(projects.id, input.projectId) });
+        const payload: any = existing.result || {};
+        return { success: true, rightSceneId: payload.rightSceneId || null, newRevision: proj?.revision } as any;
+      }
+    }
+
+    // Ownership and scene fetch
+    const scene = await db.query.scenes.findFirst({
+      where: eq(scenes.id, sceneId),
+      with: { project: true },
+    });
+    if (!scene || scene.project.userId !== userId) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Scene not found or access denied' });
+    }
+
+    // Revision check
+    if (input.clientRevision !== undefined) {
+      const proj = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });
+      if (proj && proj.revision !== input.clientRevision) {
+        throw new TRPCError({ code: 'CONFLICT', message: 'Stale client revision' });
+      }
+    }
+
+    const total = scene.duration;
+    const splitAt = Math.max(1, Math.min(total - 1, Math.floor(offset)));
+    const rightDuration = total - splitAt;
+    if (rightDuration <= 0) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Offset must be within scene duration' });
+    }
+
+    // Insert right-hand scene after current
+    const rightName = `${scene.name || 'Scene'} (Part 2)`;
+    const mergedProps: any = { ...(scene.props as any), startOffset: splitAt };
+    const [right] = await db.insert(scenes).values({
+      projectId,
+      order: scene.order + 1,
+      name: rightName,
+      tsxCode: scene.tsxCode, // safe since only right remains after delete
+      props: mergedProps,
+      duration: rightDuration,
+      layoutJson: scene.layoutJson,
+      slug: scene.slug,
+      dominantColors: scene.dominantColors as any,
+      firstH1Text: scene.firstH1Text,
+    }).returning();
+
+    // Delete original left scene
+    await db.delete(scenes).where(eq(scenes.id, sceneId));
+
+    // Normalize orders 0..n-1
+    const ordered = await db.query.scenes.findMany({
+      where: eq(scenes.projectId, projectId),
+      orderBy: [scenes.order],
+    });
+    await Promise.all(
+      ordered.map((s, idx) => db.update(scenes).set({ order: idx }).where(eq(scenes.id, s.id)))
+    );
+
+    const projUpdated = await db.update(projects)
+      .set({ revision: sql`${projects.revision} + 1` })
+      .where(eq(projects.id, projectId))
+      .returning();
+
+    if (input.idempotencyKey) {
+      await db.insert(sceneOperations).values({
+        projectId,
+        idempotencyKey: input.idempotencyKey,
+        operationType: 'trimLeft',
+        payload: { sceneId, offset },
+        result: { rightSceneId: right?.id },
+      });
+    }
+
+    return { success: true, rightSceneId: right?.id, newRevision: projUpdated[0]?.revision };
   });

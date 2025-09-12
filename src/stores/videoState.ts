@@ -86,7 +86,10 @@ export interface AudioTrack {
 export type TimelineAction =
   | { type: 'deleteScene'; scene: any }
   | { type: 'reorder'; beforeOrder: string[]; afterOrder: string[] }
-  | { type: 'updateDuration'; sceneId: string; prevDuration: number; newDuration: number };
+  | { type: 'updateDuration'; sceneId: string; prevDuration: number; newDuration: number }
+  | { type: 'split'; sceneId: string; offset: number; leftBeforeDuration: number; rightSceneId: string }
+  | { type: 'trimLeft'; originalScene: any; rightSceneId: string; offset: number }
+  | { type: 'duplicate'; scene: any };
 
 // Draft attachment interface
 export interface DraftAttachment {
@@ -152,6 +155,8 @@ interface VideoState {
   // Undo/Redo stacks per project (timeline-focused actions)
   undoStacks: Record<string, Array<TimelineAction> | null>;
   redoStacks: Record<string, Array<TimelineAction> | null>;
+  // Persisted stacks timestamp for TTL pruning
+  undoSavedAt?: Record<string, number>;
   
   // Actions
   setProject: (projectId: string, initialProps: InputProps, options?: { force?: boolean }) => void;
@@ -1008,6 +1013,7 @@ export const useVideoState = create<VideoState>()(
       undoStacks: { ...state.undoStacks, [projectId]: [...stack, action] },
       // Clear redo stack on new action
       redoStacks: { ...state.redoStacks, [projectId]: [] },
+      undoSavedAt: { ...(state.undoSavedAt || {}), [projectId]: Date.now() },
     } as any;
   }),
   popUndo: (projectId: string): TimelineAction | null => {
@@ -1017,11 +1023,15 @@ export const useVideoState = create<VideoState>()(
     const action = stack[stack.length - 1];
     if (!action) return null;
     state.undoStacks[projectId] = stack.slice(0, -1);
+    state.undoSavedAt = { ...(state.undoSavedAt || {}), [projectId]: Date.now() };
     return action;
   },
   pushRedo: (projectId: string, action: TimelineAction) => set((state) => {
     const stack = state.redoStacks[projectId] || [];
-    return { redoStacks: { ...state.redoStacks, [projectId]: [...stack, action] } } as any;
+    return { 
+      redoStacks: { ...state.redoStacks, [projectId]: [...stack, action] },
+      undoSavedAt: { ...(state.undoSavedAt || {}), [projectId]: Date.now() },
+    } as any;
   }),
   popRedo: (projectId: string): TimelineAction | null => {
     const state = get();
@@ -1030,6 +1040,7 @@ export const useVideoState = create<VideoState>()(
     const action = stack[stack.length - 1];
     if (!action) return null;
     state.redoStacks[projectId] = stack.slice(0, -1);
+    state.undoSavedAt = { ...(state.undoSavedAt || {}), [projectId]: Date.now() };
     return action;
   },
     
@@ -1288,6 +1299,28 @@ export const useVideoState = create<VideoState>()(
           [projectId]: true
         }
       };
+    }),
+
+  addPendingDelete: (projectId: string, sceneId: string) =>
+    set((state) => {
+      const map = (state as any).pendingDeleteIds || {};
+      const setForProject = new Set(map[projectId] || []);
+      setForProject.add(sceneId);
+      return {
+        ...(state as any),
+        pendingDeleteIds: { ...map, [projectId]: setForProject }
+      } as any;
+    }),
+
+  clearPendingDelete: (projectId: string, sceneId: string) =>
+    set((state) => {
+      const map = (state as any).pendingDeleteIds || {};
+      const setForProject = new Set(map[projectId] || []);
+      setForProject.delete(sceneId);
+      return {
+        ...(state as any),
+        pendingDeleteIds: { ...map, [projectId]: setForProject }
+      } as any;
     }),
 
   // 🚨 NEW: Add system message for cross-panel communication
@@ -1553,22 +1586,67 @@ export const useVideoState = create<VideoState>()(
     {
       name: 'bazaar-video-state',
       storage: createJSONStorage(() => localStorage),
-      // Only persist essential data, exclude real-time state
-      partialize: (state) => ({
-        projects: state.projects,
-        currentProjectId: state.currentProjectId,
-        selectedScenes: state.selectedScenes,
-        // Don't persist chat history (too large), refreshTokens, or generating state
-      }),
-      // Handle Sets in generatingScenes by not persisting them
+      // Persist only durable UI state. DO NOT persist chatHistory/streaming/refresh tokens.
+      partialize: (state) => {
+        const projects: Record<string, ProjectState> = {} as any;
+        for (const [pid, p] of Object.entries(state.projects)) {
+          projects[pid] = {
+            // Persist props, audio, and a few UI prefs
+            props: p.props,
+            chatHistory: [], // never persist messages
+            dbMessagesLoaded: false,
+            activeStreamingMessageId: null,
+            refreshToken: undefined,
+            audio: p.audio ?? null,
+            shouldOpenAudioPanel: p.shouldOpenAudioPanel ?? false,
+            draftMessage: p.draftMessage ?? '',
+            draftAttachments: p.draftAttachments ?? [],
+            playbackSpeed: p.playbackSpeed ?? 1,
+          };
+        }
+        return {
+          projects,
+          currentProjectId: state.currentProjectId,
+          selectedScenes: state.selectedScenes,
+          undoStacks: state.undoStacks,
+          redoStacks: state.redoStacks,
+          undoSavedAt: state.undoSavedAt,
+        };
+      },
       onRehydrateStorage: () => (state) => {
         if (state) {
-          // Reset non-persistent state
+          // Reset global ephemeral state
           state.chatHistory = {};
           state.refreshTokens = {};
           state.lastSyncTime = 0;
           state.pendingDbSync = {};
           state.generatingScenes = {};
+          // Ensure per-project ephemerals are reset to avoid duplicate messages after refresh
+          try {
+            for (const pid of Object.keys(state.projects || {})) {
+              const p = state.projects[pid]! as ProjectState;
+              p.chatHistory = [];
+              p.activeStreamingMessageId = null;
+              p.refreshToken = undefined;
+              p.dbMessagesLoaded = false;
+            }
+          } catch {}
+          // TTL prune undo/redo (24h)
+          try {
+            const ttlMs = 24 * 60 * 60 * 1000;
+            const now = Date.now();
+            const savedAt = state.undoSavedAt || {};
+            const undo = state.undoStacks || {};
+            const redo = state.redoStacks || {};
+            Object.keys(savedAt).forEach((pid) => {
+              if (now - (savedAt[pid] || 0) > ttlMs) {
+                undo[pid] = [] as any;
+                redo[pid] = [] as any;
+              }
+            });
+            state.undoStacks = undo as any;
+            state.redoStacks = redo as any;
+          } catch {}
         }
       },
     }

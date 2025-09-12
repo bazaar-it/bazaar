@@ -9,14 +9,19 @@ import MarketingHeader from "~/components/marketing/MarketingHeader";
 import type { MarketingHeaderRef } from "~/components/marketing/MarketingHeader";
 import MarketingComponentPlayer from "~/components/MarketingComponentPlayer";
 import HomePageTextAnimation from "~/components/HomePageTextAnimation";
-import TemplateScrollGrid from "~/components/TemplateScrollGrid";
+import dynamic from 'next/dynamic';
+
+const HomePageTemplatesSection = dynamic(
+  () => import('~/components/marketing/HomePageTemplatesSection'),
+  { ssr: false }
+);
 import AspectRatioTransitionPlayer from "~/components/AspectRatioTransitionPlayer";
 import DynamicFormatTitle from "~/components/DynamicFormatTitle";
 import ParticleEffect from "~/components/marketing/ParticleEffect";
+import LiveBadge from "~/components/marketing/LiveBadge";
 
-export function Homepage() {
+export default function Homepage() {
   const { data: session, status } = useSession();
-  const [showVideo, setShowVideo] = useState(false);
   const [intendedAction, setIntendedAction] = useState<'try-for-free' | null>(null);
   
   // Add loading state for unauthenticated Try for Free button
@@ -60,19 +65,9 @@ export function Homepage() {
         {/* Advanced Floating Particles - Hero Section Only */}
         <ParticleEffect />
 
-        {/* Announcement Banner */}
+        {/* Live on X indicator (shows only when live) */}
         <div className="w-full mb-8 flex justify-center">
-          <div className="inline-flex items-center gap-3 bg-gray-100 py-2 px-3 rounded-full">
-            <span className="bg-gradient-to-r from-pink-500 to-orange-500 text-white px-3 py-1 rounded-full text-sm font-medium">
-              V2 is Live!
-            </span>
-            <button 
-              onClick={() => setShowVideo(true)}
-              className="text-pink-600 hover:text-pink-800 font-medium text-sm underline transition-colors"
-            >
-                                Watch the video
-            </button>
-          </div>
+          <LiveBadge />
         </div>
         
         <div className="mb-8 md:mb-16 w-full text-center">
@@ -134,7 +129,7 @@ export function Homepage() {
             </div>
           )}
           <p className="text-center text-gray-500 text-sm mt-2 mb-0">
-            No credit card required
+            Start with 100 free prompts
           </p>
         </div>
         
@@ -220,27 +215,18 @@ export function Homepage() {
           </div>
         </section>
 
-        {/* 25 Templates Section */}
-        <section className="mt-16 w-full py-8 md:py-12 -mx-4 px-4 bg-gradient-to-b from-white to-pink-50/20">
-          <div className="text-center mb-8 md:mb-16">
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 text-gray-900 px-4">
-              50+ Templates to Start From
-            </h2>
-          </div>
-          
-          {/* Template Scroll Grid with Real Images */}
-          <div className="mb-12">
-            <TemplateScrollGrid />
-          </div>
-          
-          {/* Start Creating Now Button */}
-          <div className="text-center mt-5">
+        {/* Homepage Templates Section */}
+        <HomePageTemplatesSection marketingHeaderRef={marketingHeaderRef} />
+
+        {/* Start Creating Now CTA Section */}
+        <section className="mt-8 py-16 px-4">
+          <div className="max-w-4xl mx-auto text-center">
             {status === "authenticated" && session?.user ? (
               <div className="inline-block p-[2px] bg-gradient-to-r from-pink-500 to-orange-500 rounded-lg">
                 <NewProjectButton
                   enableQuickCreate={true}
                   disableFormatDropdown={false}
-                  className="!inline-block !bg-white !px-6 md:!px-8 !py-3 md:!py-4 !rounded-lg !text-base md:!text-lg !font-semibold !shadow-none !hover:shadow-none !transform !hover:scale-[1.02] !transition-all !duration-200 !h-auto !border-none hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white focus:bg-gradient-to-r focus:from-pink-500 focus:to-orange-500 focus:text-white transition-colors"
+                  className="!block !w-full !bg-white !px-6 md:!px-8 !py-3 md:!py-4 !rounded-lg !text-base md:!text-lg !font-semibold !shadow-none !hover:shadow-none !transform !hover:scale-[1.02] !transition-all !duration-200 !h-auto !border-none !cursor-pointer hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white focus:bg-gradient-to-r focus:from-pink-500 focus:to-orange-500 focus:text-white transition-colors !z-10 !relative"
                   variant="ghost"
                 >
                   Start Creating Now
@@ -250,7 +236,7 @@ export function Homepage() {
               <div className="inline-block p-[2px] bg-gradient-to-r from-pink-500 to-orange-500 rounded-lg">
                 <button
                   onClick={async () => {
-                    if (tryForFreeLoading) return; // Prevent multiple clicks
+                    if (tryForFreeLoading) return;
                     setTryForFreeLoading(true);
                     try {
                       await handleTryForFree();
@@ -259,7 +245,7 @@ export function Homepage() {
                     }
                   }}
                   disabled={tryForFreeLoading}
-                  className="cursor-pointer inline-block bg-white px-6 md:px-8 py-3 md:py-4 rounded-lg text-base md:text-lg font-semibold shadow-none transform hover:scale-[1.02] transition-all duration-200 h-auto border-none hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white focus:bg-gradient-to-r focus:from-pink-500 focus:to-orange-500 focus:text-white transition-colors"
+                  className="cursor-pointer inline-block bg-white px-6 md:px-8 py-3 md:py-4 rounded-lg text-base md:text-lg font-semibold shadow-none transform hover:scale-[1.02] transition-all duration-200 h-auto border-none hover:bg-gradient-to-r hover:from-pink-500 hover:to-orange-500 hover:text-white focus:bg-gradient-to-r focus:from-pink-500 focus:to-orange-500 focus:text-white transition-colors disabled:opacity-50"
                 >
                   {tryForFreeLoading ? (
                     <svg className="animate-spin h-5 w-5 text-gray-900 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -277,34 +263,7 @@ export function Homepage() {
 
       </main>
 
-      {/* Video Modal */}
-      {showVideo && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-          <div className="relative w-full max-w-4xl mx-4">
-            <button 
-              className="absolute -top-12 right-0 text-white hover:text-gray-300 w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors" 
-              onClick={() => setShowVideo(false)}
-              aria-label="Close video"
-            >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-            <div className="aspect-video">
-              <iframe
-                width="100%"
-                height="100%"
-                src="https://www.youtube.com/embed/rfrYyb83zys?autoplay=1"
-                title="Bazaar V3 Launch Video"
-                frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-                className="rounded-lg"
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Removed V2 announcement & video modal */}
 
 
       <style jsx global>{`
