@@ -12,39 +12,10 @@ import * as t from '@babel/types';
 const traverse = typeof traverseFn === 'function' ? traverseFn : (traverseFn as any).default;
 const generate = typeof generateFn === 'function' ? generateFn : (generateFn as any).default;
 import { buildInlineSVG, preloadIcons } from './icon-loader';
+import { extractIconNames } from './icon-replacement/extract-icon-names';
+import { buildIconVisitors } from './icon-replacement/visitors';
 
 type SvgDef = { attributes: Record<string, string>, body: string };
-
-/**
- * Extract all icon names used in the code for preloading
- */
-function extractIconNames(code: string): Set<string> {
-  const iconNames = new Set<string>();
-  
-  // Find literal icon names in various patterns
-  // Pattern 1: { icon: "mdi:heart" }
-  const objectPattern = /\{\s*icon\s*:\s*["']([^"']+)["']/g;
-  let match;
-  while ((match = objectPattern.exec(code)) !== null) {
-    if (match[1]) iconNames.add(match[1]);
-  }
-  
-  // Pattern 2: icon="mdi:heart" (JSX)
-  const jsxPattern = /icon\s*=\s*["']([^"']+)["']/g;
-  while ((match = jsxPattern.exec(code)) !== null) {
-    if (match[1]) iconNames.add(match[1]);
-  }
-  
-  // Pattern 3: iconData arrays
-  const arrayPattern = /["']([a-z0-9-]+:[a-z0-9-]+)["']/gi;
-  while ((match = arrayPattern.exec(code)) !== null) {
-    if (match[1] && match[1].includes(':')) {
-      iconNames.add(match[1]);
-    }
-  }
-  
-  return iconNames;
-}
 
 /**
  * Replace IconifyIcon components with inline SVGs using AST transformation
@@ -173,168 +144,12 @@ const __inlineIcon = __InlineIcon;
     ]);
   
   try {
+    const visitors = buildIconVisitors(iconMap as any, needsRuntimeMap, toDangerousInnerHTML);
     traverse(ast, {
-    // Check for export default
-    ExportDefaultDeclaration() {
-      hasExportDefault = true;
-    },
-    
-    // Handle JSX elements like <IconifyIcon icon="mdi:heart" />
-    JSXElement(path: any) {
-      try {
-        const node = path.node;
-        if (!node || !node.openingElement) return;
-        
-        const opening = node.openingElement;
-        if (!t.isJSXIdentifier(opening.name)) return;
-        
-        const elementName = opening.name.name;
-        if (elementName !== 'IconifyIcon' && !elementName.includes('IconifyIcon')) return;
-        
-        // Find icon attribute
-      const iconAttr = opening.attributes.find(
-        (a: any): a is t.JSXAttribute => 
-          t.isJSXAttribute(a) && 
-          t.isJSXIdentifier(a.name, { name: 'icon' })
-      );
-      
-      if (!iconAttr) return;
-      
-      // Handle literal string icons
-      if (t.isStringLiteral(iconAttr.value)) {
-        const iconName = iconAttr.value.value;
-        const svg = iconMap.get(iconName);
-        
-        if (svg) {
-          hasTransformations = true;
-          // Replace with inline SVG
-          const svgAttrs: t.JSXAttribute[] = [
-            ...Object.entries(svg.attributes).map(([k, v]) =>
-              t.jsxAttribute(t.jsxIdentifier(k), t.stringLiteral(v))
-            ),
-            t.jsxAttribute(t.jsxIdentifier('fill'), t.stringLiteral('currentColor')),
-            t.jsxAttribute(t.jsxIdentifier('width'), t.stringLiteral('1em')),
-            t.jsxAttribute(t.jsxIdentifier('height'), t.stringLiteral('1em')),
-            t.jsxAttribute(
-              t.jsxIdentifier('dangerouslySetInnerHTML'),
-              t.jsxExpressionContainer(toDangerousInnerHTML(svg.body))
-            ),
-          ];
-          
-          // Add other props from original element (except 'icon')
-          for (const attr of opening.attributes) {
-            if (t.isJSXAttribute(attr) && t.isJSXIdentifier(attr.name) && attr.name.name !== 'icon') {
-              svgAttrs.push(attr);
-            }
-          }
-          
-          path.replaceWith(
-            t.jsxElement(
-              t.jsxOpeningElement(t.jsxIdentifier('svg'), svgAttrs, true),
-              null,
-              [],
-              true
-            )
-          );
-          console.log(`[Icon Replace] Replaced JSX icon: ${iconName}`);
-        }
-      } else if (t.isJSXExpressionContainer(iconAttr.value)) {
-        // Dynamic icon - replace with __InlineIcon
-        if (needsRuntimeMap) {
-          hasTransformations = true;
-          opening.name = t.jsxIdentifier('__InlineIcon');
-          console.log('[Icon Replace] Replaced dynamic JSX icon with __InlineIcon');
-        }
-      }
-      } catch (err) {
-        // Safe error handling without Babel hub
-        console.error('[Icon Replace] Error in JSXElement visitor:', err);
-      }
-    },
-    
-    // Handle React.createElement(IconifyIcon, { icon: "mdi:heart" })
-    CallExpression(path: any) {
-      try {
-        const callee = path.node.callee;
-      
-      // Check for React.createElement
-      if (
-        !t.isMemberExpression(callee) ||
-        !t.isIdentifier(callee.object, { name: 'React' }) ||
-        !t.isIdentifier(callee.property, { name: 'createElement' })
-      ) {
-        return;
-      }
-      
-      const [comp, props] = path.node.arguments;
-      
-      // Check if it's IconifyIcon
-      if (!t.isIdentifier(comp, { name: 'IconifyIcon' })) return;
-      if (!t.isObjectExpression(props)) return;
-      
-      // Find icon prop
-      const iconProp = props.properties.find(
-        (p): p is t.ObjectProperty =>
-          t.isObjectProperty(p) &&
-          ((t.isIdentifier(p.key, { name: 'icon' }) || 
-           (t.isStringLiteral(p.key) && p.key.value === 'icon')))
-      );
-      
-      if (!iconProp) return;
-      
-      // Handle literal string icons
-      if (t.isStringLiteral(iconProp.value)) {
-        const iconName = iconProp.value.value;
-        const svg = iconMap.get(iconName);
-        
-        if (svg) {
-          hasTransformations = true;
-          // Build new props for SVG
-          const svgProps: t.ObjectProperty[] = [
-            ...Object.entries(svg.attributes).map(([k, v]) =>
-              t.objectProperty(t.identifier(k), t.stringLiteral(v))
-            ),
-            t.objectProperty(t.identifier('fill'), t.stringLiteral('currentColor')),
-            t.objectProperty(t.identifier('width'), t.stringLiteral('1em')),
-            t.objectProperty(t.identifier('height'), t.stringLiteral('1em')),
-            t.objectProperty(
-              t.identifier('dangerouslySetInnerHTML'),
-              toDangerousInnerHTML(svg.body)
-            ),
-          ];
-          
-          // Add other props (except 'icon')
-          for (const prop of props.properties) {
-            if (t.isObjectProperty(prop) && 
-                !((t.isIdentifier(prop.key) && prop.key.name === 'icon') ||
-                  (t.isStringLiteral(prop.key) && prop.key.value === 'icon'))) {
-              svgProps.push(prop);
-            }
-          }
-          
-          // Replace with React.createElement('svg', ...)
-          path.replaceWith(
-            t.callExpression(
-              t.memberExpression(t.identifier('React'), t.identifier('createElement')),
-              [t.stringLiteral('svg'), t.objectExpression(svgProps)]
-            )
-          );
-          console.log(`[Icon Replace] Replaced createElement icon: ${iconName}`);
-        }
-      } else {
-        // Dynamic icon - replace with __InlineIcon
-        if (needsRuntimeMap) {
-          hasTransformations = true;
-          path.node.arguments[0] = t.identifier('__InlineIcon');
-          console.log('[Icon Replace] Replaced dynamic createElement with __InlineIcon');
-        }
-      }
-      } catch (err) {
-        // Safe error handling without Babel hub
-        console.error('[Icon Replace] Error in CallExpression visitor:', err);
-      }
-    },
-  });
+      ExportDefaultDeclaration() { hasExportDefault = true; },
+      JSXElement(path: any) { visitors.JSXElement(path); },
+      CallExpression(path: any) { visitors.CallExpression(path); },
+    });
   } catch (traverseError) {
     console.error('[Icon Replace] Failed to traverse AST:', traverseError);
     // Return code with runtime map but no AST transformations
@@ -342,16 +157,16 @@ const __inlineIcon = __InlineIcon;
   }
   
   // Generate code from AST if we made transformations
+  // Generate code from AST and detect if it changed
   let transformedCode = code;
-  if (hasTransformations && ast) {
-    try {
-      const output = generate(ast);
-      transformedCode = output.code;
-      console.log('[Icon Replace] Generated code from transformed AST');
-    } catch (genError) {
-      console.error('[Icon Replace] Failed to generate code from AST:', genError);
-      // Fall back to original code with runtime map
-    }
+  try {
+    const output = generate(ast);
+    transformedCode = output.code;
+    hasTransformations = hasTransformations || transformedCode !== code;
+    console.log('[Icon Replace] Generated code from transformed AST');
+  } catch (genError) {
+    console.error('[Icon Replace] Failed to generate code from AST:', genError);
+    // Fall back to original code with runtime map
   }
   
   // Replace all IconifyIcon references in the final code

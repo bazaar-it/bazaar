@@ -905,7 +905,9 @@ Transform the static design into sequential storytelling.`;
         { type: 'text', text: userPrompt }
       ];
 
-      for (const url of filteredUrls) {
+      // Ensure we only send HTTPS image URLs to the vision API
+      const filteredUrls2 = input.imageUrls.filter((u) => /^https?:\/\//i.test(u));
+      for (const url of filteredUrls2) {
         visionMessagesContent.push({ 
           type: 'image_url', 
           image_url: { url } 
@@ -927,7 +929,7 @@ Transform the static design into sequential storytelling.`;
         const validation = await MediaValidation.validateAndFixCode(
           processed.code,
           input.projectId,
-          input.imageUrls
+          filteredUrls2
         );
         if (validation.wasFixed) {
           console.log('🔧 [IMAGE-TO-CODE] Fixed hallucinated URLs:', validation.fixes);

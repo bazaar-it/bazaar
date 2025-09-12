@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { projects, patches, scenePlans, scenes, messages, assets } from "~/server/db/schema";
-import { eq, desc, like, and, ne, isNull } from "drizzle-orm";
+import { eq, desc, like, and, ne, isNull, inArray, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { createDefaultProjectProps } from "~/lib/types/video/remotion-constants";
 import { jsonPatchSchema } from "~/lib/types/shared/json-patch";
@@ -116,6 +116,32 @@ export const projectRouter = createTRPCRouter({
         );
         
       return userProjects;
+    }),
+
+  // Delete all empty projects (zero scenes) for current user
+  pruneEmpty: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      try {
+        const rows = await ctx.db
+          .select({ id: projects.id, c: sql<number>`count(${scenes.id})` })
+          .from(projects)
+          .leftJoin(scenes, eq(scenes.projectId, projects.id))
+          .where(eq(projects.userId, ctx.session.user.id))
+          .groupBy(projects.id);
+
+        const emptyIds = rows.filter((r) => Number(r.c) === 0).map((r) => r.id);
+        if (emptyIds.length === 0) return { deleted: 0 };
+
+        const del = await ctx.db
+          .delete(projects)
+          .where(inArray(projects.id, emptyIds))
+          .returning({ id: projects.id });
+
+        return { deleted: del.length };
+      } catch (error) {
+        console.error('[project.pruneEmpty] Error:', error);
+        return { deleted: 0 };
+      }
     }),
     
   create: protectedProcedure
