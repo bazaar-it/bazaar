@@ -182,6 +182,17 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
           // Execute the scene code
           // The last expression (Component;) will be returned
           ${executableCode}
+
+          // Ensure explicit return for Lambda execution
+          // Even if preprocessing forgot to add a return, make sure we return the component
+          try {
+            // Only return if Component is defined to avoid ReferenceErrors
+            if (typeof Component !== 'undefined') {
+              return Component;
+            }
+          } catch (_) {
+            // Swallow and fall through to caller handling
+          }
         `
       );
       
