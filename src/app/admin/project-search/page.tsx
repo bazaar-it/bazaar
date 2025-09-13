@@ -1,6 +1,7 @@
+//src/app/admin/project-search/page.tsx
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { api } from "~/trpc/react";
 import { Card } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
@@ -10,16 +11,29 @@ import { Search, Copy, ExternalLink, Music, Clock, Film, MessageSquare } from "l
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
+import Link from "next/link";
 
 export default function AdminProjectSearchPage() {
   const router = useRouter();
   const [searchId, setSearchId] = useState("");
   const [expandedMessages, setExpandedMessages] = useState<string | null>(null);
+  const [listSearch, setListSearch] = useState("");
+  const [selectedUserId, setSelectedUserId] = useState<string | undefined>(undefined);
 
-  const { data: project, isLoading, refetch } = api.admin.searchProject.useQuery(
-    { projectId: searchId },
-    { enabled: searchId.length > 10 }
+  // Always trim whitespace from the input before querying
+  const trimmedId = useMemo(() => searchId.trim(), [searchId]);
+
+  const { data: project, isLoading, error, refetch, isFetching } = api.admin.searchProject.useQuery(
+    { projectId: trimmedId },
+    { enabled: trimmedId.length > 10 }
   );
+
+  useEffect(() => {
+    if (error) {
+      // Show a helpful error toast when project is not found or query fails
+      toast.error(error.message || "Search failed");
+    }
+  }, [error]);
 
   const duplicateProject = api.admin.duplicateProject.useMutation({
     onSuccess: (newProject) => {
@@ -32,7 +46,7 @@ export default function AdminProjectSearchPage() {
   });
 
   const handleSearch = () => {
-    if (searchId.trim()) {
+    if (trimmedId) {
       refetch();
     }
   };
@@ -49,6 +63,16 @@ export default function AdminProjectSearchPage() {
     }
   };
 
+  // Project list with filters
+  const { data: projectList, isLoading: listLoading, refetch: refetchList } = api.admin.listProjects.useQuery({
+    search: listSearch.trim() || undefined,
+    userId: selectedUserId,
+    limit: 20,
+    offset: 0,
+    sortBy: 'updatedAt',
+    sortDir: 'desc',
+  });
+
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold mb-8">Project Search & Management</h1>
@@ -63,14 +87,35 @@ export default function AdminProjectSearchPage() {
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
             className="flex-1"
           />
-          <Button onClick={handleSearch} disabled={!searchId.trim() || isLoading}>
+          <Button onClick={handleSearch} disabled={!trimmedId || isLoading || isFetching}>
             <Search className="w-4 h-4 mr-2" />
-            {isLoading ? "Searching..." : "Search"}
+            {isLoading || isFetching ? "Searching..." : "Search"}
           </Button>
         </div>
+        <p className="text-xs text-muted-foreground mt-2">
+          Tip: Paste the exact project ID. Whitespace is ignored.
+        </p>
       </Card>
 
       {/* Project Details */}
+      {!project && (isLoading || isFetching) && (
+        <Card className="p-6">
+          <p className="text-sm text-muted-foreground">Searching project…</p>
+        </Card>
+      )}
+
+      {!project && !isLoading && !isFetching && trimmedId && !error && (
+        <Card className="p-6">
+          <p className="text-sm">No project found for ID: <span className="font-mono">{trimmedId}</span></p>
+        </Card>
+      )}
+
+      {error && (
+        <Card className="p-6">
+          <p className="text-sm text-red-600">{error.message}</p>
+        </Card>
+      )}
+
       {project && (
         <Card className="p-6">
           <div className="space-y-6">
@@ -223,6 +268,67 @@ export default function AdminProjectSearchPage() {
           </div>
         </Card>
       )}
+
+      {/* All Projects - Filters and List */}
+      <Card className="p-6 mt-8">
+        <div className="mb-4 flex flex-col md:flex-row md:items-center gap-3">
+          <Input
+            placeholder="Filter by title"
+            value={listSearch}
+            onChange={(e) => setListSearch(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && refetchList()}
+            className="md:flex-1"
+          />
+          <Input
+            placeholder="Filter by userId"
+            value={selectedUserId || ''}
+            onChange={(e) => setSelectedUserId(e.target.value || undefined)}
+            onKeyDown={(e) => e.key === 'Enter' && refetchList()}
+            className="md:w-80"
+          />
+          <Button onClick={() => refetchList()} disabled={listLoading}>
+            <Search className="w-4 h-4 mr-2" />
+            {listLoading ? 'Loading…' : 'Apply Filters'}
+          </Button>
+        </div>
+
+        {!projectList?.projects?.length && !listLoading ? (
+          <p className="text-sm text-muted-foreground">No projects found.</p>
+        ) : (
+          <div className="space-y-3">
+            {projectList?.projects?.map((p) => (
+              <Card key={p.id} className="p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">{p.title}</div>
+                    <div className="text-xs text-muted-foreground">
+                      Updated {formatDistanceToNow(new Date(p.updatedAt))} ago · {p.totalScenes} scenes · {p.totalMessages} msgs
+                    </div>
+                    {p.user && (
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Owner: <Link href={`/admin/users/${p.user.id}`} className="underline">{p.user.name || p.user.email}</Link>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button variant="outline" onClick={() => window.open(`/projects/${p.id}/generate`, '_blank')}>
+                      <ExternalLink className="w-4 h-4 mr-1" /> Open
+                    </Button>
+                    <Button variant="outline" onClick={() => duplicateProject.mutate({ projectId: p.id })} disabled={duplicateProject.isPending}>
+                      <Copy className="w-4 h-4 mr-1" /> {duplicateProject.isPending ? 'Duplicating…' : 'Duplicate'}
+                    </Button>
+                    {p.user && (
+                      <Link href={`/admin/users/${p.user.id}`} className="text-sm underline">
+                        View User
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

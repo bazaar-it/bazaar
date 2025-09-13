@@ -7,6 +7,8 @@
 // that don't exist in Lambda's Node environment
 
 import { replaceIconifyIcons } from './replace-iconify-icons';
+import { iconMetrics } from './icon-loader';
+import { isFontSupported } from '~/lib/constants/fonts';
 
 export interface AudioTrack {
   url: string;
@@ -29,6 +31,7 @@ export interface RenderConfig {
   projectProps?: any;
   audio?: AudioTrack;
   onProgress?: (progress: number) => void;
+  onWarning?: (warning: { type: string; message: string; sceneId?: string; data?: any }) => void;
 }
 
 // Quality presets that will be used by Lambda
@@ -79,7 +82,7 @@ export const getQualityForFormat = (quality: string, format: string) => {
 };
 
 // Pre-compile TypeScript to JavaScript for Lambda
-async function preprocessSceneForLambda(scene: any) {
+async function preprocessSceneForLambda(scene: any, onWarning?: RenderConfig['onWarning']) {
   console.log(`[Preprocess] Checking scene:`, {
     id: scene.id,
     name: scene.name,
@@ -193,7 +196,10 @@ async function preprocessSceneForLambda(scene: any) {
     
     // Replace Iconify icons with inline SVGs for Lambda
     console.log(`[Preprocess] Replacing Iconify icons for scene ${scene.id}...`);
-    transformedCode = await replaceIconifyIcons(transformedCode);
+    transformedCode = await replaceIconifyIcons(transformedCode, {
+      addWarning: onWarning,
+      sceneId: scene.id,
+    });
     
     // Extract Remotion components being used (if any)
     const remotionComponents = [];
@@ -261,9 +267,23 @@ async function preprocessSceneForLambda(scene: any) {
     // Font loading is now handled by MainCompositionSimple using @remotion/fonts
     // No need to inject font loading code into the scene
     
+    // Warn for unsupported fonts in obviously literal styles
+    try {
+      const fontFamilyMatches = tsxCode.match(/fontFamily\s*:\s*['\"][^'\"]+['\"]/g) || [];
+      for (const m of fontFamilyMatches) {
+        const family = (m.match(/['\"]([^'\"]+)['\"]/ ) || [])[1];
+        if (family && !isFontSupported(family)) {
+          onWarning?.({ type: 'font_fallback', message: `Font not preloaded: ${family}. Using fallback.`, sceneId: scene.id, data: { fontFamily: family } });
+        }
+      }
+    } catch {}
+
     // Replace window.IconifyIcon with actual SVG icons
     // CRITICAL: This must happen AFTER TypeScript compilation but BEFORE any destructive replacements
-    transformedCode = await replaceIconifyIcons(transformedCode);
+    transformedCode = await replaceIconifyIcons(transformedCode, {
+      addWarning: onWarning,
+      sceneId: scene.id,
+    });
 
     // SAFETY: Provide a runtime helper for any remaining inline icon calls
     // Some transforms may emit __inlineIcon(svg, props). Ensure it's defined.
@@ -362,6 +382,7 @@ export async function prepareRenderConfig({
   playbackSpeed = 1.0,
   projectProps,
   audio,
+  onWarning,
 }: RenderConfig) {
   const settings = getQualityForFormat(quality, format);
   
@@ -417,7 +438,7 @@ export async function prepareRenderConfig({
       detectedFonts: [],
       width: renderWidth,
       height: renderHeight
-    }))
+    }, onWarning))
   );
   
   // Filter out any scenes that failed preprocessing or have no code
@@ -487,6 +508,29 @@ export async function prepareRenderConfig({
   
   const estimatedDurationMinutes = totalDuration / 30 / 60; // frames to minutes
   
+  // Log icon pipeline summary (log-only, no UI). Snapshot then reset.
+  try {
+    console.log(
+      `[Icons] Summary — local: ${iconMetrics.localHits}, api: ${iconMetrics.apiSuccess}/${iconMetrics.apiRequests}` +
+      `, cache(mem): ${iconMetrics.apiCachedHits}, r2(reads/hits/writes): ${iconMetrics.r2Reads}/${iconMetrics.r2ReadHits}/${iconMetrics.r2Writes}` +
+      `, placeholders: ${iconMetrics.fallbacks}, rateLimited: ${iconMetrics.rateLimited}, retries: ${iconMetrics.retries}`
+    );
+  } catch (_) {}
+  // Reset counters for next export
+  Object.assign(iconMetrics, {
+    apiRequests: 0,
+    apiSuccess: 0,
+    apiFailures: 0,
+    apiCachedHits: 0,
+    localHits: 0,
+    fallbacks: 0,
+    rateLimited: 0,
+    retries: 0,
+    r2Reads: 0,
+    r2ReadHits: 0,
+    r2Writes: 0,
+  });
+
   return {
     projectId,
     scenes: speedAdjustedScenes, // Use speed-adjusted scenes

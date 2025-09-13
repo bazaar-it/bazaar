@@ -82,6 +82,14 @@ export const env = createEnv({
     LIVE_MODE: z.enum(["manual", "webhook"]).optional().default("manual"),
     // Admin notifications
     ADMIN_NOTIFICATION_EMAIL: z.string().email().optional(),
+    // Server-side compilation toggle (Sprint 106 Phase 1)
+    USE_SERVER_COMPILATION: z.preprocess(
+      (val) => {
+        if (val === undefined) return true; // default on
+        return String(val).toLowerCase() === 'true';
+      },
+      z.boolean().optional()
+    ),
   },
 
   /**
@@ -142,6 +150,7 @@ export const env = createEnv({
     LIVE_FORCE: process.env.LIVE_FORCE,
     LIVE_MODE: process.env.LIVE_MODE,
     ADMIN_NOTIFICATION_EMAIL: process.env.ADMIN_NOTIFICATION_EMAIL,
+    USE_SERVER_COMPILATION: process.env.USE_SERVER_COMPILATION,
     NEXT_PUBLIC_LOG_AGENT_URL: process.env.NEXT_PUBLIC_LOG_AGENT_URL,
     NEXT_PUBLIC_LOG_RUN_ID: process.env.NEXT_PUBLIC_LOG_RUN_ID,
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,

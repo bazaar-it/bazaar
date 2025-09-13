@@ -209,12 +209,23 @@ export const scenes = createTable(
     dominantColors: d.jsonb(), // Array of dominant colors ["#000000", "#3B82F6"]
     firstH1Text: d.text(), // First H1 text content for easy identification
     lastFocused: d.boolean().default(false), // Track which scene user is working on
+    
+    // Sprint 106: Hybrid TSX/JS Storage
+    jsCode: d.text("js_code"), // Pre-compiled JavaScript for browser execution
+    jsCompiledAt: d.timestamp("js_compiled_at", { withTimezone: true }), // When TSX was compiled to JS
+    compilationError: d.text("compilation_error"), // Error message if compilation failed
+    // Phase 2: Versioned artifact + compile metadata (additive, safe)
+    compilationVersion: d.integer("compilation_version").default(1),
+    compileMeta: d.jsonb("compile_meta"),
   }),
   (t) => [
     index("scene_project_idx").on(t.projectId),
     index("scene_order_idx").on(t.projectId, t.order),
     // Index for published scenes lookup
     index("scene_publish_idx").on(t.projectId, t.publishedHash),
+    // Indexes for compilation status
+    index("scene_compilation_status_idx").on(t.jsCompiledAt),
+    index("scene_needs_compilation_idx").on(t.id).where(sql`js_code IS NULL AND compilation_error IS NULL`),
   ],
 );
 
@@ -1250,6 +1261,9 @@ export const templates = createTable("templates", (d) => ({
   name: d.varchar("name", { length: 255 }).notNull(),
   description: d.text("description"),
   tsxCode: d.text("tsx_code").notNull(),
+  jsCode: d.text("js_code"),
+  jsCompiledAt: d.timestamp("js_compiled_at", { withTimezone: true }),
+  compilationError: d.text("compilation_error"),
   duration: d.integer("duration").notNull(),
   previewFrame: d.integer("preview_frame").default(15),
   supportedFormats: d.jsonb("supported_formats").$type<('landscape' | 'portrait' | 'square')[]>().default(['landscape', 'portrait', 'square']),

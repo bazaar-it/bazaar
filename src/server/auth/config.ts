@@ -131,10 +131,12 @@ export const authConfig = {
 
       // Send email notification to admin about new user
       try {
-        // Try to determine the provider from recent account entries
+        // Import the notification function
+        const { sendNewUserNotification } = await import('~/server/services/email/notifications');
+        
+        // Try to determine the provider from recent account entries (no createdAt column)
         const recentAccount = await db.query.accounts.findFirst({
           where: eq(accounts.userId, user.id),
-          orderBy: (accounts, { desc }) => [desc(accounts.createdAt)],
         });
         const provider = recentAccount?.provider || 'Unknown';
         

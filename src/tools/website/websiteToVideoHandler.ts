@@ -13,6 +13,8 @@ interface ToolExecutionResult {
   chatResponse?: string;
 }
 import { db } from "~/server/db";
+import { env } from "~/env";
+import { sceneCompiler } from "~/server/services/compilation/scene-compiler.service";
 import { projects, scenes } from "~/server/db/schema";
 import { eq, asc } from "drizzle-orm";
 import { WebAnalysisAgentV4, type ExtractedBrandDataV4 } from "~/tools/webAnalysis/WebAnalysisAgentV4";
@@ -222,11 +224,19 @@ export class WebsiteToVideoHandler {
         
         // Save scene to database immediately
         const sceneId = randomUUID();
+        let compiled = { jsCode: null as string | null, jsCompiledAt: null as Date | null };
+        if (env.USE_SERVER_COMPILATION) {
+          const res = await sceneCompiler.compileScene(scene.code, { projectId: input.projectId, sceneId });
+          compiled = { jsCode: res.jsCode, jsCompiledAt: res.compiledAt };
+          console.log('[CompileMetrics] websiteToVideo sceneIndex=%d compiled=%s', index, String(!!res.jsCode));
+        }
         const sceneRecord = {
           id: sceneId,
           projectId: input.projectId,
           name: scene.name,
           tsxCode: scene.code,
+          jsCode: compiled.jsCode,
+          jsCompiledAt: compiled.jsCompiledAt,
           duration: scene.duration,
           order: index,
           props: {},

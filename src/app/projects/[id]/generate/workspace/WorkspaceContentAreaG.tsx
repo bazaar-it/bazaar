@@ -7,6 +7,7 @@ import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
 import { DndContext, closestCenter, useSensor, useSensors, PointerSensor, DragOverlay, defaultDropAnimationSideEffects } from '@dnd-kit/core';
 import type { DragEndEvent, DragStartEvent, DragOverEvent, DropAnimation } from '@dnd-kit/core';
 import { arrayMove, SortableContext, useSortable, horizontalListSortingStrategy } from '@dnd-kit/sortable';
+import { ClientOnly } from '~/components/ClientOnly';
 import { CSS } from '@dnd-kit/utilities';
 import { XIcon, RotateCcw } from 'lucide-react';
 import type { InputProps } from '~/lib/types/video/input-props';
@@ -1034,7 +1035,7 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
                         )}
                       </React.Fragment>
                   ))}
-                </PanelGroup>
+                  </PanelGroup>
               )}
               
               {/* Drop overlay that appears when dragging from sidebar */}

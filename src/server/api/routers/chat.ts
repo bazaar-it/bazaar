@@ -15,11 +15,14 @@ export const chatRouter = createTRPCRouter({
             limit: z.number().int().min(1).max(100).optional().default(50),
         }))
         .query(async ({ ctx, input }) => {
-            const project = await ctx.db.query.projects.findFirst({
+            let project = await ctx.db.query.projects.findFirst({
                 columns: { id: true, userId: true },
                 where: eq(projects.id, input.projectId),
             });
-            if (!project || project.userId !== ctx.session.user.id) {
+            if (!project) {
+                throw new TRPCError({ code: "NOT_FOUND", message: "Project not found." });
+            }
+            if (project.userId !== ctx.session.user.id && !ctx.session.user.isAdmin) {
                 throw new TRPCError({ code: "FORBIDDEN", message: "Project not found or access denied." });
             }
             // First get the messages in descending order to get the most recent ones

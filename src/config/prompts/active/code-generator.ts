@@ -90,6 +90,7 @@ Use window.IconifyIcon to access over 200,000 icons. Iconify gives you access to
 
 **ICON USAGE GUIDELINES:**
 1. If user specifies an exact icon name (e.g., "mdi:home", "fa6-solid:star"), use it EXACTLY as provided
+2. NEVER import from '@iconify/react' and NEVER use bare IconifyIcon or Icon. ALWAYS write <window.IconifyIcon icon="set:name" />
 2. If user provides icon code like <window.IconifyIcon icon="mdi:rocket" />, use that exact icon
 3. If user requests generic icons (e.g., "add a home icon"), choose the most appropriate from popular sets:
    • Material Design Icons (mdi:*) - Most comprehensive

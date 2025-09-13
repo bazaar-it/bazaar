@@ -17,6 +17,48 @@ import type { AddToolInput, EditToolInput, DeleteToolInput, TrimToolInput, Scene
 import type { AddAudioInput } from "~/tools/addAudio/addAudio";
 import type { SceneEntity } from "~/generated/entities";
 import { formatSceneOperationMessage } from "~/lib/utils/scene-message-formatter";
+import { sceneCompiler } from "~/server/services/compilation/scene-compiler.service";
+import { env } from "~/env";
+
+// Helper function to compile TSX with context-aware conflict resolution
+async function prepareSceneDataWithCompilation(
+  tsxCode: string,
+  projectId: string,
+  sceneId: string = randomUUID(),
+  existingScenes?: Pick<SceneEntity, 'id' | 'tsxCode' | 'name'>[]
+) {
+  // Gate by flag
+  if (!env.USE_SERVER_COMPILATION) {
+    console.log('[CompileMetrics] skip=true reason=flag-disabled', { projectId, sceneId });
+    return {
+      tsxCode,
+      jsCode: null,
+      jsCompiledAt: null,
+      compilationError: null,
+      compilationVersion: 1,
+      compileMeta: { skipped: true, reason: 'flag-disabled' },
+    };
+  }
+
+  const t0 = Date.now();
+  const compilationResult = await sceneCompiler.compileScene(tsxCode, {
+    projectId,
+    sceneId,
+    existingScenes
+  });
+  const ms = Date.now() - t0;
+  console.log('[CompileMetrics] skip=false success=%s ms=%d scene=%s', String(compilationResult.success), ms, sceneId);
+  
+  return {
+    tsxCode: compilationResult.tsxCode, // May be auto-fixed for conflicts
+    jsCode: compilationResult.jsCode,    // Always has a value (compiled or fallback)
+    jsCompiledAt: compilationResult.compiledAt,
+    compilationError: compilationResult.compilationError || null,
+    // Phase 2 fields for callers that persist directly
+    compilationVersion: 1,
+    compileMeta: compilationResult.metadata?.compile_meta,
+  };
+}
 
 // Helper function for tool execution and database save
 export async function executeToolFromDecision(
@@ -193,10 +235,20 @@ export async function executeToolFromDecision(
         duration: addFinalDuration,
       });
       
+      // Compile TSX to JS with conflict resolution for multi-scene projects
+      const newSceneId = randomUUID();
+      const compiledData = await prepareSceneDataWithCompilation(
+        addResult.data.tsxCode,
+        projectId,
+        newSceneId,
+        storyboard // Pass existing scenes for conflict detection
+      );
+      
       const [newScene] = await db.insert(scenes).values({
+        id: newSceneId, // Use the same ID we used for compilation
         projectId,
         name: addResult.data.name,
-        tsxCode: addResult.data.tsxCode,
+        ...compiledData,
         duration: addFinalDuration || 150,
         order: storyboard.length,
         props: addResult.data.props || {},
@@ -438,9 +490,18 @@ export async function executeToolFromDecision(
         throw new Error(errorMessage);
       }
       
+      // Compile the edited TSX code to JS with conflict checking
+      const compiledEdit = await prepareSceneDataWithCompilation(
+        editResult.data.tsxCode,
+        projectId,
+        decision.toolContext.targetSceneId!,
+        storyboard // Pass existing scenes for conflict detection
+      );
+      
       // Preserve manual trims by default: ONLY change duration if explicitly requested
       const setFields: any = {
-        tsxCode: editResult.data.tsxCode,
+        // Keep tsx and compiled js updates from compilation service
+        ...compiledEdit,
         name: editResult.data.name || sceneToEdit.name, // Preserve scene name
         props: editResult.data.props || sceneToEdit.props,
         updatedAt: new Date(),
@@ -1118,11 +1179,19 @@ async function executeIndividualScene(
       return { success: false, error: toolResult.error?.message || 'Tool execution failed' };
     }
     
-    // Save to database with correct order
+    // Save to database with correct order and compiled JS
+    const websiteSceneId = randomUUID();
+    const compiledWebsite = await prepareSceneDataWithCompilation(
+      toolResult.data.tsxCode,
+      projectId,
+      websiteSceneId,
+      storyboard
+    );
     const [newScene] = await db.insert(scenes).values({
+      id: websiteSceneId,
       projectId,
       name: toolResult.data.name,
-      tsxCode: toolResult.data.tsxCode,
+      ...compiledWebsite,
       duration: toolResult.data.duration || 150,
       order: sceneOrder,
       props: {},
