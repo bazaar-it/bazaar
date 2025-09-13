@@ -8,6 +8,8 @@ import type { ChangelogVideoRequest, ChangelogVideoResponse, PRAnalysis } from '
 import type { InputProps } from '~/lib/types/video/input-props';
 import { db } from '~/server/db';
 import { projects, scenes, users } from '~/server/db/schema';
+import { env } from "~/env";
+import { sceneCompiler } from "~/server/services/compilation/scene-compiler.service";
 import { eq } from 'drizzle-orm';
 import { prepareRenderConfig } from '~/server/services/render/render.service';
 import { renderVideoOnLambda, getLambdaRenderProgress } from '~/server/services/render/lambda-render.service';
@@ -94,6 +96,12 @@ export async function generateChangelogVideo(
       branding || 'auto'
     );
     
+    let compiled = { jsCode: null as string | null, jsCompiledAt: null as Date | null };
+    if (env.USE_SERVER_COMPILATION) {
+      const res = await sceneCompiler.compileScene(componentCode, { projectId, sceneId });
+      compiled = { jsCode: res.jsCode, jsCompiledAt: res.compiledAt };
+      console.log('[CompileMetrics] changelog compiled=%s scene=%s', String(!!res.jsCode), sceneId);
+    }
     await db.insert(scenes).values({
       id: sceneId,
       projectId,
@@ -101,6 +109,8 @@ export async function generateChangelogVideo(
       order: 0,
       duration: sceneDuration,
       tsxCode: componentCode,
+      jsCode: compiled.jsCode,
+      jsCompiledAt: compiled.jsCompiledAt,
       createdAt: new Date(),
       updatedAt: new Date(),
     });

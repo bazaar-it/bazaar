@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo, Suspense, useRef } from 'react';
+import { useSession } from 'next-auth/react';
 import { useVideoState } from '~/stores/videoState';
 import type { InputProps } from '~/lib/types/video/input-props';
 import { Button } from "~/components/ui/button";
@@ -160,6 +161,17 @@ export function PreviewPanelG({
         }
         const localScene = currentProps.scenes?.find((s: any) => s.id === dbScene.id);
         const localName = (localScene as any)?.name || localScene?.data?.name;
+        const hasCompiled = !!(dbScene as any).jsCode;
+        // Per-scene visibility: whether compiled JS will be used
+        console.log('[PreviewPanelG] Scene source:', {
+          id: dbScene.id,
+          name: dbScene.name,
+          use: hasCompiled ? 'compiled-js' : 'tsx',
+          hasJsCode: hasCompiled,
+          jsCodeLength: hasCompiled ? ((dbScene as any).jsCode?.length || 0) : 0,
+          duration: sceneDuration,
+          order: dbScene.order ?? 0,
+        });
         const scene = {
           id: dbScene.id,
           type: 'custom' as const,
@@ -193,6 +205,13 @@ export function PreviewPanelG({
       if (dbScenes.length === 0) {
         replace(projectId, { ...currentProps, scenes: [], meta: { ...currentProps.meta, duration: 150 } });
       } else {
+        // Aggregate visibility: how many scenes use compiled JS vs TSX
+        const compiledCount = convertedScenes.filter((s: any) => !!(s?.data as any)?.jsCode).length;
+        console.log('[PreviewPanelG] Scene sources summary:', {
+          total: convertedScenes.length,
+          compiledJs: compiledCount,
+          tsxFallback: convertedScenes.length - compiledCount,
+        });
         replace(projectId, updatedProps);
       }
       }, 300); // 300ms debounce for DB sync
@@ -238,6 +257,15 @@ export function PreviewPanelG({
   );
   const ranges = useMemo(() => computeSceneRanges(scenes as any), [scenes]);
   const activeRange = useMemo(() => findSceneAtFrame(ranges, currentFrame), [ranges, currentFrame]);
+  
+  // Admin-only indicator (owner email only)
+  const { data: session } = useSession();
+  const isOwner = session?.user?.email === 'markushogne@gmail.com';
+  const compiledSummary = useMemo(() => {
+    const total = scenes.length;
+    const compiled = scenes.filter((s: any) => (s as any).jsCode || (s?.data as any)?.jsCode).length;
+    return { total, compiled };
+  }, [scenes]);
   
   // Force preview refresh when audio settings change
   useEffect(() => {
@@ -2597,6 +2625,19 @@ export default function FallbackComposition() {
       />
       
       <div className="relative flex-grow flex items-center justify-center">
+        {isOwner && (
+          <div className="absolute top-2 right-2 z-10 text-[11px] leading-tight">
+            <div className="px-2 py-1 rounded-md bg-black/70 text-white shadow-sm border border-white/10">
+              <div>Preview Source</div>
+              <div>
+                JS {compiledSummary.compiled}/{compiledSummary.total}
+                {compiledSummary.total > 0 && compiledSummary.compiled < compiledSummary.total ? (
+                  <span className="ml-1 text-yellow-300">(TSX fallback present)</span>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        )}
         {componentImporter && playerProps ? (
           <div 
             className={cn(

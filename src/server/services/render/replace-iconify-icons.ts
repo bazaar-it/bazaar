@@ -100,6 +100,8 @@ export async function replaceIconifyIcons(code: string, hook?: WarningHook): Pro
       t.objectProperty(t.identifier('__html'), t.stringLiteral(body)),
     ]);
   
+  // Traverse AST and inline icons
+  try {
     // Check for export default and perform inline replacements
     traverse(ast, {
       ExportDefaultDeclaration() { hasExportDefault = true; },

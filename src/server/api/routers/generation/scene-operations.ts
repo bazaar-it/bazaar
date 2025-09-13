@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
+import { env } from "~/env";
+import { sceneCompiler } from "~/server/services/compilation/scene-compiler.service";
 import { scenes, projects, messages, sceneOperations } from "~/server/db/schema";
 import { eq, and, desc, gte, sql } from "drizzle-orm";
 import { messageService } from "~/server/services/data/message.service";
@@ -814,12 +816,20 @@ export const restoreScene = protectedProcedure
       .set({ order: sql`${scenes.order} + 1` })
       .where(and(eq(scenes.projectId, projectId), gte(scenes.order, scene.order)));
 
-    // Insert scene back (preserve original ID)
+    // Insert scene back (preserve original ID) with optional server compilation
+    let compiled = { jsCode: null as string | null, jsCompiledAt: null as Date | null };
+    if (env.USE_SERVER_COMPILATION) {
+      const res = await sceneCompiler.compileScene(scene.tsxCode, { projectId, sceneId: scene.id });
+      compiled = { jsCode: res.jsCode, jsCompiledAt: res.compiledAt };
+      console.log('[CompileMetrics] restoreScene compiled=%s scene=%s', String(!!res.jsCode), scene.id);
+    }
     const [restored] = await db.insert(scenes).values({
       id: scene.id,
       projectId,
       name: scene.name,
       tsxCode: scene.tsxCode,
+      jsCode: compiled.jsCode,
+      jsCompiledAt: compiled.jsCompiledAt,
       duration: scene.duration,
       order: scene.order,
       props: scene.props as any,
@@ -984,11 +994,19 @@ export const trimLeft = protectedProcedure
     // Insert right-hand scene after current
     const rightName = `${scene.name || 'Scene'} (Part 2)`;
     const mergedProps: any = { ...(scene.props as any), startOffset: splitAt };
+    let compiledRight = { jsCode: null as string | null, jsCompiledAt: null as Date | null };
+    if (env.USE_SERVER_COMPILATION) {
+      const res = await sceneCompiler.compileScene(scene.tsxCode, { projectId, sceneId });
+      compiledRight = { jsCode: res.jsCode, jsCompiledAt: res.compiledAt };
+      console.log('[CompileMetrics] trimLeft compiled right=%s scene=%s', String(!!res.jsCode), sceneId);
+    }
     const [right] = await db.insert(scenes).values({
       projectId,
       order: scene.order + 1,
       name: rightName,
       tsxCode: scene.tsxCode, // safe since only right remains after delete
+      jsCode: compiledRight.jsCode,
+      jsCompiledAt: compiledRight.jsCompiledAt,
       props: mergedProps,
       duration: rightDuration,
       layoutJson: scene.layoutJson,

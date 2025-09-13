@@ -18,6 +18,7 @@ import type { AddAudioInput } from "~/tools/addAudio/addAudio";
 import type { SceneEntity } from "~/generated/entities";
 import { formatSceneOperationMessage } from "~/lib/utils/scene-message-formatter";
 import { sceneCompiler } from "~/server/services/compilation/scene-compiler.service";
+import { env } from "~/env";
 
 // Helper function to compile TSX with context-aware conflict resolution
 async function prepareSceneDataWithCompilation(
@@ -26,11 +27,27 @@ async function prepareSceneDataWithCompilation(
   sceneId: string = randomUUID(),
   existingScenes?: Pick<SceneEntity, 'id' | 'tsxCode' | 'name'>[]
 ) {
+  // Gate by flag
+  if (!env.USE_SERVER_COMPILATION) {
+    console.log('[CompileMetrics] skip=true reason=flag-disabled', { projectId, sceneId });
+    return {
+      tsxCode,
+      jsCode: null,
+      jsCompiledAt: null,
+      compilationError: null,
+      compilationVersion: 1,
+      compileMeta: { skipped: true, reason: 'flag-disabled' },
+    };
+  }
+
+  const t0 = Date.now();
   const compilationResult = await sceneCompiler.compileScene(tsxCode, {
     projectId,
     sceneId,
     existingScenes
   });
+  const ms = Date.now() - t0;
+  console.log('[CompileMetrics] skip=false success=%s ms=%d scene=%s', String(compilationResult.success), ms, sceneId);
   
   return {
     tsxCode: compilationResult.tsxCode, // May be auto-fixed for conflicts
