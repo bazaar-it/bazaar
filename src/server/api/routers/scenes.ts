@@ -337,7 +337,7 @@ export const scenesRouter = createTRPCRouter({
       
       // Verify project ownership
       const projectScenes = await ctx.db.query.scenes.findMany({
-        where: eq(scenes.projectId, input.projectId),
+        where: and(eq(scenes.projectId, input.projectId), sql`"deleted_at" IS NULL`),
         with: {
           project: true
         }
@@ -392,7 +392,7 @@ export const scenesRouter = createTRPCRouter({
 
       // Normalize orders 0..n-1 for safety
       const orderedAfterReorder = await ctx.db.query.scenes.findMany({
-        where: eq(scenes.projectId, input.projectId),
+        where: and(eq(scenes.projectId, input.projectId), sql`"deleted_at" IS NULL`),
       });
       orderedAfterReorder
         .sort((a: any, b: any) => ((a.order ?? 0) - (b.order ?? 0)) || (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()))

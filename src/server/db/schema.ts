@@ -217,6 +217,8 @@ export const scenes = createTable(
     // Phase 2: Versioned artifact + compile metadata (additive, safe)
     compilationVersion: d.integer("compilation_version").default(1),
     compileMeta: d.jsonb("compile_meta"),
+    // Soft delete support
+    deletedAt: d.timestamp("deleted_at", { withTimezone: true }),
   }),
   (t) => [
     index("scene_project_idx").on(t.projectId),
@@ -226,6 +228,7 @@ export const scenes = createTable(
     // Indexes for compilation status
     index("scene_compilation_status_idx").on(t.jsCompiledAt),
     index("scene_needs_compilation_idx").on(t.id).where(sql`js_code IS NULL AND compilation_error IS NULL`),
+    index("scene_deleted_at_idx").on(t.deletedAt),
   ],
 );
 

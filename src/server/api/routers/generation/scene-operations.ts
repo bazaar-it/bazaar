@@ -4,7 +4,7 @@ import { db } from "~/server/db";
 import { env } from "~/env";
 import { sceneCompiler } from "~/server/services/compilation/scene-compiler.service";
 import { scenes, projects, messages, sceneOperations } from "~/server/db/schema";
-import { eq, and, desc, gte, sql } from "drizzle-orm";
+import { eq, and, desc, gte, sql, isNull } from "drizzle-orm";
 import { messageService } from "~/server/services/data/message.service";
 import { orchestrator } from "~/brain/orchestratorNEW";
 import type { BrainDecision } from "~/lib/types/ai/brain.types";
@@ -729,12 +729,12 @@ export const removeScene = protectedProcedure
         }
       }
 
-      // 2. Delete the scene, then normalize order and bump revision
-      await db.delete(scenes).where(eq(scenes.id, sceneId));
+      // 2. Soft delete the scene, then normalize order and bump revision
+      await db.update(scenes).set({ deletedAt: new Date() }).where(eq(scenes.id, sceneId));
 
-      // Normalize orders 0..n-1
+      // Normalize orders 0..n-1 among non-deleted scenes
       const ordered = await db.query.scenes.findMany({
-        where: eq(scenes.projectId, projectId),
+        where: and(eq(scenes.projectId, projectId), isNull(scenes.deletedAt)),
         orderBy: [scenes.order],
       });
       await Promise.all(
@@ -811,30 +811,51 @@ export const restoreScene = protectedProcedure
       throw new TRPCError({ code: 'UNAUTHORIZED', message: "Access denied" });
     }
 
-    // Bump order of existing scenes at or after the target position
+    // Bump order of existing non-deleted scenes at or after the target position
     await db.update(scenes)
       .set({ order: sql`${scenes.order} + 1` })
-      .where(and(eq(scenes.projectId, projectId), gte(scenes.order, scene.order)));
+      .where(and(eq(scenes.projectId, projectId), isNull(scenes.deletedAt), gte(scenes.order, scene.order)));
 
-    // Insert scene back (preserve original ID) with optional server compilation
+    // Restore scene: If a soft-deleted row exists, un-delete it; otherwise insert
+    const existing = await db.query.scenes.findFirst({ where: eq(scenes.id, scene.id) });
+
+    // Insert/compile only if needed
     let compiled = { jsCode: null as string | null, jsCompiledAt: null as Date | null };
     if (env.USE_SERVER_COMPILATION) {
       const res = await sceneCompiler.compileScene(scene.tsxCode, { projectId, sceneId: scene.id });
       compiled = { jsCode: res.jsCode, jsCompiledAt: res.compiledAt };
       console.log('[CompileMetrics] restoreScene compiled=%s scene=%s', String(!!res.jsCode), scene.id);
     }
-    const [restored] = await db.insert(scenes).values({
-      id: scene.id,
-      projectId,
-      name: scene.name,
-      tsxCode: scene.tsxCode,
-      jsCode: compiled.jsCode,
-      jsCompiledAt: compiled.jsCompiledAt,
-      duration: scene.duration,
-      order: scene.order,
-      props: scene.props as any,
-      layoutJson: scene.layoutJson as any,
-    }).returning();
+    let restored;
+    if (existing) {
+      [restored] = await db.update(scenes)
+        .set({
+          name: scene.name,
+          tsxCode: scene.tsxCode,
+          jsCode: compiled.jsCode,
+          jsCompiledAt: compiled.jsCompiledAt,
+          duration: scene.duration,
+          order: scene.order,
+          props: scene.props as any,
+          layoutJson: scene.layoutJson as any,
+          deletedAt: null,
+        })
+        .where(eq(scenes.id, scene.id))
+        .returning();
+    } else {
+      [restored] = await db.insert(scenes).values({
+        id: scene.id,
+        projectId,
+        name: scene.name,
+        tsxCode: scene.tsxCode,
+        jsCode: compiled.jsCode,
+        jsCompiledAt: compiled.jsCompiledAt,
+        duration: scene.duration,
+        order: scene.order,
+        props: scene.props as any,
+        layoutJson: scene.layoutJson as any,
+      }).returning();
+    }
 
     return { success: true, scene: restored };
   });

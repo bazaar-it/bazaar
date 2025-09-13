@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
 import { prepareRenderConfig } from "~/server/services/render/render.service";
+import { eq, and, isNull } from "drizzle-orm";
 import { renderVideoOnLambda } from "~/server/services/render/lambda-render.service";
 import { renderState } from "~/server/services/render/render-state";
 import { ExportTrackingService } from "~/server/services/render/export-tracking.service";
@@ -57,7 +58,8 @@ export const renderRouter = createTRPCRouter({
         ),
         with: {
           scenes: {
-            orderBy: (scenes, { asc }) => asc(scenes.order),
+            where: (scenesTable, { and, isNull }) => and(eq(scenesTable.projectId, input.projectId), isNull(scenesTable.deletedAt)),
+            orderBy: (scenesTable, { asc }) => asc(scenesTable.order),
           },
         },
       });

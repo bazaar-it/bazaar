@@ -108,6 +108,7 @@ export const shareRouter = createTRPCRouter({
             },
             with: {
               scenes: {
+                where: (scenesTable, { isNull }) => isNull(scenesTable.deletedAt),
                 orderBy: (scenesTable, { asc }) => [asc(scenesTable.order)],
                 columns: {
                   id: true,
