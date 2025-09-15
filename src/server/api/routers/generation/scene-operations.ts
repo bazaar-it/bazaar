@@ -402,8 +402,15 @@ export const generateScene = protectedProcedure
         if ((!ctx.videoUrls || ctx.videoUrls.length === 0) && inheritedVideoUrls.length > 0) {
           ctx.videoUrls = inheritedVideoUrls;
         }
+        // Only inherit audio if the project currently has background audio set.
+        // If the user has deleted audio from the project (project.audio is null),
+        // do NOT resurrect audio from a previous user message unless the current
+        // request explicitly includes audioUrls.
         if ((!ctx.audioUrls || ctx.audioUrls.length === 0) && inheritedAudioUrls.length > 0) {
-          ctx.audioUrls = inheritedAudioUrls;
+          const projectHasAudio = !!(project as any)?.audio;
+          if (projectHasAudio) {
+            ctx.audioUrls = inheritedAudioUrls;
+          }
         }
         if ((!ctx.referencedSceneIds || ctx.referencedSceneIds.length === 0) && inheritedSceneUrls.length > 0) {
           ctx.referencedSceneIds = inheritedSceneUrls;

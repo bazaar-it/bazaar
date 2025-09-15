@@ -35,7 +35,16 @@ var EnhancedAudio = ({ audioData }) => {
   }
   if (typeof Audio === 'undefined' || !Audio) return null;
   return React.createElement(Sequence, { from: videoStartFrame, durationInFrames: audioDurationFrames },
-    React.createElement(Audio, { src: audioData.url, startFrom: audioOffsetFrames, volume: volume, playbackRate: audioData.playbackRate || 1, crossOrigin: 'anonymous' })
+    React.createElement(Audio, { 
+      src: audioData.url, 
+      startFrom: audioOffsetFrames, 
+      volume: volume, 
+      playbackRate: audioData.playbackRate || 1, 
+      crossOrigin: 'anonymous',
+      onError: (e) => { try { console.error('[EnhancedAudio] <Audio> error', e); } catch {} },
+      onPlay: () => { try { console.log('[EnhancedAudio] <Audio> playing'); } catch {} },
+      onCanPlay: () => { try { console.log('[EnhancedAudio] <Audio> canplay'); } catch {} }
+    })
   );
 };
 
@@ -97,7 +106,17 @@ export default function MultiSceneComposition() {
           const shouldLoop = (TOTAL_FRAMES !== null) ? (trimmedSec * fps < (TOTAL_FRAMES - videoStartFrame)) : false;
           if (typeof Audio === 'undefined' || !Audio) return null;
           return React.createElement(Sequence, { from: videoStartFrame, durationInFrames: seqDurationFrames },
-            React.createElement(Audio, { src: audio.url, startFrom: audioOffsetFrames, volume: volume, playbackRate: audio.playbackRate || 1, loop: shouldLoop, crossOrigin: 'anonymous' })
+            React.createElement(Audio, { 
+              src: audio.url, 
+              startFrom: audioOffsetFrames, 
+              volume: volume, 
+              playbackRate: audio.playbackRate || 1, 
+              loop: shouldLoop, 
+              crossOrigin: 'anonymous',
+              onError: (e) => { try { console.error('[EnhancedAudio] <Audio> error', e); } catch {} },
+              onPlay: () => { try { console.log('[EnhancedAudio] <Audio> playing'); } catch {} },
+              onCanPlay: () => { try { console.log('[EnhancedAudio] <Audio> canplay'); } catch {} }
+            })
           );
         };
       })(), {}) ,

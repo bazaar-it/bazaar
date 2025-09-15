@@ -18,10 +18,12 @@ import {
   Upload,
   X,
   Clock,
-  Hash,
+  Film,
   Scissors,
   RotateCcw,
-  RotateCw
+  RotateCw,
+  Repeat,
+  Repeat1
 } from 'lucide-react';
 import { cn } from '~/lib/cn';
 import { nanoid } from 'nanoid';
@@ -114,6 +116,8 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   // Default to 200% zoom for clearer labels by default
   const [zoomScale, setZoomScale] = useState(2);
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
+  // If user selects 'Scene' loop with no current selection, remember the intent
+  const sceneLoopPendingRef = useRef<boolean>(false);
   const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [reorderHoverIndex, setReorderHoverIndex] = useState<number | null>(null);
@@ -306,22 +310,30 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       audioHadRef.current = true;
       audioLastUrlRef.current = (localAudio as any).url || null;
     }
-    // When DB has audio but local is missing → set local
+    // When DB has audio but local is missing → set local (only if server timestamp is not older than last applied)
     if (dbAudio && !localAudio) {
-      const audioWithId = { id: (dbAudio as any).id || dbAudio.url || 'default-id', ...dbAudio } as any;
-      console.log('[Timeline] Setting local audio from DB');
-      updateProjectAudio(projectId, audioWithId);
-      // Pulse highlight if newly added or URL changed
-      const prevHad = audioHadRef.current;
-      const prevUrl = audioLastUrlRef.current;
-      audioHadRef.current = true;
-      audioLastUrlRef.current = audioWithId.url || null;
-      if (!prevHad || prevUrl !== audioWithId.url) {
-        setAudioPulse(true);
-        window.setTimeout(() => setAudioPulse(false), 1800);
+      const serverTs = dbProject?.audioUpdatedAt ? (dbProject.audioUpdatedAt as Date).getTime() : 0;
+      const localAppliedTs = audioAppliedAtRef.current || 0;
+      if (serverTs >= localAppliedTs) {
+        const audioWithId = { id: (dbAudio as any).id || dbAudio.url || 'default-id', ...dbAudio } as any;
+        console.log('[Timeline] Setting local audio from DB');
+        updateProjectAudio(projectId, audioWithId);
+
+        // Pulse highlight if newly added or URL changed
+        const prevHad = audioHadRef.current;
+        const prevUrl = audioLastUrlRef.current;
+        audioHadRef.current = true;
+        audioLastUrlRef.current = audioWithId.url || null;
+        if (!prevHad || prevUrl !== audioWithId.url) {
+          setAudioPulse(true);
+          window.setTimeout(() => setAudioPulse(false), 1800);
+        }
+        audioInitializedRef.current = true;
+        return;
+      } else {
+        console.log('[Timeline] Skipping DB→local audio sync (server older than local change)');
+        return;
       }
-      audioInitializedRef.current = true;
-      return;
     }
     // When both exist, sync if they differ (URL or timings/volume)
     if (dbAudio && localAudio) {
@@ -630,6 +642,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   const currentFrameRef = useRef(0);
   useEffect(() => { currentFrameRef.current = currentFrame; }, [currentFrame]);
   const [isPlaying, setIsPlaying] = useState(false);
+  const lastKnownPlayingRef = useRef(false);
   
   // Calculate total duration - needs to be before any useEffect that uses it
   const totalDuration = useMemo(() => {
@@ -1062,6 +1075,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         const playing = event.detail.playing as boolean;
         lastExplicitPlayStateRef.current = { playing, ts: Date.now() };
         setIsPlaying(playing);
+        lastKnownPlayingRef.current = playing;
 
         // On first play, ensure AudioContext is enabled and generate waveform/peaks if missing
         if (playing && audioTrack && (!peaksSecondsRef.current || !audioWaveform)) {
@@ -1117,6 +1131,16 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     window.addEventListener('loop-state-loaded' as any, handleLoopLoaded);
     return () => window.removeEventListener('loop-state-loaded' as any, handleLoopLoaded);
   }, []);
+
+  // Also read saved loop state directly on mount to avoid event ordering race
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`bazaar-loop-state-${projectId}`);
+      if (saved === 'video' || saved === 'off' || saved === 'scene') {
+        setLoopState(saved);
+      }
+    } catch {}
+  }, [projectId]);
   
   // Audio track calculations
   useEffect(() => {
@@ -1856,6 +1880,30 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     return () => window.removeEventListener('keydown', onDeleteKey);
   }, [isPointerInside, audioTrack, projectId, updateProjectAudio, updateAudioMutation]);
 
+  // Keyboard: ArrowLeft/ArrowRight step playhead by 1 frame when timeline is hovered (and not typing)
+  useEffect(() => {
+    const onArrowStep = (e: KeyboardEvent) => {
+      // Ignore if user is typing
+      const active = document.activeElement as HTMLElement | null;
+      const isTyping = !!active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.getAttribute('contenteditable') === 'true');
+      if (isTyping) return;
+      // Only respond when pointer/timeline is active to avoid hijacking arrows globally
+      if (!isPointerInside) return;
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      const delta = e.key === 'ArrowLeft' ? -1 : 1;
+      const cur = Math.round(currentFrameRef.current || 0);
+      const next = Math.max(0, Math.min(totalDuration - 1, cur + delta));
+      try {
+        const ev = new CustomEvent('timeline-seek', { detail: { frame: next } });
+        window.dispatchEvent(ev);
+      } catch {}
+      setCurrentFrame(next);
+    };
+    window.addEventListener('keydown', onArrowStep);
+    return () => window.removeEventListener('keydown', onArrowStep);
+  }, [isPointerInside, totalDuration]);
+
   // Helper: compute scene start frame by id
   const getSceneStartById = useCallback((sceneId: string): { start: number; duration: number } | null => {
     let start = 0;
@@ -1988,6 +2036,47 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       trimLeftMutation.mutate({ projectId, sceneId: selectedSceneId, offset, idempotencyKey: idKey, clientRevision });
     }, 30);
   }, [selectedSceneId, getSceneStartById, currentFrame, projectId, scenes, trimLeftMutation, pushAction, utils]);
+
+  // If Scene loop was toggled before a selection existed, apply it when user selects a scene next
+  useEffect(() => {
+    if (loopState === 'scene' && sceneLoopPendingRef.current && selectedSceneId) {
+      const info = getSceneStartById(selectedSceneId);
+      if (info) {
+        try {
+          // Re-emit loop-state-change to ensure PreviewPanelG applies immediately
+          const ev = new CustomEvent('loop-state-change', { detail: { state: 'scene' } });
+          window.dispatchEvent(ev);
+        } catch {}
+        try {
+          // Seek to the beginning of the selected scene
+          const seek = new CustomEvent('timeline-seek', { detail: { frame: info.start } });
+          window.dispatchEvent(seek);
+          setCurrentFrame(info.start);
+        } catch {}
+        // Ensure playback starts when entering scene-loop after pending selection
+        if (!lastKnownPlayingRef.current) {
+          try { window.dispatchEvent(new Event('timeline-play')); } catch {}
+        }
+      }
+      sceneLoopPendingRef.current = false;
+    }
+  }, [loopState, selectedSceneId, getSceneStartById]);
+
+  // When already in Scene loop, switching the selected scene should auto-seek and keep playing
+  useEffect(() => {
+    if (loopState !== 'scene' || !selectedSceneId) return;
+    const info = getSceneStartById(selectedSceneId);
+    if (!info) return;
+    try {
+      const seek = new CustomEvent('timeline-seek', { detail: { frame: info.start } });
+      window.dispatchEvent(seek);
+      setCurrentFrame(info.start);
+    } catch {}
+    // Auto-play if previously playing; do not toggle blindly
+    if (lastKnownPlayingRef.current) {
+      try { window.dispatchEvent(new Event('timeline-play')); } catch {}
+    }
+  }, [selectedSceneId, loopState, getSceneStartById]);
 
   // Trim-right button: set duration to playhead offset (end at playhead)
   const handleTrimRightClick = useCallback(() => {
@@ -2305,27 +2394,32 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       {/* Timeline Controls - Consistent solid header (no translucency) */}
       <div className="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
         {/* Left cluster: counter + toggle + edit/history */}
-        <div className="flex items-center gap-3 min-w-[260px]">
-          {/* Counter (unitless; determined by toggle) */}
-          <div className="flex items-center gap-1 px-2.5 py-1 rounded-md font-mono [font-variant-numeric:tabular-nums] min-w-[150px] mr-3">
-            {displayMode === 'frames' ? (
-              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{currentFrame}</span>
-            ) : (
-              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{(currentFrame / FPS).toFixed(2)}</span>
-            )}
-            <span className="text-xs text-gray-400">/</span>
-            {displayMode === 'frames' ? (
-              <span className="text-base text-gray-700 dark:text-gray-300">{totalDuration}</span>
-            ) : (
-              <span className="text-base text-gray-700 dark:text-gray-300">{(totalDuration / FPS).toFixed(2)}</span>
-            )}
-          </div>
+        <div className="flex items-center gap-1 min-w-[260px]">
+          {/* Counter (fixed width; no absolute positioning) */}
+          {(() => {
+            const isFrames = displayMode === 'frames';
+            const leftStr = isFrames ? String(currentFrame) : (currentFrame / FPS).toFixed(2);
+            const rightStr = isFrames ? String(totalDuration) : (totalDuration / FPS).toFixed(2);
+            // Compute stable max char width based on total duration in both units
+            const maxLen = Math.max(String(totalDuration).length, (totalDuration / FPS).toFixed(2).length);
+            const totalCh = maxLen + 1 + maxLen + 2; // left + slash + right + padding
+            return (
+              <div
+                className="inline-flex items-center h-8 px-2 rounded-md font-mono [font-variant-numeric:tabular-nums] text-sm text-gray-900 dark:text-gray-100"
+                style={{ width: `${totalCh}ch` }}
+              >
+                <span className="text-right" style={{ width: `${maxLen}ch` }}>{leftStr}</span>
+                <span className="text-center text-gray-400" style={{ width: '1ch' }}>/</span>
+                <span className="text-left text-gray-700 dark:text-gray-300" style={{ width: `${maxLen}ch` }}>{rightStr}</span>
+              </div>
+            );
+          })()}
 
-          {/* Explicit toggle: Seconds | Frames (equal columns, sliding highlight) */}
-          <div className="relative grid grid-cols-2 bg-white dark:bg-gray-800 rounded-lg p-[2px] shadow-sm border border-gray-200 dark:border-gray-700 select-none overflow-hidden h-7">
+          {/* Explicit toggle: Seconds | Frames (icons, sliding highlight) */}
+          <div className="relative grid grid-cols-2 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm border border-gray-200 dark:border-gray-700 select-none overflow-hidden h-8">
             <span
               className={cn(
-                'absolute inset-y-[2px] left-[2px] w-[calc(50%-2px)] rounded-md transition-transform duration-200 ease-out transform-gpu will-change-transform',
+                'absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-md transition-transform duration-200 ease-out transform-gpu will-change-transform',
                 displayMode === 'frames' ? 'translate-x-full' : 'translate-x-0',
                 'bg-gray-900 dark:bg-gray-200'
               )}
@@ -2334,27 +2428,31 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
             <button
               onClick={() => setDisplayMode('time')}
               className={cn(
-                'relative z-10 px-2 py-[2px] text-[11px] rounded-md h-6 transition-colors duration-150',
+                'relative z-10 px-2 py-[2px] text-xs rounded-md h-6 transition-colors duration-150 flex items-center justify-center',
                 displayMode === 'time' ? 'text-white dark:text-gray-900' : 'text-gray-700 dark:text-gray-300'
               )}
-              title="Show seconds"
+              title="Seconds"
+              aria-label="Seconds"
             >
-              Sec
+              <Clock className="w-3.5 h-3.5" />
+              <span className="sr-only">Seconds</span>
             </button>
             <button
               onClick={() => setDisplayMode('frames')}
               className={cn(
-                'relative z-10 px-2 py-[2px] text-[11px] rounded-md h-6 transition-colors duration-150',
+                'relative z-10 px-2 py-[2px] text-xs rounded-md h-6 transition-colors duration-150 flex items-center justify-center',
                 displayMode === 'frames' ? 'text-white dark:text-gray-900' : 'text-gray-700 dark:text-gray-300'
               )}
-              title="Show frames"
+              title="Frames"
+              aria-label="Frames"
             >
-              Frames
+              <Film className="w-3.5 h-3.5" />
+              <span className="sr-only">Frames</span>
             </button>
           </div>
 
           {/* Edit & History Controls (moved left, CapCut-style) */}
-          <div className="flex items-center gap-2 ml-3">
+          <div className="flex items-center gap-2">
             {/* Edit Controls: Trim Left, Split, Trim Right */}
             <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm h-8 border border-gray-200 dark:border-gray-700">
               <button
@@ -2461,31 +2559,53 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         {/* Right side controls */}
         <div className="flex items-center gap-2">
 
-          {/* Loop Controls */}
-          <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm h-8 border border-gray-200 dark:border-gray-700">
-            {([
-              { key: 'off', label: 'Off' },
-              { key: 'scene', label: 'Scene' },
-              { key: 'video', label: 'Video' },
-            ] as const).map(opt => (
-              <button
-                key={opt.key}
-                onClick={() => {
-                  setLoopState(opt.key);
-                  const ev = new CustomEvent('loop-state-change', { detail: { state: opt.key } });
-                  window.dispatchEvent(ev);
-                }}
-                className={cn(
-                  "px-2 h-6 rounded-md text-xs transition-colors",
-                  loopState === opt.key
-                    ? "bg-gray-900 text-white dark:bg-gray-200 dark:text-gray-900"
-                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                )}
-                title={`Loop: ${opt.label}`}
-              >
-                {opt.label}
-              </button>
-            ))}
+          {/* Loop Control – Spotify-style cycle: Off → Video → Scene */}
+          <div className="flex items-center bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm h-8 border border-gray-200 dark:border-gray-700">
+            <button
+              onClick={() => {
+                const next = loopState === 'off' ? 'video' : loopState === 'video' ? 'scene' : 'off';
+                setLoopState(next);
+                try { window.dispatchEvent(new CustomEvent('loop-state-change', { detail: { state: next } })); } catch {}
+                if (next === 'scene') {
+                  if (!selectedSceneId) {
+                    const first = scenes?.[0];
+                    if (first) {
+                      try { window.dispatchEvent(new CustomEvent('timeline-select-scene', { detail: { sceneId: first.id } })); } catch {}
+                      setSelectedSceneId(first.id);
+                      const info = getSceneStartById(first.id);
+                      if (info) {
+                        try { window.dispatchEvent(new CustomEvent('timeline-seek', { detail: { frame: info.start } })); } catch {}
+                        setCurrentFrame(info.start);
+                      }
+                    } else {
+                      sceneLoopPendingRef.current = true;
+                    }
+                  } else {
+                    sceneLoopPendingRef.current = false;
+                  }
+                  // Autoplay when entering scene loop
+                  if (!isPlaying) {
+                    try { window.dispatchEvent(new Event('timeline-play-pause')); } catch {}
+                  }
+                } else {
+                  sceneLoopPendingRef.current = false;
+                }
+              }}
+              className={cn(
+                "grid place-items-center w-8 h-6 rounded-md transition-colors",
+                loopState === 'off' ? "text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700" : "bg-gray-900 text-white dark:bg-gray-200 dark:text-gray-900"
+              )}
+              title={loopState === 'off' ? 'Loop: Off (click to loop video)'
+                : loopState === 'video' ? 'Loop: Video (click to loop scene)'
+                : 'Loop: Scene (click to turn off)'}
+              aria-label="Toggle loop mode"
+            >
+              {loopState === 'scene' ? (
+                <Repeat1 className="w-3.5 h-3.5" />
+              ) : (
+                <Repeat className="w-3.5 h-3.5" />
+              )}
+            </button>
           </div>
 
           {/* Playback Speed — hidden per request */}

@@ -356,6 +356,32 @@ export function PreviewPanelG({
         }
       }
     };
+
+    // Explicit play request (no toggle)
+    const handleTimelinePlay = () => {
+      if (!playerRef.current) return;
+      try {
+        playerRef.current.play();
+        setIsPlaying(true);
+        const event = new CustomEvent('preview-play-state-change', { detail: { playing: true } });
+        window.dispatchEvent(event);
+      } catch (error) {
+        console.warn('Failed to play from timeline (explicit):', error);
+      }
+    };
+
+    // Explicit pause request (no toggle)
+    const handleTimelinePause = () => {
+      if (!playerRef.current) return;
+      try {
+        playerRef.current.pause();
+        setIsPlaying(false);
+        const event = new CustomEvent('preview-play-state-change', { detail: { playing: false } });
+        window.dispatchEvent(event);
+      } catch (error) {
+        console.warn('Failed to pause from timeline (explicit):', error);
+      }
+    };
     
     // New: Provide precise current frame on demand
     const handleRequestCurrentFrame = () => {
@@ -377,12 +403,16 @@ export function PreviewPanelG({
 
     window.addEventListener('timeline-seek' as any, handleTimelineSeek);
     window.addEventListener('timeline-play-pause' as any, handleTimelinePlayPause);
+    window.addEventListener('timeline-play' as any, handleTimelinePlay);
+    window.addEventListener('timeline-pause' as any, handleTimelinePause);
     window.addEventListener('request-play-state' as any, handleRequestPlayState);
     window.addEventListener('request-current-frame' as any, handleRequestCurrentFrame);
     
     return () => {
       window.removeEventListener('timeline-seek' as any, handleTimelineSeek);
       window.removeEventListener('timeline-play-pause' as any, handleTimelinePlayPause);
+      window.removeEventListener('timeline-play' as any, handleTimelinePlay);
+      window.removeEventListener('timeline-pause' as any, handleTimelinePause);
       window.removeEventListener('request-play-state' as any, handleRequestPlayState);
       window.removeEventListener('request-current-frame' as any, handleRequestCurrentFrame);
     };
