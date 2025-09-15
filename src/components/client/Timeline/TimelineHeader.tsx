@@ -33,18 +33,32 @@ const TimelineHeader: React.FC<TimelineHeaderProps> = ({
   // Generate frame markers
   const markers = useMemo(() => {
     const result = [];
+    const FPS = 30; // Timeline is 30fps
     
     for (let frame = 0; frame <= durationInFrames; frame += markerInterval) {
       // Calculate position as percentage
       const position = (frame / durationInFrames) * 100;
       
-      // Convert frame to time (assuming 30fps)
-      const seconds = Math.floor(frame / 30);
+      // Convert frame to time
+      const seconds = Math.floor(frame / FPS);
       const minutes = Math.floor(seconds / 60);
       const remainingSeconds = seconds % 60;
+      const framesWithinSecond = frame % FPS; // 0..29
       
-      // Format time as MM:SS
-      const timeLabel = `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+      // Format
+      // Requirement:
+      // - Under 1 minute: show "S.ff" (no leading 00:)
+      // - At/over 1 minute: show "M:SS" (append .ff only if not on exact second)
+      let timeLabel: string;
+      const ff = framesWithinSecond > 0 ? `.${Math.floor((framesWithinSecond / FPS) * 100)
+        .toString()
+        .padStart(2, '0')}` : '.00';
+      if (minutes === 0) {
+        timeLabel = `${remainingSeconds}${ff}`; // e.g., 1.00, 2.00, 2.33
+      } else {
+        const base = `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        timeLabel = framesWithinSecond > 0 ? `${base}${ff}` : base; // e.g., 1:02 or 1:02.33
+      }
       
       result.push({
         frame,

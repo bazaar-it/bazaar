@@ -39,6 +39,8 @@ export const generateScene = protectedProcedure
     assistantMessageId: z.string().optional(), // For updating existing message
     metadata: z.object({
       timezone: z.string().optional(),
+      // NEW: Suppress assistant chat message creation (silent flows like auto-fix)
+      suppressAssistantMessage: z.boolean().optional(),
     }).optional(),
   }))
   .mutation(async ({ input, ctx }): Promise<SceneCreateResponse> => {
@@ -340,18 +342,28 @@ export const generateScene = protectedProcedure
         if (input.assistantMessageId) {
           // Update existing message from SSE
           assistantMessageId = input.assistantMessageId;
+          const { sanitizeAssistantMessage } = await import('~/lib/utils/chat-sanitizer');
+          const safeClarification = sanitizeAssistantMessage(
+            orchestratorResponse.chatResponse || 'Could you provide more details?',
+            'Could you provide more details?'
+          ).message;
           await db.update(messages)
             .set({
-              content: orchestratorResponse.chatResponse || "Could you provide more details?",
+              content: safeClarification,
               status: 'success', // Clarification is a successful response
               updatedAt: new Date(),
             })
             .where(eq(messages.id, input.assistantMessageId));
         } else {
           // Create new message if no SSE message exists (fallback)
+          const { sanitizeAssistantMessage } = await import('~/lib/utils/chat-sanitizer');
+          const safeClarification = sanitizeAssistantMessage(
+            orchestratorResponse.chatResponse || 'Could you provide more details?',
+            'Could you provide more details?'
+          ).message;
           const newAssistantMessage = await messageService.createMessage({
             projectId,
-            content: orchestratorResponse.chatResponse || "Could you provide more details?",
+            content: safeClarification,
             role: "assistant",
             status: "success",
           });
@@ -409,27 +421,46 @@ export const generateScene = protectedProcedure
       // 6. ✅ IMMEDIATE DELIVERY: Update or create assistant's response and deliver to chat immediately
       let assistantMessageId: string | undefined;
       
-      if (input.assistantMessageId) {
-        // Update existing message from SSE
-        assistantMessageId = input.assistantMessageId;
-        await db.update(messages)
-          .set({
-            content: decision.chatResponse || "Processing your request...",
-            status: 'success', // Mark as success immediately for user feedback delivery
-            updatedAt: new Date(),
-          })
-          .where(eq(messages.id, input.assistantMessageId));
-        console.log(`[${response.getRequestId()}] ✅ IMMEDIATE: Updated assistant message delivered to chat: ${assistantMessageId}`);
-      } else if (decision.chatResponse) {
-        // Create new message if no SSE message exists (fallback)
-        const newAssistantMessage = await messageService.createMessage({
-          projectId,
-          content: decision.chatResponse,
-          role: "assistant",
-          status: "success", // Mark as success immediately for user feedback delivery
-        });
-        assistantMessageId = newAssistantMessage?.id;
-        console.log(`[${response.getRequestId()}] ✅ IMMEDIATE: Created new assistant message delivered to chat: ${assistantMessageId}`);
+      // Build safe, user-friendly message; fallback based on operation and prompt
+      const opMap: Record<string, 'create' | 'edit' | 'delete' | 'trim'> = {
+        addScene: 'create',
+        editScene: 'edit',
+        deleteScene: 'delete',
+        trimScene: 'trim',
+      } as const;
+      const plannedOp = opMap[orchestratorResponse.result.toolName as keyof typeof opMap] || 'create';
+      const fallbackText = formatSceneOperationMessage(
+        plannedOp,
+        { name: 'Scene' },
+        { userPrompt: userMessage }
+      );
+      const { sanitizeAssistantMessage } = await import('~/lib/utils/chat-sanitizer');
+      const safeChat = sanitizeAssistantMessage(decision.chatResponse, fallbackText).message;
+
+      // Respect suppression flag (silent auto-fix or other system flows)
+      if (!input.metadata?.suppressAssistantMessage) {
+        if (input.assistantMessageId) {
+          // Update existing message from SSE
+          assistantMessageId = input.assistantMessageId;
+          await db.update(messages)
+            .set({
+              content: safeChat || 'Processing your request...',
+              status: 'success',
+              updatedAt: new Date(),
+            })
+            .where(eq(messages.id, input.assistantMessageId));
+          console.log(`[${response.getRequestId()}] ✅ IMMEDIATE: Updated assistant message delivered to chat: ${assistantMessageId}`);
+        } else if (safeChat) {
+          // Create new message if no SSE message exists (fallback)
+          const newAssistantMessage = await messageService.createMessage({
+            projectId,
+            content: safeChat,
+            role: 'assistant',
+            status: 'success',
+          });
+          assistantMessageId = newAssistantMessage?.id;
+          console.log(`[${response.getRequestId()}] ✅ IMMEDIATE: Created new assistant message delivered to chat: ${assistantMessageId}`);
+        }
       }
 
       // 7. Execute the tool
@@ -516,7 +547,7 @@ export const generateScene = protectedProcedure
             context: {
               reasoning: decision.reasoning,
               // Prefer explicit chatResponse from tool if present; fall back to decision text
-              chatResponse: (toolResult as any).chatResponse || (decision as any).chatResponse,
+              chatResponse: input.metadata?.suppressAssistantMessage ? undefined : ((toolResult as any).chatResponse || (decision as any).chatResponse),
             },
             assistantMessageId,
             additionalMessageIds: toolResult.additionalMessageIds || [],
@@ -612,7 +643,7 @@ export const generateScene = protectedProcedure
         ...successResponse,
         context: {
           reasoning: decision.reasoning,
-          chatResponse: decision.chatResponse,
+          chatResponse: input.metadata?.suppressAssistantMessage ? undefined : decision.chatResponse,
         },
         assistantMessageId, // Include the assistant message ID
         // ✅ INCLUDE ADDITIONAL MESSAGE IDs FOR CLIENT SYNC

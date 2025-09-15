@@ -111,30 +111,22 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       isAudioDraggingRef.current = false;
     };
   }, [projectId]);
-  const [zoomScale, setZoomScale] = useState(1);
+  // Default to 200% zoom for clearer labels by default
+  const [zoomScale, setZoomScale] = useState(2);
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
   const [dragInfo, setDragInfo] = useState<DragInfo | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [reorderHoverIndex, setReorderHoverIndex] = useState<number | null>(null);
+  // Tracks current pointer position in frames during reorder to drive ghost overlay
+  const [reorderPointerFrame, setReorderPointerFrame] = useState<number | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; sceneId: string } | null>(null);
   const [audioMenu, setAudioMenu] = useState<{ x: number; y: number } | null>(null);
   const [isAudioSelected, setIsAudioSelected] = useState(false);
   const [audioPulse, setAudioPulse] = useState(false);
-  // Long-press-to-reorder support (for less sensitive reordering)
-  const longPressTimerRef = useRef<number | null>(null);
-  const longPressStartRef = useRef<{ x: number; y: number; sceneId: string; sceneStart: number; sceneDuration: number; sceneIndex: number } | null>(null);
-  // Track last mouse position without touching window globals
-  const lastMouseXRef = useRef<number>(0);
-  const lastMouseYRef = useRef<number>(0);
-  // Centralized, safe timer cleanup
-  const clearLongPress = useCallback(() => {
-    const id = longPressTimerRef.current;
-    if (id != null) {
-      try { window.clearTimeout(id); } catch {}
-      longPressTimerRef.current = null;
-    }
-    longPressStartRef.current = null;
-  }, []);
+  // Track whether reorder is via native HTML5 drag (vs mouse-based custom)
+  const isHtml5DragRef = useRef<boolean>(false);
+  // No-op placeholder kept for compatibility with prior calls (removed long-press support)
+  const clearLongPress = useCallback(() => {}, []);
   const audioLastUrlRef = useRef<string | null>(null);
   const audioHadRef = useRef<boolean>(false);
   // Peaks cache and refs
@@ -145,6 +137,8 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [displayMode, setDisplayMode] = useState<'frames' | 'time'>('frames');
+  // Keep reference to custom drag image element for HTML5 drag
+  const dragImageRef = useRef<HTMLDivElement | null>(null);
   // Loop controls state (mirrors PreviewPanelG's loopState)
   const [loopState, setLoopState] = useState<'video' | 'off' | 'scene'>('video');
   // Split operation busy flag to prevent repeated clicks and provide feedback
@@ -990,6 +984,9 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     return Math.max(0, Math.min(totalDuration - 1, newFrame));
   }, [timelineRef, innerContentRef, zoomScale, totalDuration]);
 
+  // General hover tooltip (immediate)
+  const [hoverTip, setHoverTip] = useState<{ x: number; y: number; text: string } | null>(null);
+
   // Handle hover over audio block to show nearby peak frames (tooltip-only)
   const handleAudioHover = useCallback((e: React.MouseEvent) => {
     if (!audioTrack || isAudioDraggingRef.current) return;
@@ -1065,6 +1062,23 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         const playing = event.detail.playing as boolean;
         lastExplicitPlayStateRef.current = { playing, ts: Date.now() };
         setIsPlaying(playing);
+
+        // On first play, ensure AudioContext is enabled and generate waveform/peaks if missing
+        if (playing && audioTrack && (!peaksSecondsRef.current || !audioWaveform)) {
+          (async () => {
+            try {
+              const { enableAudioWithGesture } = await import('~/lib/utils/audioContext');
+              enableAudioWithGesture();
+              // If we have a URL and no waveform yet, try generating now
+              const url = (audioTrack as any)?.url;
+              if (url && !audioWaveform) {
+                await generateWaveform(url);
+              }
+            } catch (err) {
+              console.warn('[Timeline] Failed to enable audio context/generate waveform on play:', err);
+            }
+          })();
+        }
       }
     };
     
@@ -1109,23 +1123,17 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     // Audio track state updated
   }, [audioTrack, totalDuration]);
   
-  // Format time display - show frames prominently
-  const formatTime = useCallback((frames: number, showFrames: boolean = true): string => {
+  // Format ruler labels based on display mode
+  const formatTime = useCallback((frames: number): React.ReactNode => {
     // Ensure frames is an integer
     frames = Math.round(frames);
-    const totalSeconds = Math.floor(frames / FPS);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    const frameRemainder = frames % FPS;
-    
-    if (showFrames && zoomScale >= 2) {
-      // When zoomed in, show frame count prominently
-      return `${frames}f (${minutes}:${seconds.toString().padStart(2, '0')})`;
+    if (displayMode === 'frames') {
+      return String(frames);
     }
-    
-    // Standard timecode format
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${frameRemainder.toString().padStart(2, '0')}`;
-  }, [zoomScale]);
+    const seconds = Math.floor(frames / FPS);
+    // Always show whole seconds; no units; over a minute keep seconds total (e.g., 75)
+    return String(seconds);
+  }, [displayMode]);
   
   // Handle timeline click for scrubbing
   const handleTimelineClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
@@ -1328,10 +1336,13 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     }
 
     if (dragInfo.action === 'reorder') {
+      // For HTML5 drag, container onDragOver drives hover state; skip here
+      if (isHtml5DragRef.current) return;
       // Handle scene reordering
       const mouseX = e.clientX - rect.left + timelineRef.current.scrollLeft;
       const relativeX = mouseX / (rect.width * zoomScale);
       const mouseFrame = Math.round(relativeX * totalDuration);
+      setReorderPointerFrame(mouseFrame);
       
       // Find which scene we're hovering over
       let cumulativeFrames = 0;
@@ -1542,6 +1553,14 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   const handleResizeDragEnd = useCallback((e?: MouseEvent) => {
     // If we were doing a reorder operation
       if (dragInfo && dragInfo.action === 'reorder' && e && timelineRef.current) {
+      // Pointer-based reorder path (HTML5 drag uses onDrop)
+      if (isHtml5DragRef.current) {
+        setDragInfo(null);
+        setIsDragging(false);
+        setReorderHoverIndex(null);
+        setReorderPointerFrame(null);
+        return;
+      }
       // Prevent click-to-swap: only reorder if mouse moved enough
       const deltaPx = Math.abs(e.clientX - dragInfo.startX);
       const REORDER_THRESHOLD_PX = 6;
@@ -1577,17 +1596,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         if (mouseFrame >= cumulativeFrames && mouseFrame < sceneEnd) {
           // We're dropping on scene at index i
           if (dragInfo.sceneIndex !== undefined && i !== dragInfo.sceneIndex) {
-            // Require center overlap (drop near the center of the target scene) to commit reorder
-            const targetDur = scene.duration || 150;
-            const localPos = mouseFrame - cumulativeFrames;
-            // Slightly widened center band but still strict enough to avoid accidental reorders
-            const minCenter = Math.floor(targetDur * 0.25);
-            const maxCenter = Math.ceil(targetDur * 0.75);
-            if (localPos < minCenter || localPos > maxCenter) {
-              setDragInfo(null);
-              setIsDragging(false);
-              break;
-            }
+            // Commit reorder when dropped over target scene (no center band requirement)
             console.log('[Timeline] Reordering scenes:', dragInfo.sceneIndex, 'to', i);
             
             // Perform the reorder
@@ -1615,6 +1624,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
             
             toast.success('Scenes reordered');
             setReorderHoverIndex(null);
+            setReorderPointerFrame(null);
           }
           break;
         }
@@ -2265,60 +2275,149 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     const onWheel = (e: WheelEvent) => {
       // Allow pinch-zoom or browser zoom shortcuts to pass through
       if (e.ctrlKey || e.metaKey) return;
-      // If horizontal intent is stronger than vertical, treat as timeline scroll
+      // If horizontal intent is stronger than vertical, handle locally and prevent browser navigation
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
         try { e.preventDefault(); } catch {}
-        // Scroll timeline horizontally
         el.scrollLeft += e.deltaX;
       }
     };
+    const onWheelGlobalCapture = (e: WheelEvent) => {
+      // Intercept two‑finger horizontal swipes at the window level to block back/forward
+      if (e.ctrlKey || e.metaKey) return;
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        try { e.preventDefault(); } catch {}
+        // Route the scroll to the timeline if present
+        if (timelineRef.current) {
+          timelineRef.current.scrollLeft += e.deltaX;
+        }
+      }
+    };
     el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel as any);
+    window.addEventListener('wheel', onWheelGlobalCapture, { passive: false, capture: true });
+    return () => {
+      el.removeEventListener('wheel', onWheel as any);
+      window.removeEventListener('wheel', onWheelGlobalCapture as any, true);
+    };
   }, []);
   
   return (
-    <div className="flex flex-col bg-white dark:bg-gray-950 rounded-[15px] border border-gray-200 shadow-sm select-none overscroll-x-contain overscroll-y-none" style={{ height: `${timelineHeight}px`, overflow: 'hidden' }}>
+    <div className="flex flex-col bg-white dark:bg-gray-950 rounded-[15px] border border-gray-200 shadow-sm select-none overscroll-x-none overscroll-y-none" style={{ height: `${timelineHeight}px`, overflow: 'hidden', touchAction: 'pan-y' }}>
       {/* Timeline Controls - Consistent solid header (no translucency) */}
       <div className="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
-        {/* Left cluster: frame/time display */}
-        <div className="flex items-center gap-3 min-w-[220px]">
-          {/* Frame/Time Counter - Minimal with switch indicator */}
-          <div className="flex items-center gap-1">
+        {/* Left cluster: counter + toggle + edit/history */}
+        <div className="flex items-center gap-3 min-w-[260px]">
+          {/* Counter (unitless; determined by toggle) */}
+          <div className="flex items-center gap-1 px-2.5 py-1 rounded-md font-mono [font-variant-numeric:tabular-nums] min-w-[150px] mr-3">
             {displayMode === 'frames' ? (
-              <button
-                onClick={() => setDisplayMode('time')}
-                className="relative flex items-center gap-1.5 px-2.5 py-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
-                title="Switch to time display"
-              >
-                <span className="font-mono text-base font-medium text-gray-900 dark:text-gray-100">
-                  {currentFrame}
-                </span>
-                <span className="text-sm text-gray-400">/</span>
-                <span className="font-mono text-sm text-gray-500 dark:text-gray-400">
-                  {totalDuration}f
-                </span>
-              </button>
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{currentFrame}</span>
             ) : (
-              <button
-                onClick={() => setDisplayMode('frames')}
-                className="relative flex items-center gap-1.5 px-2.5 py-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
-                title="Switch to frame display"
-              >
-                <span className="font-mono text-base font-medium text-gray-900 dark:text-gray-100">
-                  {(currentFrame / FPS).toFixed(2)}s
-                </span>
-                <span className="text-sm text-gray-400">/</span>
-                <span className="font-mono text-sm text-gray-500 dark:text-gray-400">
-                  {(totalDuration / FPS).toFixed(2)}s
-                </span>
-              </button>
+              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{(currentFrame / FPS).toFixed(2)}</span>
             )}
+            <span className="text-xs text-gray-400">/</span>
+            {displayMode === 'frames' ? (
+              <span className="text-base text-gray-700 dark:text-gray-300">{totalDuration}</span>
+            ) : (
+              <span className="text-base text-gray-700 dark:text-gray-300">{(totalDuration / FPS).toFixed(2)}</span>
+            )}
+          </div>
+
+          {/* Explicit toggle: Seconds | Frames (equal columns, sliding highlight) */}
+          <div className="relative grid grid-cols-2 bg-white dark:bg-gray-800 rounded-lg p-[2px] shadow-sm border border-gray-200 dark:border-gray-700 select-none overflow-hidden h-7">
+            <span
+              className={cn(
+                'absolute inset-y-[2px] left-[2px] w-[calc(50%-2px)] rounded-md transition-transform duration-200 ease-out transform-gpu will-change-transform',
+                displayMode === 'frames' ? 'translate-x-full' : 'translate-x-0',
+                'bg-gray-900 dark:bg-gray-200'
+              )}
+              aria-hidden
+            />
+            <button
+              onClick={() => setDisplayMode('time')}
+              className={cn(
+                'relative z-10 px-2 py-[2px] text-[11px] rounded-md h-6 transition-colors duration-150',
+                displayMode === 'time' ? 'text-white dark:text-gray-900' : 'text-gray-700 dark:text-gray-300'
+              )}
+              title="Show seconds"
+            >
+              Sec
+            </button>
+            <button
+              onClick={() => setDisplayMode('frames')}
+              className={cn(
+                'relative z-10 px-2 py-[2px] text-[11px] rounded-md h-6 transition-colors duration-150',
+                displayMode === 'frames' ? 'text-white dark:text-gray-900' : 'text-gray-700 dark:text-gray-300'
+              )}
+              title="Show frames"
+            >
+              Frames
+            </button>
+          </div>
+
+          {/* Edit & History Controls (moved left, CapCut-style) */}
+          <div className="flex items-center gap-2 ml-3">
+            {/* Edit Controls: Trim Left, Split, Trim Right */}
+            <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm h-8 border border-gray-200 dark:border-gray-700">
+              <button
+                onClick={handleTrimLeftClick}
+                disabled={!selectedSceneId}
+                className="grid place-items-center w-8 h-6 rounded-md text-xs transition-colors disabled:opacity-50 hover:bg-gray-100 dark:hover:bg-gray-700"
+                title="Trim start to playhead ([)"
+              >
+                [
+              </button>
+              <button
+                onClick={() => selectedSceneId && handleSplitAtPlayhead(selectedSceneId)}
+                disabled={!selectedSceneId || isSplitBusy || splitSceneMutation.isPending}
+                className="grid place-items-center w-8 h-6 rounded-md text-xs transition-colors disabled:opacity-50 hover:bg-gray-100 dark:hover:bg-gray-700"
+                title={isSplitBusy || splitSceneMutation.isPending ? "Splitting…" : "Split at playhead (|)"}
+              >
+                {isSplitBusy || splitSceneMutation.isPending ? (
+                  <span className="inline-block w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  '|'
+                )}
+              </button>
+              <button
+                onClick={handleTrimRightClick}
+                disabled={!selectedSceneId}
+                className="grid place-items-center w-8 h-6 rounded-md text-xs transition-colors disabled:opacity-50 hover:bg-gray-100 dark:hover:bg-gray-700"
+                title="Trim end to playhead (])"
+              >
+                ]
+              </button>
+            </div>
+
+            {/* Undo/Redo */}
+            <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm h-8 border border-gray-200 dark:border-gray-700">
+              <button
+                onClick={performUndo}
+                disabled={undoSize === 0}
+                className={cn(
+                  "grid place-items-center w-8 h-6 rounded-md transition-colors",
+                  undoSize === 0 ? "opacity-40 cursor-not-allowed" : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                )}
+                title="Undo (⌘Z / Ctrl+Z)"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={performRedo}
+                disabled={redoSize === 0}
+                className={cn(
+                  "grid place-items-center w-8 h-6 rounded-md transition-colors",
+                  redoSize === 0 ? "opacity-40 cursor-not-allowed" : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                )}
+                title="Redo (⇧⌘Z / Shift+Ctrl+Z)"
+              >
+                <RotateCw className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Center cluster: playback controls */}
         <div className="flex-1 flex items-center justify-center">
-          <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm">
+          <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm h-8 border border-gray-200 dark:border-gray-700">
             <button
               onClick={() => {
                 const newFrame = Math.max(0, currentFrame - 30);
@@ -2328,7 +2427,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                 window.dispatchEvent(event);
                 setCurrentFrame(newFrame);
               }}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300 transition-colors"
+              className="grid place-items-center w-8 h-6 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300 transition-colors"
               title="Previous second"
             >
               <SkipBack className="w-3.5 h-3.5" />
@@ -2336,7 +2435,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
             
             <button
               onClick={togglePlayPause}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-800 dark:text-gray-200 transition-colors"
+              className="grid place-items-center w-8 h-6 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-800 dark:text-gray-200 transition-colors"
               title={isPlaying ? "Pause" : "Play"}
             >
               {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
@@ -2351,7 +2450,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                 window.dispatchEvent(event);
                 setCurrentFrame(newFrame);
               }}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300 transition-colors"
+              className="grid place-items-center w-8 h-6 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300 transition-colors"
               title="Next second"
             >
               <SkipForward className="w-3.5 h-3.5" />
@@ -2361,41 +2460,9 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
 
         {/* Right side controls */}
         <div className="flex items-center gap-2">
-          {/* Edit Controls: Trim Left, Split, Trim Right */}
-          <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm">
-            <button
-              onClick={handleTrimLeftClick}
-              disabled={!selectedSceneId}
-              className="px-2 py-1 rounded-md text-xs transition-colors disabled:opacity-50 hover:bg-gray-100 dark:hover:bg-gray-700"
-              title="Trim start to playhead ([)"
-            >
-              [
-            </button>
-            <button
-              onClick={() => selectedSceneId && handleSplitAtPlayhead(selectedSceneId)}
-              disabled={!selectedSceneId || isSplitBusy || splitSceneMutation.isPending}
-              className="px-2 py-1 rounded-md text-xs transition-colors disabled:opacity-50 hover:bg-gray-100 dark:hover:bg-gray-700"
-              title={isSplitBusy || splitSceneMutation.isPending ? "Splitting…" : "Split at playhead (|)"}
-            >
-              {isSplitBusy || splitSceneMutation.isPending ? (
-                <span className="inline-block w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-              ) : (
-                '|'
-              )}
-            </button>
-            <button
-              onClick={handleTrimRightClick}
-              disabled={!selectedSceneId}
-              className="px-2 py-1 rounded-md text-xs transition-colors disabled:opacity-50 hover:bg-gray-100 dark:hover:bg-gray-700"
-              title=
-                "Trim end to playhead (])"
-            >
-              ]
-            </button>
-          </div>
 
           {/* Loop Controls */}
-          <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm">
+          <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm h-8 border border-gray-200 dark:border-gray-700">
             {([
               { key: 'off', label: 'Off' },
               { key: 'scene', label: 'Scene' },
@@ -2409,7 +2476,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                   window.dispatchEvent(ev);
                 }}
                 className={cn(
-                  "px-2 py-1 rounded-md text-xs transition-colors",
+                  "px-2 h-6 rounded-md text-xs transition-colors",
                   loopState === opt.key
                     ? "bg-gray-900 text-white dark:bg-gray-200 dark:text-gray-900"
                     : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -2421,51 +2488,30 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
             ))}
           </div>
 
-          {/* Playback Speed */}
-          <div className="flex items-center gap-2 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm">
-            <PlaybackSpeedSlider
-              currentSpeed={storePlaybackSpeed}
-              onSpeedChange={(speed) => {
-                if (projectId) {
-                  storeSetPlaybackSpeed(projectId, speed);
-                }
-                try {
-                  const ev = new CustomEvent('playback-speed-change', { detail: { speed } });
-                  window.dispatchEvent(ev);
-                } catch {}
-              }}
-            />
-          </div>
+          {/* Playback Speed — hidden per request */}
+          {false && (
+            <div className="flex items-center gap-2 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm">
+              <PlaybackSpeedSlider
+                currentSpeed={storePlaybackSpeed}
+                onSpeedChange={(speed) => {
+                  if (projectId) {
+                    storeSetPlaybackSpeed(projectId, speed);
+                  }
+                  try {
+                    const ev = new CustomEvent('playback-speed-change', { detail: { speed } });
+                    window.dispatchEvent(ev);
+                  } catch {}
+                }}
+              />
+            </div>
+          )}
 
           {/* Zoom Controls */}
           <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm">
-          {/* Undo/Redo */}
-          <button
-            onClick={performUndo}
-            disabled={undoSize === 0}
-            className={cn(
-              "p-2 rounded-md transition-colors",
-              undoSize === 0 ? "opacity-40 cursor-not-allowed" : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
-            )}
-            title="Undo (⌘Z / Ctrl+Z)"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={performRedo}
-            disabled={redoSize === 0}
-            className={cn(
-              "p-2 rounded-md transition-colors",
-              redoSize === 0 ? "opacity-40 cursor-not-allowed" : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
-            )}
-            title="Redo (⇧⌘Z / Shift+Ctrl+Z)"
-          >
-            <RotateCw className="w-3.5 h-3.5" />
-          </button>
 
           <button
             onClick={() => setZoomScale(prev => Math.max(0.25, Math.round((prev - 0.1) * 100) / 100))}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300 transition-colors"
+            className="grid place-items-center w-8 h-6 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300 transition-colors"
             title="Zoom out"
           >
             <ZoomOut className="w-3.5 h-3.5" />
@@ -2473,7 +2519,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
           
           <button
             onClick={() => setZoomScale(1)}
-            className="text-sm text-gray-700 dark:text-gray-300 px-2 min-w-[3rem] text-center font-medium hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+            className="grid place-items-center w-12 h-6 text-sm text-gray-700 dark:text-gray-300 text-center font-medium hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
             title={`Zoom: ${Math.round(zoomScale * 100)}%\n${
               zoomScale >= 3 ? 'Frame-level precision' :
               zoomScale >= 2 ? '5-frame precision' :
@@ -2487,7 +2533,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
           
           <button
             onClick={() => setZoomScale(prev => Math.min(4, Math.round((prev + 0.1) * 100) / 100))}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300 transition-colors"
+            className="grid place-items-center w-8 h-6 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300 transition-colors"
             title="Zoom in"
           >
             <ZoomIn className="w-3.5 h-3.5" />
@@ -2538,6 +2584,12 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
               window.dispatchEvent(event);
             }
           }}
+          onMouseMove={(e) => {
+            const f = frameFromClientX(e.clientX);
+            const text = displayMode === 'frames' ? `${f}` : `${Math.floor(f / FPS)}`;
+            setHoverTip({ x: e.clientX + 10, y: e.clientY + 12, text });
+          }}
+          onMouseLeave={() => setHoverTip(null)}
         >
           <div 
             className="h-full relative"
@@ -2594,6 +2646,63 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
           onScroll={handleTimelineScroll}
           onMouseEnter={() => setIsPointerInside(true)}
           onMouseLeave={() => setIsPointerInside(false)}
+          onDragOver={(e) => {
+            // Enable drop for HTML5 drag; update hover state
+            if (!dragInfo || dragInfo.action !== 'reorder') return;
+            e.preventDefault();
+            try { e.dataTransfer.dropEffect = 'move'; } catch {}
+            const mouseFrame = frameFromClientX(e.clientX);
+            setReorderPointerFrame(mouseFrame);
+            // Determine hover index by frame
+            let cumulative = 0;
+            let hovered: number | null = null;
+            for (let i = 0; i < scenes.length; i++) {
+              const end = cumulative + (scenes[i]?.duration || 150);
+              if (mouseFrame >= cumulative && mouseFrame < end) { hovered = i; break; }
+              cumulative = end;
+            }
+            setReorderHoverIndex(hovered);
+          }}
+          onDrop={(e) => {
+            if (!dragInfo || dragInfo.action !== 'reorder') return;
+            e.preventDefault();
+            isHtml5DragRef.current = false;
+            const mouseFrame = frameFromClientX(e.clientX);
+            let cumulative = 0;
+            let targetIndex: number | null = null;
+            for (let i = 0; i < scenes.length; i++) {
+              const end = cumulative + (scenes[i]?.duration || 150);
+              if (mouseFrame >= cumulative && mouseFrame < end) { targetIndex = i; break; }
+              cumulative = end;
+            }
+            if (targetIndex != null && dragInfo.sceneIndex !== undefined && targetIndex !== dragInfo.sceneIndex) {
+              const beforeOrder = scenes.map((s: any) => s.id);
+              reorderScenes(projectId, dragInfo.sceneIndex, targetIndex);
+              const newOrder = [...scenes];
+              const [moved] = newOrder.splice(dragInfo.sceneIndex, 1);
+              if (moved) newOrder.splice(targetIndex, 0, moved);
+              const idKey = `reorder-${nanoid(8)}`;
+              const clientRevision = (useVideoState.getState().projects[projectId] as any)?.revision;
+              reorderScenesMutation.mutate({
+                projectId,
+                sceneIds: newOrder.map((s: any) => s.id),
+                idempotencyKey: idKey,
+                clientRevision,
+              });
+              try { pushAction(projectId, { type: 'reorder', beforeOrder, afterOrder: newOrder.map((s: any) => s.id) }); } catch {}
+              toast.success('Scenes reordered');
+            }
+            setReorderHoverIndex(null);
+            setReorderPointerFrame(null);
+            setDragInfo(null);
+            setIsDragging(false);
+            try {
+              if (dragImageRef.current && dragImageRef.current.parentNode) {
+                dragImageRef.current.parentNode.removeChild(dragImageRef.current);
+              }
+              dragImageRef.current = null;
+            } catch {}
+          }}
           style={{ 
             height: `${timelineHeight - 60 - 32}px`,
             cursor: isDragging ? 'grabbing' : (isSplitBusy || splitSceneMutation.isPending) ? 'progress' : 'crosshair' 
@@ -2665,10 +2774,35 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                 // Calculate scene start position based on previous scenes (sequential)
                 const sceneStart = scenes.slice(0, index).reduce((acc, s) => acc + (s.duration || 150), 0);
                 // When zoomed, scenes need to scale with the container
-                const left = (sceneStart / totalDuration) * 100;
+                let left = (sceneStart / totalDuration) * 100;
                 const width = (scene.duration / totalDuration) * 100;
                 const isBeingDragged = isDragging && dragInfo?.sceneId === scene.id && dragInfo?.action === 'reorder';
                 const isHoverTarget = isDragging && dragInfo?.action === 'reorder' && reorderHoverIndex === index && dragInfo.sceneIndex !== index;
+                
+                // Shift-aside animation (CapCut-like): while reordering, open space at target by shifting neighbors
+                let shiftPct = 0;
+                if (isDragging && dragInfo?.action === 'reorder' && dragInfo.sceneIndex !== undefined && reorderHoverIndex !== null) {
+                  const sourceIndex = dragInfo.sceneIndex;
+                  const targetIndex = reorderHoverIndex;
+                  const draggedWidthPct = (scenes[sourceIndex]?.duration || 150) / totalDuration * 100;
+                  if (sourceIndex < targetIndex) {
+                    // Moving right: items between (source+1 .. target) shift left by dragged width
+                    if (index > sourceIndex && index <= targetIndex) {
+                      shiftPct = -draggedWidthPct;
+                    }
+                  } else if (sourceIndex > targetIndex) {
+                    // Moving left: items between (target .. source-1) shift right by dragged width
+                    if (index >= targetIndex && index < sourceIndex) {
+                      shiftPct = draggedWidthPct;
+                    }
+                  }
+                }
+                // Ghost overlay position for dragged scene following pointer (pointer-based only)
+                if (isBeingDragged && reorderPointerFrame !== null && !isHtml5DragRef.current) {
+                  const draggedDuration = dragInfo?.startDuration || scene.duration || 150;
+                  const startFrame = Math.max(0, Math.min(totalDuration - draggedDuration, reorderPointerFrame - Math.round(draggedDuration / 2)));
+                  left = totalDuration > 0 ? (startFrame / totalDuration) * 100 : 0;
+                }
                 const isDeleting = deletingScenes.has(scene.id);
                 const isMerging = mergingScenes.has(scene.id);
                 const displayName = cleanSceneName(scene.name || scene.data?.name) || `Scene ${index + 1}`;
@@ -2679,7 +2813,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                     data-timeline-scene={scene.id}
                     className={cn(
                       "absolute flex items-center rounded-lg text-sm font-medium transition-all cursor-move",
-                      isBeingDragged ? "opacity-50 z-40 scale-105" : "z-10 hover:scale-102 hover:z-15",
+                      isBeingDragged ? "z-40" : "z-10 hover:scale-102 hover:z-15",
                       isMerging && !isDeleting ? "ring-2 ring-amber-400/60" : "",
                       isHoverTarget && "ring-2 ring-blue-400/70",
                       isDeleting && "pointer-events-none"
@@ -2689,31 +2823,59 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                       width: `${width}%`,
                       height: TIMELINE_ITEM_HEIGHT,
                       top: '50%',
-                      transform: `translateY(-50%) ${isDeleting ? 'scale(0.96)' : (isMerging ? 'scale(1.04)' : '')}`,
+                      transform: `translateY(-50%) translateX(${shiftPct}%) ${isDeleting ? 'scale(0.96)' : (isMerging ? 'scale(1.04)' : '')}`,
                       minWidth: '40px',
                       ...getSceneStyles(scene),
                       transition: `left ${DELETE_FADE_MS}ms cubic-bezier(0.22,1,0.36,1), width ${DELETE_FADE_MS}ms cubic-bezier(0.22,1,0.36,1), opacity ${DELETE_FADE_MS}ms cubic-bezier(0.22,1,0.36,1), transform ${DELETE_FADE_MS}ms cubic-bezier(0.22,1,0.36,1)`,
                       willChange: 'left, width, transform, opacity',
-                      opacity: isDeleting ? 0 : 1,
+                      opacity: isDeleting ? 0 : (isBeingDragged ? 0.25 : 1),
                       boxShadow: isMerging && !isDeleting ? '0 0 0 8px rgba(251, 191, 36, 0.20)' : undefined,
                     }}
                     draggable
-                    onDragStartCapture={(e) => {
-                      // If we're initiating a reorder interaction, block native HTML5 drag entirely
-                      if (isDragging && dragInfo?.action === 'reorder') {
-                        try { e.preventDefault(); e.stopPropagation(); } catch {}
-                        return false as any;
-                      }
-                      return undefined as any;
-                    }}
                     onDragStart={(e) => {
-                      // Guard: prevent native drag when reordering via grip/long-press
-                      if (isDragging && dragInfo?.action === 'reorder') {
-                        try { e.preventDefault(); e.stopPropagation(); } catch {}
-                        return;
-                      }
-                      // If a long-press reorder is pending, cancel it so chat-drag wins
-                      clearLongPress();
+                      isHtml5DragRef.current = true;
+                      // Start reorder mode + provide payload for chat drop
+                      setDragInfo({
+                        action: 'reorder',
+                        sceneId: scene.id,
+                        startX: e.clientX,
+                        startPosition: sceneStart,
+                        startDuration: scene.duration,
+                        sceneIndex: index
+                      });
+                      setIsDragging(true);
+                      setSelectedSceneId(scene.id);
+                      // Use a custom drag image so the scene preview follows the mouse globally
+                      try {
+                        if (dragImageRef.current && dragImageRef.current.parentNode) {
+                          dragImageRef.current.parentNode.removeChild(dragImageRef.current);
+                          dragImageRef.current = null;
+                        }
+                        const ghost = document.createElement('div');
+                        ghost.style.position = 'fixed';
+                        ghost.style.top = '-1000px';
+                        ghost.style.left = '-1000px';
+                        ghost.style.width = '240px';
+                        ghost.style.height = '40px';
+                        ghost.style.borderRadius = '8px';
+                        ghost.style.padding = '0 8px';
+                        ghost.style.color = '#fff';
+                        ghost.style.fontWeight = '600';
+                        ghost.style.fontSize = '12px';
+                        ghost.style.display = 'flex';
+                        ghost.style.alignItems = 'center';
+                        ghost.style.justifyContent = 'center';
+                        ghost.style.border = '2px solid rgba(255,255,255,0.9)';
+                        ghost.style.boxShadow = '0 10px 28px rgba(0,0,0,0.35), 0 2px 6px rgba(0,0,0,0.25)';
+                        ghost.style.filter = 'saturate(1.1) contrast(1.1) brightness(1.05)';
+                        ghost.style.opacity = '1';
+                        const colors = sceneColors[scene.id] || { primary: '#6b7280', gradient: 'linear-gradient(90deg, #6b7280 0%, #4b5563 100%)' };
+                        ghost.style.background = colors.gradient || colors.primary;
+                        ghost.textContent = displayName;
+                        document.body.appendChild(ghost);
+                        dragImageRef.current = ghost;
+                        e.dataTransfer.setDragImage(ghost, 120, 20);
+                      } catch {}
                       try {
                         const payload = {
                           type: 'timeline-scene',
@@ -2724,15 +2886,26 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                         };
                         e.dataTransfer.setData('application/json', JSON.stringify(payload));
                         e.dataTransfer.setData('text/plain', `@scene ${index + 1}`);
-                        e.dataTransfer.effectAllowed = 'copy';
+                        e.dataTransfer.effectAllowed = 'copyMove';
                       } catch {}
                     }}
                     onDragEnd={() => {
-                      // Cleanup any stale long-press timers
-                      clearLongPress();
+                      isHtml5DragRef.current = false;
+                      // If drop happened outside the timeline, chat panel will consume it. Clear reorder state.
+                      setDragInfo(null);
+                      setIsDragging(false);
+                      setReorderHoverIndex(null);
+                      setReorderPointerFrame(null);
+                      // Remove custom drag image element
+                      try {
+                        if (dragImageRef.current && dragImageRef.current.parentNode) {
+                          dragImageRef.current.parentNode.removeChild(dragImageRef.current);
+                        }
+                        dragImageRef.current = null;
+                      } catch {}
                     }}
                     onMouseDown={(e) => {
-                      // Check if we're clicking on a resize handle
+                      // Check if we're clicking on a resize handle; otherwise select only
                       const rect = e.currentTarget.getBoundingClientRect();
                       const relativeX = e.clientX - rect.left;
                     const isLeftEdge = relativeX < 10;
@@ -2743,70 +2916,13 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                       } else if (isRightEdge) {
                         handleResizeDragStart(e, scene.id, 'resize-end');
                       } else {
-                        // Gentle behavior: allow press-and-hold on the block body to initiate reorder
-                        // without making it too sensitive or conflicting with drag-to-chat.
-                        // If the user moves quickly, native drag-to-chat will take precedence.
-                        clearLongPress();
-                        const startX = e.clientX;
-                        const startY = e.clientY;
-                        // Remember context so timer can promote to reorder
-                        longPressStartRef.current = {
-                          x: startX,
-                          y: startY,
-                          sceneId: scene.id,
-                          sceneStart: sceneStart,
-                          sceneDuration: scene.duration,
-                          sceneIndex: index,
-                        };
-                        // After a short hold, if the pointer hasn't moved much, switch to reorder mode
-                        longPressTimerRef.current = window.setTimeout(() => {
-                          const info = longPressStartRef.current;
-                          if (!info) return;
-                          const MOVE_THRESHOLD_PX = 6;
-                          const dx = Math.abs((lastMouseXRef.current ?? info.x) - info.x);
-                          const dy = Math.abs((lastMouseYRef.current ?? info.y) - info.y);
-                          const movedTooMuch = (Math.abs(dx) > MOVE_THRESHOLD_PX) || (Math.abs(dy) > MOVE_THRESHOLD_PX);
-                          if (movedTooMuch) return;
-                          // Activate reorder drag
-                          setDragInfo({
-                            action: 'reorder',
-                            sceneId: info.sceneId,
-                            startX: info.x,
-                            startPosition: info.sceneStart,
-                            startDuration: info.sceneDuration,
-                            sceneIndex: info.sceneIndex,
-                          });
-                          setIsDragging(true);
-                          setSelectedSceneId(info.sceneId);
-                          try {
-                            const ev = new CustomEvent('timeline-select-scene', { detail: { sceneId: info.sceneId } });
-                            window.dispatchEvent(ev);
-                          } catch {}
-                        }, 250); // 250ms press to activate reorder
+                        // Select without initiating reorder; HTML5 drag handles move when dragging
+                        setSelectedSceneId(scene.id);
+                        try {
+                          const ev = new CustomEvent('timeline-select-scene', { detail: { sceneId: scene.id } });
+                          window.dispatchEvent(ev);
+                        } catch {}
                       }
-                    }}
-                    onMouseMove={(e) => {
-                      // Track last mouse for long-press movement threshold (no globals)
-                      lastMouseXRef.current = e.clientX;
-                      lastMouseYRef.current = e.clientY;
-                      // If pointer moves too far before long-press fires, cancel long-press
-                      const info = longPressStartRef.current;
-                      if (info && longPressTimerRef.current) {
-                        const dx = Math.abs(e.clientX - info.x);
-                        const dy = Math.abs(e.clientY - info.y);
-                        const MOVE_CANCEL_PX = 6;
-                        if (dx > MOVE_CANCEL_PX || dy > MOVE_CANCEL_PX) {
-                          clearLongPress();
-                        }
-                      }
-                    }}
-                    onMouseUp={() => {
-                      // Cancel any pending long-press
-                      clearLongPress();
-                    }}
-                    onMouseLeave={() => {
-                      // Cancel pending long-press when leaving the block
-                      clearLongPress();
                     }}
                     onContextMenu={(e) => handleContextMenu(e, scene.id)}
                     onClick={(e) => {
@@ -2831,6 +2947,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                       onMouseDown={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
+                        isHtml5DragRef.current = false; // pointer-based reorder
                         setDragInfo({
                           action: 'reorder',
                           sceneId: scene.id,
@@ -2850,6 +2967,34 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                       title="Drag to reorder"
                     >
                       <GripVertical className="w-3.5 h-3.5" />
+                    </div>
+
+                    {/* Drag to Chat Handle */}
+                    <div
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-white/70 hover:text-white/100 cursor-grab select-none"
+                      draggable
+                      onDragStart={(e) => {
+                        // Prevent parent block's dragstart (reorder) from firing
+                        e.stopPropagation();
+                        try {
+                          const payload = {
+                            type: 'timeline-scene',
+                            projectId,
+                            sceneId: scene.id,
+                            index: index + 1,
+                            name: displayName,
+                          };
+                          e.dataTransfer.setData('application/json', JSON.stringify(payload));
+                          e.dataTransfer.setData('text/plain', `@scene ${index + 1}`);
+                          e.dataTransfer.effectAllowed = 'copy';
+                        } catch {}
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      title="Drag to chat"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                      </svg>
                     </div>
                     
                     {/* Scene Label */}
@@ -3110,7 +3255,6 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                 background: 'linear-gradient(180deg, #fb923c 0%, #fed7aa 100%)',
                 boxShadow: '0 0 10px rgba(251, 146, 60, 0.6), 0 0 20px rgba(254, 215, 170, 0.4)'
               }}
-              title={`Frame: ${currentFrame} / ${totalDuration} (${((currentFrame / totalDuration) * 100).toFixed(1)}%)`}
               onMouseDown={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -3122,6 +3266,11 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                 });
                 setIsDragging(true);
               }}
+              onMouseMove={(e) => {
+                const text = displayMode === 'frames' ? `${currentFrame}` : `${Math.floor(currentFrame / FPS)}`;
+                setHoverTip({ x: e.clientX + 10, y: e.clientY + 12, text });
+              }}
+              onMouseLeave={() => setHoverTip(null)}
             >
               {/* Modern playhead indicator with Bazaar orange gradient */}
               <div 
@@ -3199,8 +3348,8 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         </div>
       )}
 
-      {/* Peak hover tooltip (no visual markers) */}
-      {peakTooltip && peakTooltip.frames && peakTooltip.frames.length > 0 && (
+  {/* Peak hover tooltip (no visual markers) */}
+  {peakTooltip && peakTooltip.frames && peakTooltip.frames.length > 0 && (
         <div
           className="fixed z-[9999] bg-gray-900 text-white px-2 py-1 rounded-md text-xs shadow-lg pointer-events-none"
           style={{
@@ -3210,7 +3359,20 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         >
           Peaks near: {peakTooltip.frames.join(', ')}
         </div>
-      )}
+  )}
+
+  {/* Immediate hover tooltip for time/frame */}
+  {hoverTip && (
+    <div
+      className="fixed z-[9999] bg-gray-900 text-white px-2 py-1 rounded-md text-xs shadow-lg pointer-events-none"
+      style={{
+        left: Math.min(hoverTip.x, window.innerWidth - 120),
+        top: Math.max(0, hoverTip.y),
+      }}
+    >
+      {hoverTip.text}
+    </div>
+  )}
     </div>
   );
 }

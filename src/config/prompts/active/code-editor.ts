@@ -105,7 +105,9 @@ export const durationInFrames_[ID] = totalFrames_edit;
 - window.RemotionShapes - Built-in shape components
 - window.Rough - Hand-drawn style graphics library
 - 100+ Google Fonts are pre-loaded - just use fontFamily: "FontName" directly (no loading needed)
-- window.BazaarAvatars - 5 avatar image paths ('asian-woman', 'black-man', 'hispanic-man', 'middle-eastern-man', 'white-woman') - Usage: window.BazaarAvatars['asian-woman']
+- window.BazaarAvatars - avatar image paths available by key.
+  Keys include: 'asian-woman', 'black-man', 'hispanic-man', 'middle-eastern-man', 'white-woman', 'jackatar', 'markatar', 'downie', 'hotrussian', 'hottie', 'irish-guy', 'nigerian-princess', 'norway-girl', 'wise-ceo'
+  Usage: window.BazaarAvatars['asian-woman']
 
 ⚠️ IMPORTANT: These are NOT imports - they're pre-loaded global objects. Access them directly via window.
 

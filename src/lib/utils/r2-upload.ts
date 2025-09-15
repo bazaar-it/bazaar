@@ -80,3 +80,42 @@ export async function uploadScreenshotToR2(
   return publicUrl;
 }
 
+/**
+ * Upload an arbitrary buffer to Cloudflare R2 under a prefix.
+ */
+export async function uploadBufferToR2(
+  buffer: Buffer,
+  keyPrefix: string,
+  fileName: string,
+  contentType: string,
+  metadata?: Record<string, string>
+): Promise<string> {
+  if (!buffer || !Buffer.isBuffer(buffer)) {
+    throw new Error(`Invalid buffer provided for ${fileName}`);
+  }
+
+  const s3Client = new S3Client({
+    region: 'auto',
+    endpoint: process.env.CLOUDFLARE_R2_ENDPOINT,
+    credentials: {
+      accessKeyId: process.env.CLOUDFLARE_R2_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY!,
+    },
+  });
+
+  const ts = Date.now();
+  const rand = crypto.randomUUID().slice(0, 8);
+  const key = `${keyPrefix.replace(/\/$/, '')}/${ts}-${rand}-${fileName}`;
+
+  const command = new PutObjectCommand({
+    Bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME!,
+    Key: key,
+    Body: buffer,
+    ContentType: contentType || 'application/octet-stream',
+    Metadata: metadata || {},
+  });
+
+  await s3Client.send(command);
+  const publicUrl = `${process.env.CLOUDFLARE_R2_PUBLIC_URL}/${key}`;
+  return publicUrl;
+}

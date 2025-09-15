@@ -1,8 +1,16 @@
 # 🏆 Bazaar-Vid Progress Summary
 
 ## 📝 Latest Update (Sep 11, 2025)
+## 📝 Latest Update (Sep 13, 2025)
+- Sprint 107: Fixed preview crash when scene names contained apostrophes (e.g., Build a' word slide template). Root cause was unescaped dynamic strings injected into generated composite code; Sucrase failed with "Invalid scope depth". Escaped dynamic values via JSON.stringify in `PreviewPanelG.tsx` and added a browser-safe console logger to avoid `setImmediate` errors from Winston in `use-auto-fix`.
+
+- Sprint 107: Prevented assistant code leakage in chat. Added server-side chat sanitizer and a suppression flag for silent flows (auto-fix). Clarification messages sanitized. Auto-fix now calls `generateScene` with `metadata.suppressAssistantMessage = true` to remain silent.
+
 - Sprint 107: Fixed intermittent horizontal scrollbar in ChatPanel by enforcing word wrapping and hiding horizontal overflow. Changes in `ChatPanelG.tsx` and `ChatMessage.tsx`. See `memory-bank/sprints/sprint107_general_reliability/analysis/chat-horizontal-overflow.md`.
 - Sprint 107: Disabled unfinished Website→Video pipeline behind feature flag. Orchestrator/Intent/Context updated to ignore website tool; chat no longer passes `websiteUrl`. Safe to paste URLs without triggering that workflow.
+
+## 📝 Latest Update (Sep 14, 2025)
+- Sprint 107: Multi‑scene stability — ensured every scene (TSX and precompiled JS) is wrapped in an IIFE and bound to a unique component name derived from the scene ID in `PreviewPanelG.tsx`. Prevents "Identifier 'X' has already been declared" when combining templates with similar component names (e.g., Rainbow stroke + word slide).
 
 ## 📝 Latest Update (Sep 08, 2025)
 - Sprint 116: Kickstarted “Unified Images” plan. New sprint docs under `memory-bank/sprints/sprint116_images/`. Strategy: remove separate image tool; Brain emits `imageAction`/`imageDirectives`; Sonnet 4 multimodal handles add/edit with minimal prompts; upload-time media metadata informs decisions.

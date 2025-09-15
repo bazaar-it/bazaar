@@ -110,8 +110,8 @@ Use window.IconifyIcon to access over 200,000 icons. Iconify gives you access to
 5. Always use style={{fontSize: "24px"}} or appropriate size for the context
 
 AVATARS - (Images of real humans)
-  • You have access to 5 avatars via window.BazaarAvatars. Use these for profile images/avatars. 
-  • Avatar names: 'asian-woman', 'black-man', 'hispanic-man', 'middle-eastern-man', 'white-woman'
+  • You have access to avatars via window.BazaarAvatars. Use these for profile images/avatars.
+  • Available names include: 'asian-woman', 'black-man', 'hispanic-man', 'middle-eastern-man', 'white-woman', 'jackatar', 'markatar', 'downie', 'hotrussian', 'hottie', 'irish-guy', 'nigerian-princess', 'norway-girl', 'wise-ceo'
   • Usage: <img src={window.BazaarAvatars['asian-woman']} style={{width: "100px", height: "100px"}} />
 
 
