@@ -1,53 +1,39 @@
 // src/lib/avatars/avatarRegistry.ts
+import { AVATAR_MAP, AVATAR_KEYS, buildAvatarMap } from '~/lib/avatars/catalog';
+
 export interface AvatarAsset {
   id: string;
   name: string;
   url: string;
-  description: string;
+  description?: string;
 }
 
-export const AVATAR_REGISTRY: AvatarAsset[] = [
-  {
-    id: 'asian-woman',
-    name: 'Asian Woman',
-    url: '/avatars/asian-woman.png',
-    description: 'Professional Asian woman with warm smile'
-  },
-  {
-    id: 'black-man', 
-    name: 'Black Man',
-    url: '/avatars/black-man.png',
-    description: 'Friendly Black man with casual style'
-  },
-  {
-    id: 'hispanic-man',
-    name: 'Hispanic Man', 
-    url: '/avatars/hispanic-man.png',
-    description: 'Professional Hispanic man with confident expression'
-  },
-  {
-    id: 'middle-eastern-man',
-    name: 'Middle Eastern Man',
-    url: '/avatars/middle-eastern-man.png', 
-    description: 'Professional Middle Eastern man with business style'
-  },
-  {
-    id: 'white-woman',
-    name: 'White Woman',
-    url: '/avatars/white-woman.png',
-    description: 'Friendly white woman with bright smile'
-  }
-];
+const toTitle = (id: string) => id
+  .replace(/-/g, ' ')
+  .replace(/\b\w/g, (m) => m.toUpperCase());
 
-// Simple utility functions
-export const getAvatarById = (id: string): AvatarAsset | undefined => {
-  return AVATAR_REGISTRY.find(avatar => avatar.id === id);
-};
+function resolveMap(): Record<string, string> {
+  const base = process.env.NEXT_PUBLIC_CLOUDFLARE_R2_PUBLIC_URL || process.env.CLOUDFLARE_R2_PUBLIC_URL;
+  const dir = process.env.NEXT_PUBLIC_AVATARS_BASE_DIR || process.env.AVATARS_BASE_DIR || 'Bazaar avatars';
+  return base ? buildAvatarMap(base, dir) : AVATAR_MAP;
+}
 
-export const getAllAvatars = (): AvatarAsset[] => {
-  return AVATAR_REGISTRY;
-};
+const MAP = resolveMap();
 
-export const getRandomAvatar = (): AvatarAsset => {
-  return AVATAR_REGISTRY[Math.floor(Math.random() * AVATAR_REGISTRY.length)]!;
-}; 
+function fallbackUrl(id: string): string {
+  const base = process.env.NEXT_PUBLIC_CLOUDFLARE_R2_PUBLIC_URL || process.env.CLOUDFLARE_R2_PUBLIC_URL;
+  const dir = process.env.NEXT_PUBLIC_AVATARS_BASE_DIR || process.env.AVATARS_BASE_DIR || 'Bazaar avatars';
+  if (!base) return '';
+  const enc = (s: string) => s.split('/').map(encodeURIComponent).join('/');
+  return `${base}/${encodeURIComponent(dir)}/${enc(id)}.png`;
+}
+
+export const AVATAR_REGISTRY: AvatarAsset[] = AVATAR_KEYS.map((id) => ({
+  id,
+  name: toTitle(id),
+  url: MAP[id] ?? fallbackUrl(id),
+}));
+
+export const getAvatarById = (id: string): AvatarAsset | undefined => AVATAR_REGISTRY.find(a => a.id === id);
+export const getAllAvatars = (): AvatarAsset[] => AVATAR_REGISTRY;
+export const getRandomAvatar = (): AvatarAsset => AVATAR_REGISTRY[Math.floor(Math.random() * AVATAR_REGISTRY.length)]!;

@@ -28,6 +28,10 @@ export default {
     // Mock the env module first (higher priority)
     '^~/env\\.js$': '<rootDir>/src/__mocks__/env.js',
     '^~/env$': '<rootDir>/src/__mocks__/env.js',
+    // Map relative env import used by packages/r2 to mock
+    '^\.\./\.\./src/env\\.js$': '<rootDir>/src/__mocks__/env.js',
+    // Mock ESM-only @iconify/utils to avoid transform issues in Jest
+    '^@iconify/utils$': '<rootDir>/__mocks__/iconify-utils.ts',
     
     // TypeScript path mapping for ~ alias
     '^~/(.*)$': '<rootDir>/src/$1',
@@ -59,7 +63,8 @@ export default {
   
   // Handle ESM modules in node_modules
   transformIgnorePatterns: [
-    'node_modules/(?!(nanoid|@testing-library|@remotion|chalk|uuid)/)',
+    // Transform ESM packages that Jest can't parse by default
+    'node_modules/(?!(nanoid|@testing-library|@remotion|chalk|uuid|@iconify-json|@iconify/types)/)',
   ],
   
   // ESM settings - moved to transform config above to avoid deprecation warning

@@ -86,6 +86,7 @@ describe('Preview composite glue (no destructuring, multi-scene safety)', () => 
       ],
       includeFontsLoader: false,
       includeIconFallback: true,
+      totalDurationInFrames: 300,
     });
     const win = makeWindowStub();
     const transformed = transform(composite, { transforms: ['typescript', 'jsx'], jsxRuntime: 'classic', production: false }).code;

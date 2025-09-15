@@ -5,6 +5,8 @@
 - [x] Add post-transform validation: remove any remaining `window.IconifyIcon` refs
 - [x] Inline placeholder SVG for unknown/missing icons with clear data-attributes
 - [x] Add cache for fetched SVGs (memory + R2 backing)
+- [x] Prevent false positives (times/emoji) in icon extraction
+- [x] Ensure `__InlineIcon` runtime is injected whenever replacements introduce it
 
 ## UI Alignment
 - [ ] (Defer) Document supported sets and fallback behavior in docs (no gating)
@@ -19,6 +21,7 @@
 
 ## Tests & Monitoring
 - [ ] Add tests: valid icon, unknown set, missing icon name → ensure no React #130
+- [ ] Add tests for time-string arrays and dynamic icon arrays → ensure no unwanted API calls and runtime is present
 - [x] Log metrics: icons requested, inlined, placeholder count per export
 
 ## User Notification (New)

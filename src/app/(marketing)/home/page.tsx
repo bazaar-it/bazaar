@@ -131,6 +131,22 @@ export default function Homepage() {
           <p className="text-center text-gray-500 text-sm mt-2 mb-0">
             Start with 100 free prompts
           </p>
+          <div className="mt-4 flex justify-center">
+            <a
+              href="https://www.producthunt.com/products/bazaar-2?embed=true&utm_source=badge-featured&utm_medium=badge&utm_source=badge-bazaar-2"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="See Bazaar on Product Hunt"
+            >
+              <img
+                src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=996887&theme=light"
+                alt="Bazaar – Vibe Code your Software Demo Video on Product Hunt"
+                width={250}
+                height={54}
+                className="w-[250px] h-[54px]"
+              />
+            </a>
+          </div>
         </div>
         
         {/* Marketing Video Player - responsive positioning */}

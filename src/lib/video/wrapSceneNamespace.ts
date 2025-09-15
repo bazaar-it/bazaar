@@ -40,10 +40,29 @@ export function wrapSceneNamespace(params: WrapNamespaceParams): WrapNamespaceRe
   const startOffset = Math.max(0, Math.floor(params.startOffset || 0));
 
   const sceneNamespaceName = params.namespaceName || `SceneNS_${index}`;
+  const compVar = `__SceneComp_${index}`;
 
   // Prepare offset header + code rewrite.
   let offsetHeader = '';
   let namespacedBody = sceneCode;
+  // Sanitize risky template-literal style attributes that can collide when concatenated
+  try {
+    namespacedBody = namespacedBody
+      .replace(/transform:\s*`translate\(\$\{([^}]+)\}px,\s*\$\{([^}]+)\}px\)`/g, "transform: 'translate(' + $1 + 'px, ' + $2 + 'px)'")
+      .replace(/transform:\s*`translateY\(\$\{([^}]+)\}%\)`/g, "transform: 'translateY(' + $1 + '%)'")
+      .replace(/transform:\s*`scale\(\$\{([^}]+)\}\)`/g, "transform: 'scale(' + $1 + ')'")
+      .replace(/viewBox\s*:\s*`0 0 \$\{([^}]+)\}\s+\$\{([^}]+)\}`/g, "viewBox: '0 0 ' + $1 + ' ' + $2");
+
+    // Namespace SVG defs/filters IDs and their url(#...) references to avoid cross‑scene collisions
+    const svgIdPrefix = sceneNamespaceName + '__';
+    // Prefix ids defined on common SVG defs elements
+    namespacedBody = namespacedBody.replace(
+      /(React\.createElement\s*\(\s*['\"](?:linearGradient|radialGradient|filter|clipPath|mask|pattern)['\"]\s*,\s*\{[^}]*?\bid\s*:\s*['\"])([^'\"]+)(['\"])\s*/g,
+      (_m, p1, id, p4) => `${p1}${svgIdPrefix}${id}${p4}`
+    );
+    // Update url(#...) references
+    namespacedBody = namespacedBody.replace(/url\(#([^\)]+)\)/g, (_m, id) => `url(#${svgIdPrefix}${id})`);
+  } catch {}
   if (startOffset > 0) {
     try {
       // Define a helper that adds the startOffset without mutating globals.
@@ -62,16 +81,31 @@ export function wrapSceneNamespace(params: WrapNamespaceParams): WrapNamespaceRe
     }
   }
 
+  // Detect server-compiled auto-return at EOF (e.g., `return TemplateScene;`)
+  const hasAutoReturn = /\n\s*return\s+[A-Za-z_$][\w$]*\s*;\s*$/.test(namespacedBody);
+
   // Build the wrapped code
-  const wrapped = [
-    `// Isolated namespace for Scene ${index}`,
-    // Use 'var' so accidental duplicate declarations in a single module don't throw.
-    `var ${sceneNamespaceName} = (() => {`,
-    offsetHeader,
-    namespacedBody,
-    `  return { Comp: ${componentName} };`,
-    `})();`,
-  ]
+  const wrapped = (
+    hasAutoReturn
+      ? [
+          `// Isolated namespace for Scene ${index}`,
+          `var ${sceneNamespaceName} = (() => {`,
+          offsetHeader,
+          `  var ${compVar} = (function(){`,
+          namespacedBody,
+          `  })();`,
+          `  return { Comp: ${compVar} };`,
+          `})();`,
+        ]
+      : [
+          `// Isolated namespace for Scene ${index}`,
+          `var ${sceneNamespaceName} = (() => {`,
+          offsetHeader,
+          namespacedBody,
+          `  return { Comp: ${componentName} };`,
+          `})();`,
+        ]
+  )
     .filter(Boolean)
     .join('\n');
 

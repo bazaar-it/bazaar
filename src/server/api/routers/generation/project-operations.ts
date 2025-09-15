@@ -2,7 +2,7 @@ import { z } from "zod";
 import { protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
 import { scenes, projects } from "~/server/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 
 /**
  * GET PROJECT SCENES - Query all scenes for a project
@@ -35,7 +35,7 @@ export const getProjectScenes = protectedProcedure
 
     // Get scenes
     const projectScenes = await db.query.scenes.findMany({
-      where: eq(scenes.projectId, projectId),
+      where: and(eq(scenes.projectId, projectId), isNull(scenes.deletedAt)),
       orderBy: [scenes.order],
     });
 
@@ -48,4 +48,3 @@ export const getProjectScenes = protectedProcedure
 
     return projectScenes;
   });
-

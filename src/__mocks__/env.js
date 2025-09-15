@@ -4,6 +4,13 @@ module.exports = {
   NODE_ENV: 'test',
   DATABASE_URL: 'postgresql://test',
   OPENAI_API_KEY: 'test-key',
+  // R2 config expected by packages/r2
+  R2_ENDPOINT: 'https://example.com',
+  R2_ACCESS_KEY_ID: 'test-access-key',
+  R2_SECRET_ACCESS_KEY: 'test-secret',
+  R2_BUCKET_NAME: 'test-bucket',
+  R2_PUBLIC_URL: 'https://r2.example.com/public',
+  // Legacy/other envs used elsewhere (kept for compatibility)
   CLOUDFLARE_R2_BUCKET_NAME: 'test-bucket',
   CLOUDFLARE_R2_ACCOUNT_ID: 'test-account',
   CLOUDFLARE_R2_ACCESS_KEY_ID: 'test-access-key',

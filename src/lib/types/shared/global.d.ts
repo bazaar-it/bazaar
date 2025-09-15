@@ -27,11 +27,7 @@ interface RemotionGoogleFonts {
 
 // Avatar System types - Ultra Simple
 interface BazaarAvatars {
-  'asian-woman': string;
-  'black-man': string;
-  'hispanic-man': string;
-  'middle-eastern-man': string;
-  'white-woman': string;
+  [key: string]: string; // dynamic keys backed by avatar catalog
 }
 
 declare global {

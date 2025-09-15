@@ -2,7 +2,6 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo, Suspense, useRef } from 'react';
-import { useSession } from 'next-auth/react';
 import { useVideoState } from '~/stores/videoState';
 import type { InputProps } from '~/lib/types/video/input-props';
 import { Button } from "~/components/ui/button";
@@ -90,7 +89,8 @@ export function PreviewPanelG({
     { projectId },
     { 
       refetchOnWindowFocus: false,
-      staleTime: 0, // Always fetch fresh data
+      // Balance: give optimistic UI a moment before DB resync
+      staleTime: 1000,
       // This will be invalidated when scenes are created
     }
   );
@@ -193,6 +193,23 @@ export function PreviewPanelG({
         return scene;
       });
       const dedupedScenes = Array.from(new Map(convertedScenes.map((s: any) => [s.id, s])).values());
+      // Dedupe: If the server scenes are effectively identical to local (id/order/duration/code hash), skip replace
+      const sigFrom = (list: any[]) => list.map((s: any) => {
+        const order = s.order ?? 0;
+        const duration = s.duration || 150;
+        // Prefer compiled JS when present; otherwise use TSX
+        const code = (s?.data?.code || (s as any).jsCode || (s as any).tsxCode || '') as string;
+        const h = (typeof hashString === 'function') ? hashString(code) : String(code.length);
+        return `${s.id}:${order}:${duration}:${h}`;
+      }).join('|');
+      const serverSig = sigFrom(convertedScenes);
+      const localSig = sigFrom((currentProps.scenes || []) as any[]);
+
+      if (serverSig === localSig) {
+        console.log('[PreviewPanelG] ⚖️ Server scenes match local signature; skipping replace');
+        return;
+      }
+
       const updatedProps = {
         ...currentProps,
         scenes: dedupedScenes,
@@ -258,14 +275,9 @@ export function PreviewPanelG({
   const ranges = useMemo(() => computeSceneRanges(scenes as any), [scenes]);
   const activeRange = useMemo(() => findSceneAtFrame(ranges, currentFrame), [ranges, currentFrame]);
   
-  // Admin-only indicator (owner email only)
-  const { data: session } = useSession();
-  const isOwner = session?.user?.email === 'markushogne@gmail.com';
-  const compiledSummary = useMemo(() => {
-    const total = scenes.length;
-    const compiled = scenes.filter((s: any) => (s as any).jsCode || (s?.data as any)?.jsCode).length;
-    return { total, compiled };
-  }, [scenes]);
+  // hashString defined later in file; keep single definition to avoid redeclare
+  
+  // (Removed owner-only preview source indicator)
   
   // Force preview refresh when audio settings change
   useEffect(() => {
@@ -344,6 +356,32 @@ export function PreviewPanelG({
         }
       }
     };
+
+    // Explicit play request (no toggle)
+    const handleTimelinePlay = () => {
+      if (!playerRef.current) return;
+      try {
+        playerRef.current.play();
+        setIsPlaying(true);
+        const event = new CustomEvent('preview-play-state-change', { detail: { playing: true } });
+        window.dispatchEvent(event);
+      } catch (error) {
+        console.warn('Failed to play from timeline (explicit):', error);
+      }
+    };
+
+    // Explicit pause request (no toggle)
+    const handleTimelinePause = () => {
+      if (!playerRef.current) return;
+      try {
+        playerRef.current.pause();
+        setIsPlaying(false);
+        const event = new CustomEvent('preview-play-state-change', { detail: { playing: false } });
+        window.dispatchEvent(event);
+      } catch (error) {
+        console.warn('Failed to pause from timeline (explicit):', error);
+      }
+    };
     
     // New: Provide precise current frame on demand
     const handleRequestCurrentFrame = () => {
@@ -365,12 +403,16 @@ export function PreviewPanelG({
 
     window.addEventListener('timeline-seek' as any, handleTimelineSeek);
     window.addEventListener('timeline-play-pause' as any, handleTimelinePlayPause);
+    window.addEventListener('timeline-play' as any, handleTimelinePlay);
+    window.addEventListener('timeline-pause' as any, handleTimelinePause);
     window.addEventListener('request-play-state' as any, handleRequestPlayState);
     window.addEventListener('request-current-frame' as any, handleRequestCurrentFrame);
     
     return () => {
       window.removeEventListener('timeline-seek' as any, handleTimelineSeek);
       window.removeEventListener('timeline-play-pause' as any, handleTimelinePlayPause);
+      window.removeEventListener('timeline-play' as any, handleTimelinePlay);
+      window.removeEventListener('timeline-pause' as any, handleTimelinePause);
       window.removeEventListener('request-play-state' as any, handleRequestPlayState);
       window.removeEventListener('request-current-frame' as any, handleRequestCurrentFrame);
     };
@@ -446,7 +488,7 @@ export function PreviewPanelG({
   // 🚨 SIMPLIFIED: Direct scene compilation with pre-compiled JS support
   const compileSceneDirectly = useCallback(async (scene: any, index: number) => {
     // Get code from scene (supporting both TSX and pre-compiled JS)
-    // PRIORITY: Use pre-compiled JS first, then check for TSX code
+    // PRIORITY: Use TSX/source first so manual edits reflect immediately, then fall back to pre-compiled JS
     const preCompiledJS = scene.jsCode || (scene.data as any)?.jsCode; // Pre-compiled JavaScript from DB
     const tsxCode = scene.tsxCode || (scene.data as any)?.tsxCode || (scene.data as any)?.code;
     // Use JS if available, otherwise fall back to TSX
@@ -476,24 +518,34 @@ export function PreviewPanelG({
 
     try {
       // Extract component name from the actual generated code
-      // Use TSX code for extraction if available, otherwise use the JS code
+      // Prefer TSX for extraction; if missing, use JS. Also handle server-compiled JS with a trailing `return Name;`.
       const codeForNameExtraction = tsxCode || sceneCode;
-      // Handle both: export default function ComponentName and export default ComponentName
-      let componentNameMatch = codeForNameExtraction.match(/export\s+default\s+function\s+(\w+)/);
-      let componentName = componentNameMatch ? componentNameMatch[1] : null;
-      
-      // If no function export, check for const declaration and export
+      let componentName: string | null = null;
+      // 1) export default function Name
+      let m = codeForNameExtraction.match(/export\s+default\s+function\s+([A-Za-z_$][\w$]*)/);
+      if (m && m[1]) componentName = m[1];
+      // 2) export default Name
       if (!componentName) {
-        const constMatch = codeForNameExtraction.match(/const\s+(\w+)\s*=\s*\(/);
-        if (constMatch) {
-          componentName = constMatch[1];
-        }
+        m = codeForNameExtraction.match(/export\s+default\s+([A-Za-z_$][\w$]*)/);
+        if (m && m[1]) componentName = m[1];
       }
-      
-      // Fallback to generic name
+      // 3) const Name = (
       if (!componentName) {
-        componentName = `Scene${index}Component`;
+        m = codeForNameExtraction.match(/const\s+([A-Za-z_$][\w$]*)\s*=\s*\(/);
+        if (m && m[1]) componentName = m[1];
       }
+      // 4) function Name(  (server-compiled JS keeps function decl + trailing return)
+      if (!componentName) {
+        m = codeForNameExtraction.match(/function\s+([A-Za-z_$][\w$]*)\s*\(/);
+        if (m && m[1]) componentName = m[1];
+      }
+      // 5) trailing `return Name;` (most reliable for server-compiled JS)
+      if (!componentName && preCompiledJS) {
+        m = preCompiledJS.match(/return\s+([A-Za-z_$][\w$]*)\s*;\s*$/m);
+        if (m && m[1]) componentName = m[1];
+      }
+      // 6) Fallback to generic
+      if (!componentName) componentName = `Scene${index}Component`;
       
       // Log original code for debugging
       // Original scene code processing
@@ -538,48 +590,58 @@ export function PreviewPanelG({
           // Strip import lines that cannot execute inside Function/concatenated context
           .replace(/^[\t ]*import[^;]*;?\s*$/gmi, '');
         
-        // Extract the component name from the original JS before cleaning
-        const exportFuncMatch = preCompiledJS.match(/export\s+default\s+function\s+(\w+)/);
-        const actualComponentName = exportFuncMatch ? exportFuncMatch[1] : componentName;
-        
         transformedCode = cleanCompiledJS;
-        
-        // Override the component name to match what's in the compiled JS
-        componentName = actualComponentName;
+        // Ensure the name we use is a valid identifier (letters, digits, _, $) and not empty
+        if (!/^[A-Za-z_$][\w$]*$/.test(componentName)) {
+          componentName = `Scene${index}Component`;
+        }
+        // Create a unique, stable name per scene to avoid collisions across scenes
+        const shortId = (String(sceneId || '')).replace(/[^a-zA-Z0-9]/g, '').slice(0, 8) || `idx${index}`;
+        const uniqueComponentName = `${componentName}_${shortId}`;
 
         // Wrap precompiled JS so its trailing `return Component;` runs in function scope
-        // and assign returned component to a named constant available in module scope.
-        const wrappedPrecompiled = `const ${componentName} = (function(){\n${transformedCode}\n})();`;
+        // and assign returned component to a uniquely named constant available in module scope.
+        const wrappedPrecompiled = `const ${uniqueComponentName} = (function(){\n${transformedCode}\n})();`;
         compiledSnippet = wrappedPrecompiled;
+        componentName = uniqueComponentName;
       } else {
         // ⚠️ SLOW PATH: Client-side compilation (legacy)
         console.log(`[PreviewPanelG] ⚠️ No pre-compiled JS, using client-side compilation for scene ${index} (${sceneName})`);
         try { metricsRef.current.slowPath += 1; } catch {}
-        
-        // 🚨 REAL COMPILATION TEST: Use Sucrase to verify the code actually compiles
-        const testCompositeCode = `
-const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring, random } = window.Remotion;
 
-${cleanSceneCode}
-
-export default function TestComponent() {
-  return <${componentName} />;
-}`;
-
-        // This is REAL validation - if Sucrase can't compile it, it's actually broken
+        // Transform the cleaned TSX to plain JS (classic runtime)
         try {
-          const result = transform(testCompositeCode, {
+          const tsxToCompile = cleanSceneCode || tsxCode;
+          const result = transform(tsxToCompile, {
             transforms: ['typescript', 'jsx'],
             jsxRuntime: 'classic',
             production: false,
           });
-          transformedCode = result.code;
+          let jsOut = result.code
+            // Remove export statements to keep functions available by name
+            .replace(/export\s+default\s+function\s+(\w+)/g, 'function $1')
+            .replace(/export\s+default\s+(\w+);?\s*/g, '')
+            .replace(/export\s+const\s+(\w+)\s*=\s*([^;]+);?/g, 'const $1 = $2;')
+            .replace(/export\s+\{[^}]*\};?\s*/g, '');
+
+          transformedCode = jsOut;
+
+          // Ensure the name we use is a valid identifier (letters, digits, _, $) and not empty
+          if (!/^[A-Za-z_$][\w$]*$/.test(componentName)) {
+            componentName = `Scene${index}Component`;
+          }
+          // Create a unique, stable name per scene to avoid collisions across scenes
+          const shortId = (String(sceneId || '')).replace(/[^a-zA-Z0-9]/g, '').slice(0, 8) || `idx${index}`;
+          const uniqueComponentName = `${componentName}_${shortId}`;
+
+          // Wrap TSX-compiled JS inside an IIFE and explicitly return the component to avoid
+          // leaking top-level declarations into module scope and to guarantee uniqueness.
+          const wrappedClientCompiled = `const ${uniqueComponentName} = (function(){\n${jsOut}\nreturn ${componentName};\n})();`;
+          compiledSnippet = wrappedClientCompiled;
+          componentName = uniqueComponentName;
         } catch (syntaxError) {
-          // Sucrase compilation failed - this is a syntax error
-          console.error(`[PreviewPanelG] ❌ Scene ${index} (${sceneName}) has SYNTAX ERROR:`, syntaxError);
+          console.error(`[PreviewPanelG] ❌ Scene ${index} (${sceneName}) has SYNTAX ERROR during client compile:`, syntaxError);
           console.log('[PreviewPanelG] Dispatching preview-scene-error event for auto-fix');
-          
-          // Still dispatch the error event for auto-fix
           const errorMessage = syntaxError instanceof Error ? syntaxError.message : 'Syntax error in scene code';
           const errorEvent = new CustomEvent('preview-scene-error', {
             detail: {
@@ -590,15 +652,13 @@ export default function TestComponent() {
             }
           });
           window.dispatchEvent(errorEvent);
-          console.log('[PreviewPanelG] Error event dispatched for scene:', sceneId);
-          
-          // Re-throw to handle in outer catch
           throw syntaxError;
         }
       }
 
       // Decide final compiled snippet for this scene
       if (!compiledSnippet) {
+        // As a last resort, use the cleaned TSX (rare) - but this should usually be JS at this point
         compiledSnippet = cleanSceneCode;
       }
 
@@ -662,9 +722,9 @@ function FallbackScene${sceneIndex}() {
     const autoFixEvent = new CustomEvent('trigger-autofix', {
       detail: {
         sceneId: '${sceneId || sceneName}', // Use actual scene ID if available
-        sceneName: '${sceneName || `Scene ${sceneIndex + 1}`}',
+        sceneName: ${JSON.stringify(sceneName || ('Scene ' + (sceneIndex + 1)))},
         sceneIndex: ${sceneIndex + 1},
-        error: { message: '${errorDetails || 'Compilation error'}' }
+        error: { message: ${JSON.stringify(errorDetails || 'Compilation error')} }
       }
     });
     window.dispatchEvent(autoFixEvent);
@@ -739,7 +799,7 @@ function FallbackScene${sceneIndex}() {
         top: '-50%',
         left: '-50%',
         opacity: 0.1,
-        transform: \`rotate(\${bgRotation}deg)\`,
+        transform: 'rotate(' + bgRotation + 'deg)',
       }}>
         <div style={{
           position: 'absolute',
@@ -768,7 +828,7 @@ function FallbackScene${sceneIndex}() {
         boxShadow: '0 20px 60px rgba(0,0,0,0.12)',
         maxWidth: '680px',
         textAlign: 'center',
-        transform: \`scale(\${scale})\`,
+        transform: 'scale(' + scale + ')',
         fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
         position: 'relative',
         zIndex: 1,
@@ -802,7 +862,7 @@ function FallbackScene${sceneIndex}() {
         <div style={{ 
           fontSize: '4.5rem', 
           marginBottom: '2rem',
-          transform: \`translateY(\${iconFloat}px)\`,
+          transform: 'translateY(' + iconFloat + 'px)',
           transition: 'transform 0.3s ease',
         }}>
           🤖
@@ -825,7 +885,7 @@ function FallbackScene${sceneIndex}() {
           lineHeight: '1.5',
           fontWeight: '500',
         }}>
-          Scene: <strong style={{ color: '#111827' }}>${sceneName || `Scene ${sceneIndex + 1}`}</strong>
+          Scene: ${sceneName || ('Scene ' + (sceneIndex + 1))}
         </p>
         
         <p style={{ 
@@ -836,10 +896,7 @@ function FallbackScene${sceneIndex}() {
           maxWidth: '500px',
           margin: '16px auto 32px',
         }}>
-          The AI-generated code has a compilation error that prevents it from running.
-          <strong style={{ color: '#059669', display: 'block', marginTop: '12px' }}>
-            Good news: Our AI agent is already working on a fix and will automatically update your video when ready!
-          </strong>
+          The AI-generated code has a compilation error that prevents it from running.\n\nGood news: Our AI agent is already working on a fix and will automatically update your video when ready!
         </p>
         
         {/* Progress indicator */}
@@ -902,70 +959,9 @@ function FallbackScene${sceneIndex}() {
           Other scenes continue playing normally
         </div>
         
-        ${errorDetails ? `
-        <div style={{ 
-          marginTop: '24px',
-          padding: '16px',
-          background: '#fef2f2',
-          borderRadius: '12px',
-          border: '1px solid #fecaca',
-          textAlign: 'left',
-        }}>
-          <div style={{ 
-            fontSize: '0.75rem',
-            fontWeight: '600',
-            color: '#991b1b',
-            marginBottom: '8px',
-          }}>
-            Technical Details:
-          </div>
-          <div style={{ 
-            fontSize: '0.7rem',
-            color: '#dc2626',
-            fontFamily: 'monospace',
-            lineHeight: '1.5',
-            wordBreak: 'break-word',
-            maxHeight: '120px',
-            overflowY: 'auto',
-          }}>
-            ${errorDetails}
-          </div>
-        </div>
-        ` : ''}
-        
-        <div style={{ 
-          fontSize: '0.75rem', 
-          color: '#9ca3af', 
-          marginTop: '24px', 
-          fontStyle: 'italic',
-          maxWidth: '420px',
-          margin: '24px auto 0',
-          lineHeight: '1.5',
-          paddingTop: '20px',
-          borderTop: '1px solid #e5e7eb',
-        }}>
-          "If you're not embarrassed by the first version of your product, you've launched too late."
-          <br />
-          <span style={{ fontWeight: '500' }}>— Reid Hoffman</span>
-        </div>
       </div>
       
-      <style jsx>{\`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.3; }
-        }
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      \`}</style>
       
-      <style jsx>{\`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
       \`}</style>
     </AbsoluteFill>
   );
@@ -1168,7 +1164,7 @@ class SingleSceneErrorBoundary extends React.Component {
               boxShadow: '0 20px 60px rgba(0,0,0,0.12)',
               maxWidth: '640px',
               textAlign: 'center',
-              transform: \`scale(\${scale})\`,
+              transform: 'scale(' + scale + ')',
               fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
               position: 'relative',
             }}>
@@ -1308,16 +1304,7 @@ class SingleSceneErrorBoundary extends React.Component {
               </div>
             </div>
             
-            <style jsx>{\`
-              @keyframes pulse {
-                0%, 100% { opacity: 1; }
-                50% { opacity: 0.3; }
-              }
-              @keyframes spin {
-                from { transform: rotate(0deg); }
-                to { transform: rotate(360deg); }
-              }
-            \`}</style>
+            
           </AbsoluteFill>
         );
       };
@@ -1399,12 +1386,19 @@ export default function SingleSceneComposition() {
         const compositeCode = buildSingleSceneModule({ code: scene.compiledCode, componentName: scene.componentName }, { includeFontsLoader: true, includeIconFallback: true, withAudio: true });
         console.log('[PreviewPanelG] Generated single scene code:', compositeCode);
 
-        // Transform with Sucrase
-        const { code: transformedCode } = transform(compositeCode, {
-          transforms: ['typescript', 'jsx'],
-          jsxRuntime: 'classic',
-          production: false,
-        });
+        // Transform with Sucrase, but fall back to raw JS if parser hits an edge case
+        let transformedCode: string;
+        try {
+          const out = transform(compositeCode, {
+            transforms: ['typescript', 'jsx'],
+            jsxRuntime: 'classic',
+            production: false,
+          });
+          transformedCode = out.code;
+        } catch (e) {
+          console.warn('[PreviewPanelG] Sucrase failed on single-scene composite; using raw code fallback', e);
+          transformedCode = compositeCode;
+        }
 
         // Sucrase transformation successful
         
@@ -1497,6 +1491,13 @@ export default function SingleSceneComposition() {
               usedRemotionFns.forEach((fn) => allImports.add(fn));
 
               // ✅ VALID: Add working scene with error boundary for runtime protection
+              // Heuristic: If scene defines SVG defs/filters/gradients, disable premount to avoid DOM ID collisions
+              const hasSvgDefsOrFilters = /React\.createElement\(\s*['"]defs['"]/m.test(wrappedSceneCode!)
+                || /linearGradient/m.test(wrappedSceneCode!)
+                || /url\(#/m.test(wrappedSceneCode!)
+                || /clipPath/m.test(wrappedSceneCode!)
+                || /mask\s*:/m.test(wrappedSceneCode!);
+              const premountValue = hasSvgDefsOrFilters ? 0 : 60;
               const errorBoundaryWrapper = `
 // React Error Boundary for Scene ${index} (Valid)
 var ${sceneNamespaceName}ErrorBoundary = class extends React.Component {
@@ -1516,7 +1517,7 @@ var ${sceneNamespaceName}ErrorBoundary = class extends React.Component {
     const errorEvent = new CustomEvent('preview-scene-error', {
       detail: {
         sceneId: '${originalScene.id}',
-        sceneName: '${(originalScene.data as any)?.name || `Scene ${index + 1}`}',
+        sceneName: ${JSON.stringify((originalScene.data as any)?.name || ('Scene ' + (index + 1)))},
         error: error
       }
     });
@@ -1627,7 +1628,7 @@ var ${sceneNamespaceName}ErrorBoundary = class extends React.Component {
                 fontSize: '1.125rem',
                 fontWeight: '500'
               }
-            }, '${(originalScene.data as any)?.name || 'Unnamed Scene'}'),
+            }, ${JSON.stringify((originalScene.data as any)?.name || 'Unnamed Scene')}),
             
             React.createElement('p', {
               key: 'msg',
@@ -1780,7 +1781,7 @@ var ${sceneNamespaceName}WithErrorBoundary = function() {
               sceneImports.push(errorBoundaryWrapper);
               // Render with error boundary; offset applied via namespaced useCurrentFrame
               sceneComponents.push(`
-                React.createElement(window.Remotion.Series.Sequence, { durationInFrames: ${originalScene.duration || 150}, premountFor: 60 },
+                React.createElement(window.Remotion.Series.Sequence, { durationInFrames: ${originalScene.duration || 150}, premountFor: ${premountValue} },
                   React.createElement(${sceneNamespaceName}WithErrorBoundary, {})
                 )
               `);
@@ -2114,16 +2115,21 @@ export default function MultiSceneComposition(props) {
 
         // Generated multi-scene composite code
         // Use unified builder for multi-scene module
-        const compositeCode = buildMultiSceneModule({ sceneImports, sceneComponents, includeFontsLoader: true, includeIconFallback: true });
+        const compositeCode = buildMultiSceneModule({ sceneImports, sceneComponents, includeFontsLoader: true, includeIconFallback: true, totalDurationInFrames: totalDuration });
 
-        // Transform with Sucrase
-        const { code: transformedCode } = transform(compositeCode, {
-          transforms: ['typescript', 'jsx'],
-          jsxRuntime: 'classic',
-          production: false,
-        });
-
-        // Sucrase transformation successful
+        // Transform with Sucrase, but fall back to raw JS if parser hits an edge case
+        let transformedCode: string;
+        try {
+          const out = transform(compositeCode, {
+            transforms: ['typescript', 'jsx'],
+            jsxRuntime: 'classic',
+            production: false,
+          });
+          transformedCode = out.code;
+        } catch (e) {
+          console.warn('[PreviewPanelG] Sucrase failed on multi-scene composite; using raw code fallback', e);
+          transformedCode = compositeCode;
+        }
         
         // Cleanup old blob URL before creating new one
         if (componentBlobUrl) {
@@ -2625,23 +2631,11 @@ export default function FallbackComposition() {
       />
       
       <div className="relative flex-grow flex items-center justify-center">
-        {isOwner && (
-          <div className="absolute top-2 right-2 z-10 text-[11px] leading-tight">
-            <div className="px-2 py-1 rounded-md bg-black/70 text-white shadow-sm border border-white/10">
-              <div>Preview Source</div>
-              <div>
-                JS {compiledSummary.compiled}/{compiledSummary.total}
-                {compiledSummary.total > 0 && compiledSummary.compiled < compiledSummary.total ? (
-                  <span className="ml-1 text-yellow-300">(TSX fallback present)</span>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Preview source indicator removed in this branch */}
         {componentImporter && playerProps ? (
           <div 
             className={cn(
-              "relative bg-black shadow-xl flex items-center justify-center",
+              "relative bg-white shadow-xl flex items-center justify-center",
               // On mobile, optimize for viewport
               "w-full h-full"
             )}
@@ -2677,6 +2671,26 @@ export default function FallbackComposition() {
                 })()}
                 onPlay={() => {
                   setIsPlaying(true);
+                  try {
+                    // Ensure player is unmuted and volume up if API available
+                    try {
+                      const api: any = playerRef.current as any;
+                      if (api?.setMuted) api.setMuted(false);
+                      if (api?.setVolume) api.setVolume(1);
+                    } catch {}
+
+                    // Ensure audio starts at offset for immediate sound if project has audio
+                    const pa = (playerProps.inputProps as any)?.audio;
+                    const fps = playerProps.fps || 30;
+                    const offsetSec = Math.max(0, pa?.timelineOffsetSec || 0);
+                    if (playerRef.current && offsetSec > 0) {
+                      const current = (playerRef.current as any)?.getCurrentFrame?.() ?? 0;
+                      const target = Math.floor(offsetSec * fps);
+                      if (typeof current === 'number' && current < target) {
+                        playerRef.current.seekTo(target);
+                      }
+                    }
+                  } catch {}
                   const event = new CustomEvent('preview-play-state-change', { 
                     detail: { playing: true }
                   });

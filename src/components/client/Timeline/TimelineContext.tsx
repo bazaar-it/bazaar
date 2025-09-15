@@ -131,6 +131,21 @@ export const TimelineProvider: React.FC<TimelineProviderProps> = ({
     row: 0
   });
   const [isDragging, setIsDragging] = useState(false);
+  // Seconds/Frames display unit
+  const [timeUnit, setTimeUnit] = useState<'seconds' | 'frames'>(() => {
+    if (typeof window === 'undefined') return 'frames';
+    try {
+      const saved = window.localStorage.getItem('timeline.timeUnit');
+      return saved === 'seconds' || saved === 'frames' ? (saved as 'seconds' | 'frames') : 'frames';
+    } catch {
+      return 'frames';
+    }
+  });
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('timeline.timeUnit', timeUnit);
+    } catch {}
+  }, [timeUnit]);
   
   // Validation settings
   const [minDuration] = useState(1); // Mirror server-side validation
@@ -708,6 +723,7 @@ export const TimelineProvider: React.FC<TimelineProviderProps> = ({
     durationInFrames,
     zoomLevel,
     scrollPosition,
+    timeUnit,
     ghostPosition,
     dragInfoRef,
     playerRef,
@@ -728,6 +744,7 @@ export const TimelineProvider: React.FC<TimelineProviderProps> = ({
     setDurationInFrames,
     setZoomLevel,
     setScrollPosition,
+    setTimeUnit,
     setGhostPosition,
     setIsDragging,
     setPlayerRef,

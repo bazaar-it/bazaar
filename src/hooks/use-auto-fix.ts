@@ -324,7 +324,8 @@ COMMON MISTAKES TO AVOID (based on patterns above):
         const result = await generateSceneMutation.mutateAsync({
           projectId,
           userMessage: fixPrompt,
-          userContext: { imageUrls: undefined, sceneId }
+          userContext: { imageUrls: undefined },
+          metadata: { suppressAssistantMessage: true }
         });
 
         const responseData = result as any;

@@ -31,8 +31,10 @@ High-level flow per scene at export time:
    - Tier 3: Generate placeholder SVG (question-mark glyph)
 
 3) Transform code (AST)
-   - Inline literal icons to <svg ... dangerouslySetInnerHTML={...} />
-   - Replace dynamic icons with __InlineIcon and inject __INLINE_ICON_MAP when needed
+   - Inline literal icons to `<svg ... dangerouslySetInnerHTML={...} />`
+   - Replace dynamic icons with a scene‑scoped runtime and inject a scene‑scoped registry when needed:
+     - Registry: `__ICON_REGISTRY_<sceneSuffix>`
+     - Renderer: `__RenderIcon_<sceneSuffix>` (never throws)
 
 4) Post-validation (safety net)
    - If any window.IconifyIcon or bare IconifyIcon survives:
@@ -41,7 +43,8 @@ High-level flow per scene at export time:
 
 5) Scene isolation & runtime safety
    - SceneErrorBoundary prevents one scene from breaking others
-   - Remotion runtime shim remains an optional last resort (site deploy only when needed)
+   - Scene‑scoped runtime avoids symbol collisions in LLM‑generated code
+   - Renderer never throws; placeholders for missing icons
 
 ## API Fallback & Caching
 

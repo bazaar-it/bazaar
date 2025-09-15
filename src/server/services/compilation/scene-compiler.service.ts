@@ -234,6 +234,18 @@ export class SceneCompilerService {
    * Perform the actual TSX to JS compilation
    */
   private async performCompilation(tsxCode: string): Promise<string> {
+    // Capture preferred default export name before transforms
+    const extractDefaultExportName = (code: string): string | null => {
+      // export default function ComponentName ...
+      let m = code.match(/export\s+default\s+function\s+([A-Z][A-Za-z0-9_]*)/);
+      if (m && m[1]) return m[1];
+      // export default ComponentName
+      m = code.match(/export\s+default\s+([A-Z][A-Za-z0-9_]*)/);
+      if (m && m[1]) return m[1];
+      return null;
+    };
+    const preferredDefault = extractDefaultExportName(tsxCode);
+
     // Normalize code before transforming (strip unsupported imports, normalize icons)
     const normalizedTsx = this.normalizeForFunctionScope(tsxCode);
 
@@ -254,10 +266,23 @@ export class SceneCompilerService {
 
     // Ensure the component is returned for Function constructor
     if (!jsCode.includes('return Component') && !jsCode.includes('return function')) {
-      // Try to find the main component and ensure it's returned
-      const componentMatch = jsCode.match(/(?:const|let|var|function)\s+([A-Z][A-Za-z0-9_]*)\s*[=(:]/);
-      if (componentMatch) {
-        jsCode += `\n// Auto-added return\nreturn ${componentMatch[1]};`;
+      // Choose best component to return
+      let componentName: string | null = preferredDefault;
+      if (!componentName) {
+        // Collect all uppercase-leading identifiers likely to be components
+        const re = /(?:const|let|var|function)\s+([A-Z][A-Za-z0-9_]*)\s*[=(:]/g;
+        const names: string[] = [];
+        let mm: RegExpExecArray | null;
+        while ((mm = re.exec(jsCode)) !== null) {
+          if (mm[1]) names.push(mm[1]);
+        }
+        if (names.length > 0) {
+          // Heuristic: use the last declared component (main comps often follow helpers)
+          componentName = names[names.length - 1];
+        }
+      }
+      if (componentName) {
+        jsCode += `\n// Auto-added return\nreturn ${componentName};`;
       }
     }
 

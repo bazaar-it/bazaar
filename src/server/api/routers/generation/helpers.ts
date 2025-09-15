@@ -237,8 +237,20 @@ export async function executeToolFromDecision(
       
       // Compile TSX to JS with conflict resolution for multi-scene projects
       const newSceneId = randomUUID();
+      // Cache remote assets (e.g., Wikipedia/Brandfetch) to R2 so Lambda can fetch reliably
+      let tsxForAdd = addResult.data.tsxCode;
+      try {
+        const { ensureRemoteAssetsCachedInCode } = await import('~/server/services/media/remoteCache.service');
+        const cached = await ensureRemoteAssetsCachedInCode(tsxForAdd, projectId);
+        if (cached.rewrites.length > 0) {
+          console.log('[RemoteCache] Rewrote', cached.rewrites.length, 'asset URL(s) for add');
+        }
+        tsxForAdd = cached.code;
+      } catch (e) {
+        console.warn('[RemoteCache] Skipped caching for add:', e);
+      }
       const compiledData = await prepareSceneDataWithCompilation(
-        addResult.data.tsxCode,
+        tsxForAdd,
         projectId,
         newSceneId,
         storyboard // Pass existing scenes for conflict detection
@@ -490,9 +502,21 @@ export async function executeToolFromDecision(
         throw new Error(errorMessage);
       }
       
+      // Cache remote assets for edited scenes too
+      let tsxForEdit = editResult.data.tsxCode;
+      try {
+        const { ensureRemoteAssetsCachedInCode } = await import('~/server/services/media/remoteCache.service');
+        const cached = await ensureRemoteAssetsCachedInCode(tsxForEdit, projectId);
+        if (cached.rewrites.length > 0) {
+          console.log('[RemoteCache] Rewrote', cached.rewrites.length, 'asset URL(s) for edit');
+        }
+        tsxForEdit = cached.code;
+      } catch (e) {
+        console.warn('[RemoteCache] Skipped caching for edit:', e);
+      }
       // Compile the edited TSX code to JS with conflict checking
       const compiledEdit = await prepareSceneDataWithCompilation(
-        editResult.data.tsxCode,
+        tsxForEdit,
         projectId,
         decision.toolContext.targetSceneId!,
         storyboard // Pass existing scenes for conflict detection

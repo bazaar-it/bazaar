@@ -596,6 +596,14 @@ ${ex.code}
 `;
       }
 
+      // Expose available avatars to the LLM so it uses real image URLs via window.BazaarAvatars
+      try {
+        const { AVATAR_KEYS } = await import('~/lib/avatars/catalog');
+        if (Array.isArray(AVATAR_KEYS) && AVATAR_KEYS.length > 0) {
+          userPrompt += `\n\nAVAILABLE AVATARS (use window.BazaarAvatars['<key>']):\n` + AVATAR_KEYS.map(k => `- ${k}`).join('\n');
+        }
+      } catch {}
+
       // Prepare messages based on prompt version
       let messages: Array<{role: 'system' | 'user' | 'assistant'; content: string}>;
       let finalSystemPrompt = systemPrompt;
