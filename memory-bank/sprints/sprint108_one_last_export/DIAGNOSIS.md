@@ -3,7 +3,7 @@
 ## Date: 2025-09-02
 
 ## Problem Statement
-Exports complete successfully but show fallback metadata instead of actual scene content.
+Earlier: Exports completed successfully but showed fallback metadata instead of actual scene content. Additionally, dynamic avatar and icon usages in LLM‑generated scenes could crash or misrender in Lambda if not pre-resolved.
 
 ## Diagnostic Evidence
 
@@ -89,29 +89,9 @@ const fn = new Function('', `
 console.log(fn()); // function Component
 ```
 
-## The Semicolon Problem
+## The Semicolon Problem (Resolved)
 
-Our preprocessing adds `Component;` with a semicolon, making it a statement rather than an expression that gets returned.
-
-## Solution Options
-
-### Option 1: Remove Semicolon (Quick Fix)
-Change preprocessing to add `Component` without semicolon
-
-### Option 2: Explicit Return (Reliable)
-Change preprocessing to add `return Component;`
-
-### Option 3: Direct Evaluation (Most Reliable)
-Instead of:
-```javascript
-const Component = function() {...}
-Component;
-```
-
-Generate:
-```javascript
-(function() {...})  // Return the function directly
-```
+Preprocessing now binds the default export to `Component` and appends `return Component;` explicitly. The Function constructor is no longer relied upon to return a last expression.
 
 ## Why This Wasn't Caught Earlier
 
@@ -119,11 +99,13 @@ Generate:
 - The semicolon issue is subtle and environment-dependent
 - Lambda's V8 engine may be stricter about statement vs expression
 
-## Immediate Fix Needed
+## Additional Root Causes & Fixes
 
-The preprocessing in `render.service.ts` needs to either:
-1. Remove the semicolon from the last line
-2. Add explicit `return` statement
-3. Restructure to return the function directly
+1) Dynamic avatars used `window.BazaarAvatars[name]`, which doesn’t exist in Lambda.
+   - Fix: Inject `__AVATAR_REGISTRY` and `__ResolveAvatar(name)`; rewrite dynamic lookups; keep static replacements.
 
-This is why all scenes show fallback - none of them are returning their components properly.
+2) Dynamic icons could throw or collide with identifiers in complex scenes.
+   - Fix: Scene‑scoped runtime and registry (`__ICON_REGISTRY_<suffix>`, `__RenderIcon_<suffix>`, `__ResolveIcon_<suffix>`) and never‑throw renderer with placeholder fallback.
+
+3) False positives in icon detection (times/emoji) inflated work and caused confusion.
+   - Fix: Filter out time strings, emoji; require alphabetic prefixes.
