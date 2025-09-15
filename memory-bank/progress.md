@@ -2,6 +2,8 @@
 
 ## 📝 Latest Update (Sep 15, 2025)
 - Marketing: Added Product Hunt featured badge to homepage (under hero CTA) ahead of launch. Link opens in new tab with noopener for safety; uses official PH SVG widget.
+- Sprint 107/UX: Fixed portrait preview sizing in workspace. Reworked RemotionPreview to compute fit via ResizeObserver (min(container/comp)) and removed brittle aspect-ratio wrapper. Prevents preview from overflowing under Timeline and ensures live resize when adding side panels.
+- UX: Enabled default autoplay for preview player (new and existing projects). Player now starts automatically; audio remains gesture-unlocked per existing logic.
 
 ## 📝 Latest Update (Sep 11, 2025)
 ## 📝 Latest Update (Sep 13, 2025)

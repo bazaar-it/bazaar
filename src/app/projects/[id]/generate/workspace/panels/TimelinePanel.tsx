@@ -1680,6 +1680,11 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
             try {
               const res = await splitSceneMutation.mutateAsync({ projectId, sceneId: dragInfo.sceneId!, frame: trimmed });
               if (res?.rightSceneId) {
+                // Record undo for trim-left via drag
+                try {
+                  const originalScene = { ...scene } as any;
+                  pushAction(projectId, { type: 'trimLeft', originalScene, rightSceneId: res.rightSceneId, offset: trimmed });
+                } catch {}
                 removeSceneMutation.mutate({ projectId, sceneId: dragInfo.sceneId! });
                 setSelectedSceneId(res.rightSceneId);
                 // Force-fetch latest scenes and replace VideoState to keep timeline and preview in sync
@@ -2218,6 +2223,11 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
             try {
               const res = await splitSceneMutation.mutateAsync({ projectId, sceneId: scene.id, frame: splitAt });
               if (res?.rightSceneId) {
+                // Record undo for trim-left
+                try {
+                  const originalScene = { ...scene } as any;
+                  pushAction(projectId, { type: 'trimLeft', originalScene, rightSceneId: res.rightSceneId, offset: splitAt });
+                } catch {}
                 removeSceneMutation.mutate({ projectId, sceneId: scene.id });
                 setSelectedSceneId(res.rightSceneId);
                 await utils.generation.getProjectScenes.invalidate({ projectId });
@@ -2237,6 +2247,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       if (e.key === ']') {
         const newDuration = Math.max(minFrames, offset);
         if (newDuration !== scene.duration) {
+          try { pushAction(projectId, { type: 'updateDuration', sceneId: scene.id, prevDuration: scene.duration, newDuration }); } catch {}
           updateScene(projectId, scene.id, { duration: newDuration });
           updateSceneDurationMutation.mutate({ projectId, sceneId: scene.id, duration: newDuration });
         }
@@ -2394,7 +2405,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       {/* Timeline Controls - Consistent solid header (no translucency) */}
       <div className="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
         {/* Left cluster: counter + toggle + edit/history */}
-        <div className="flex items-center gap-1 min-w-[260px]">
+        <div className="flex items-center gap-3 min-w-[260px]">
           {/* Counter (fixed width; no absolute positioning) */}
           {(() => {
             const isFrames = displayMode === 'frames';
@@ -2452,9 +2463,9 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
           </div>
 
           {/* Edit & History Controls (moved left, CapCut-style) */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {/* Edit Controls: Trim Left, Split, Trim Right */}
-            <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm h-8 border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-2 bg-white dark:bg-gray-800 rounded-lg px-2 py-1 shadow-sm h-8 border border-gray-200 dark:border-gray-700">
               <button
                 onClick={handleTrimLeftClick}
                 disabled={!selectedSceneId}
@@ -2486,7 +2497,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
             </div>
 
             {/* Undo/Redo */}
-            <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm h-8 border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-2 bg-white dark:bg-gray-800 rounded-lg px-2 py-1 shadow-sm h-8 border border-gray-200 dark:border-gray-700">
               <button
                 onClick={performUndo}
                 disabled={undoSize === 0}
@@ -2515,7 +2526,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
 
         {/* Center cluster: playback controls */}
         <div className="flex-1 flex items-center justify-center">
-          <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm h-8 border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-2 bg-white dark:bg-gray-800 rounded-lg px-2 py-1 shadow-sm h-8 border border-gray-200 dark:border-gray-700">
             <button
               onClick={() => {
                 const newFrame = Math.max(0, currentFrame - 30);
@@ -2627,7 +2638,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
           )}
 
           {/* Zoom Controls */}
-          <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm">
+          <div className="flex items-center gap-2 bg-white dark:bg-gray-800 rounded-lg px-2 py-1 shadow-sm">
 
           <button
             onClick={() => setZoomScale(prev => Math.max(0.25, Math.round((prev - 0.1) * 100) / 100))}
@@ -2714,8 +2725,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
           <div 
             className="h-full relative"
             style={{ 
-              width: `${Math.max(100, zoomScale * 100)}%`, 
-              minWidth: '100%',
+              width: `${zoomScale * 100}%`,
               transition: 'none'
             }}
           >
@@ -2831,8 +2841,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
           <div
             className="relative"
             style={{ 
-              width: `${Math.max(100, zoomScale * 100)}%`,
-              minWidth: '100%',
+              width: `${zoomScale * 100}%`,
               minHeight: '100%'
             }}
             ref={innerContentRef}
