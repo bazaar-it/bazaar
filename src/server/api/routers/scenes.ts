@@ -7,6 +7,7 @@ import { TRPCError } from "@trpc/server";
 import { messageService } from "~/server/services/data/message.service";
 import { formatManualEditMessage } from "~/lib/utils/scene-message-formatter";
 import { extractDurationFromCode } from "~/server/services/code/duration-extractor";
+import { compileSceneToJS } from "~/server/utils/compile-scene";
 
 // Helpers (module-scope): Not router entries. Avoid placing these inside createTRPCRouter.
 // Inject a frame offset into TSX code so that frame 0 maps to original `offset`.
@@ -336,7 +337,7 @@ export const scenesRouter = createTRPCRouter({
       
       // Verify project ownership
       const projectScenes = await ctx.db.query.scenes.findMany({
-        where: eq(scenes.projectId, input.projectId),
+        where: and(eq(scenes.projectId, input.projectId), sql`"deleted_at" IS NULL`),
         with: {
           project: true
         }
@@ -391,7 +392,7 @@ export const scenesRouter = createTRPCRouter({
 
       // Normalize orders 0..n-1 for safety
       const orderedAfterReorder = await ctx.db.query.scenes.findMany({
-        where: eq(scenes.projectId, input.projectId),
+        where: and(eq(scenes.projectId, input.projectId), sql`"deleted_at" IS NULL`),
       });
       orderedAfterReorder
         .sort((a: any, b: any) => ((a.order ?? 0) - (b.order ?? 0)) || (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()))
@@ -466,11 +467,21 @@ export const scenesRouter = createTRPCRouter({
       // Store the "before" code for tracking changes
       const codeBefore = existingScene.tsxCode;
 
-      // Update scene code
+      // Update scene code AND recompile to JS
       // Preserve manual trims by default: do NOT change duration unless explicitly requested
       const extracted = extractDurationFromCode(input.code);
+      
+      // CRITICAL: Recompile TSX to JS for preview to work!
+      const compilationResult = compileSceneToJS(input.code);
+      
       const updateFields: Record<string, any> = {
         tsxCode: input.code,
+        jsCode: compilationResult.success ? compilationResult.jsCode : null,
+        jsCompiledAt: compilationResult.success ? compilationResult.compiledAt : null,
+        compilationError: compilationResult.success ? null : compilationResult.error,
+        // Phase 2 additive fields
+        compilationVersion: 1,
+        // compileMeta left null in this path (compile-scene util has no timings yet)
         updatedAt: new Date(),
       };
       if (input.overwriteDuration && extracted && extracted > 0) {

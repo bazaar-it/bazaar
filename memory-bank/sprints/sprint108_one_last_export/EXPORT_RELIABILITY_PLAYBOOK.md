@@ -32,7 +32,7 @@ TSX (DB) → Preprocess (compile, sanitize, inline) → Validated JS
      - `<IconifyIcon icon="set:name" />`
      - `React.createElement(IconifyIcon, {icon: "set:name"})`
      - `IconifyIcon({icon: "set:name"})` and `window.IconifyIcon({...})`
-   - Dynamic names go through injected `__INLINE_ICON_MAP` runtime helper
+   - Dynamic names go through a scene‑scoped runtime helper and registry
    - Post-validate: Zero `IconifyIcon` or `window.IconifyIcon` references remain
 3. Fonts
    - Prefer @remotion/fonts in the deployed site (module-scope registration). Avoid CSS @import.
@@ -90,7 +90,7 @@ TSX (DB) → Preprocess (compile, sanitize, inline) → Validated JS
   - Short remediation
 
 ## Asset Strategy (Production)
-- Icons: Always inline to SVG; dynamic names use injected map
+- Icons: Inline literals to SVG; dynamic names use injected scene‑scoped runtime
 - Fonts: Use @remotion/fonts; pre-register at module scope
 - Images/Video: Mirror to R2 or verify host reachability and content-type; prefer `staticFile` for bundled assets
 - Audio: aac, public URL or R2; trim and playbackRate handled at composition; validate duration
@@ -98,7 +98,7 @@ TSX (DB) → Preprocess (compile, sanitize, inline) → Validated JS
 ## Validation Matrix (Pre-flight Checks)
 - Code
   - [x] No `export` or `IconifyIcon` leftovers
-  - [x] `return Component;` present
+  - [x] `const Component = …` and `return Component;` present
   - [x] No banned tokens (`delayRender`, `document.`, `navigator.`, `fetch(`) unless explicitly allowed
 - Assets
   - [x] All URLs resolvable (HEAD OK) or mirrored to R2
@@ -144,4 +144,3 @@ TSX (DB) → Preprocess (compile, sanitize, inline) → Validated JS
 - Implement optional asset mirroring to R2 with URL rewrite
 
 This playbook captures what “perfectly reliable” export means for us and how to get there with concrete code hooks and ops steps.
-

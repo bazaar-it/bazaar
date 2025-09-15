@@ -1,18 +1,18 @@
 # Sprint 108 - Export Status Report
 
-## Date: 2025-09-02
+## Date: 2025-09-15
 
-## Current Status: ⚠️ PARTIAL SUCCESS
+## Current Status: ✅ Exporting reliably; avatars and dynamic icons hardened
 
-The export completes successfully but scenes are still showing fallback metadata instead of actual content.
+Exports complete; avatars render in Lambda via dynamic resolver; icons are scene‑scoped and robust (no throws). Two icon names in the example scene (mdi:galaxy, lucide:comet) are not available in those sets during export; they render placeholders instead of breaking. Scene isolation holds. Next: add user‑visible “Export Report”.
 
 ## What's Working ✅
 
-### 1. Icon Replacement
-- Icons are being successfully replaced
+### 1. Icon Replacement (finalized)
+- Scene‑scoped runtime: `__ICON_REGISTRY_<sceneSuffix>`, `__RenderIcon_<sceneSuffix>`
+- Dynamic usages rewritten to scene renderer; literals inlined to `<svg>`
+- Never throws; placeholders for missing glyphs
 - `[Icon Replace] ✅ POST-VALIDATION PASSED: No IconifyIcon references remaining`
-- No React Error #130 occurring
-- Fallback chain working (local → API → placeholder)
 
 ### 2. Lambda Deployment
 - Successfully deployed to: `bazaar-icon-robust-20250902`
@@ -20,72 +20,40 @@ The export completes successfully but scenes are still showing fallback metadata
 - Site includes runtime IconifyIcon shim as safety net
 
 ### 3. Export Process
-- Export completes without errors
-- Video file is generated successfully
-- All 5 scenes are processed
+- Export completes and produces MP4
+- All scenes processed; per‑scene preprocess summaries logged
 
-## What's Not Working ❌
+## Remaining Work
 
-### Scene Rendering Issue
-All scenes are showing fallback metadata instead of actual content.
+### User Notification
+- Show a post‑export summary of degradations (icons/placeholders, missing media, font substitutions)
+- Provide a “Copy email to markus@bazaar.it” with structured diagnostics
 
-#### Evidence from Logs:
+#### Evidence from Logs (after fixes):
 ```
-jsCodeEnd: '...\n}\n// Last expression is returned by Function constructor\nComponent;\n',
-hasComponentFunctions: true,
-hasExportDefault: false,
-hasReturnComponent: false
+// Each scene reports
+hasComponentFunctions: true
+hasExportDefault: false
+hasReturnComponent: true
 ```
+Default export is now bound to `Component` and we append `return Component;` explicitly.
 
-The preprocessing correctly adds `Component;` as the last line (for Function constructor to return it), but the scenes are not rendering.
-
-## Root Cause Analysis
-
-### The Problem
-The Function constructor in `MainCompositionSimple.tsx` is not properly returning the Component.
+## Notes
+- Function constructor return issue fixed by explicit `return Component;` and binding the default export to `Component` after stripping `export` statements.
 
 ### What We Tried
 1. ✅ Removed the `try-catch` block from inside the Function constructor body
 2. ✅ Redeployed the Remotion site with the fix
 3. ✅ Updated the component check to handle both functions and elements
 
-### Current Code Structure
-```javascript
-// In MainCompositionSimple.tsx
-const createComponent = new Function(
-  'React', 'AbsoluteFill', ... other params,
-  `
-    // Setup code...
-    ${executableCode}  // This ends with "Component;"
-  `
-);
+### Runtime Structure
+- Preprocess guarantees `const Component = ...` and appends `return Component;`
+- Lambda site executes the code and renders the returned component
 
-// The Function constructor should return the last expression (Component)
-const ComponentFactory = createComponent(...args);
-
-if (ComponentFactory) {
-  if (typeof ComponentFactory === 'function') {
-    return <ComponentFactory />;
-  }
-  if (React.isValidElement(ComponentFactory)) {
-    return ComponentFactory;
-  }
-}
-```
-
-## The Issue
-
-Despite our fixes, the Lambda environment is still not executing the components properly. The Function constructor appears to not be returning the Component as expected.
-
-## Hypothesis
-
-The Lambda environment may be handling the Function constructor differently than expected. The last expression (`Component;`) should be returned, but it appears this isn't happening in the Lambda context.
-
-## Next Steps (Not Implemented)
-
-1. **Add explicit return**: Instead of relying on the last expression, we could modify preprocessing to add `return Component;` explicitly
-2. **Debug in Lambda**: Add more logging to see what the Function constructor actually returns
-3. **Alternative approach**: Consider using `eval()` instead of Function constructor for Lambda compatibility
+## Lessons Learned
+- Binding and returning the component in preprocess removes ambiguity about the Function constructor’s last expression.
+- Scene‑scoped runtime identifiers prevent rare symbol collisions in large LLM‑generated scenes.
+- Missing icons must degrade to placeholders; do not error.
 
 ## Files Modified in This Sprint
 
@@ -103,10 +71,10 @@ The Lambda environment may be handling the Function constructor differently than
 
 ## Current Impact
 
-- **Icons**: ✅ Working perfectly with fallback chain
-- **Export**: ✅ Completes without errors
-- **Content**: ❌ Shows fallback metadata instead of actual scenes
+- **Avatars**: ✅ Dynamic lookups resolved and rendered
+- **Icons**: ✅ Dynamic + literal supported; placeholders for unknown names
+- **Export**: ✅ Completes; scenes render actual content
 
-## Sprint Status: 🟡 INCOMPLETE
+## Sprint Status: 🟢 STABILIZED (follow‑ups pending)
 
-While we've solved the icon robustness issue completely, the scenes are still not rendering their actual content in Lambda. The export completes but shows placeholder content for each scene.
+Core reliability issues addressed. Follow‑ups: user‑visible export report and pre‑export availability gating (auto‑replace unsupported icons).

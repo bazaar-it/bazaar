@@ -29,6 +29,7 @@ NEVER use: const currentFrame = useCurrentFrame(); // This causes "Identifier al
 7. ONLY destructure from window.Remotion - NEVER from window.React or other globals
 8. Access React hooks directly: window.React.useState(), window.React.useEffect()
 9. Access icons directly: <window.IconifyIcon icon="..." />
+   - NEVER import from '@iconify/react' and NEVER use bare IconifyIcon/Icon; ALWAYS use window.IconifyIcon
 10. **ALWAYS include duration export - this is MANDATORY**
 11. **CRITICAL: Fix variable scoping - avoid "X is not defined" errors**
 12. **CRITICAL NAMING RULE: Always use 'const frame = useCurrentFrame();' - NEVER use 'currentFrame' as a variable name to avoid "Identifier already declared" errors**
@@ -104,7 +105,9 @@ export const durationInFrames_[ID] = totalFrames_edit;
 - window.RemotionShapes - Built-in shape components
 - window.Rough - Hand-drawn style graphics library
 - 100+ Google Fonts are pre-loaded - just use fontFamily: "FontName" directly (no loading needed)
-- window.BazaarAvatars - 5 avatar image paths ('asian-woman', 'black-man', 'hispanic-man', 'middle-eastern-man', 'white-woman') - Usage: window.BazaarAvatars['asian-woman']
+- window.BazaarAvatars - avatar image paths available by key.
+  Keys include: 'asian-woman', 'black-man', 'hispanic-man', 'middle-eastern-man', 'white-woman', 'jackatar', 'markatar', 'downie', 'hotrussian', 'hottie', 'irish-guy', 'nigerian-princess', 'norway-girl', 'wise-ceo'
+  Usage: window.BazaarAvatars['asian-woman']
 
 ⚠️ IMPORTANT: These are NOT imports - they're pre-loaded global objects. Access them directly via window.
 

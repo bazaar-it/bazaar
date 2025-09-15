@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
 import { prepareRenderConfig } from "~/server/services/render/render.service";
+import { eq, and, isNull } from "drizzle-orm";
 import { renderVideoOnLambda } from "~/server/services/render/lambda-render.service";
 import { renderState } from "~/server/services/render/render-state";
 import { ExportTrackingService } from "~/server/services/render/export-tracking.service";
@@ -57,7 +58,8 @@ export const renderRouter = createTRPCRouter({
         ),
         with: {
           scenes: {
-            orderBy: (scenes, { asc }) => asc(scenes.order),
+            where: (scenesTable, { and, isNull }) => and(eq(scenesTable.projectId, input.projectId), isNull(scenesTable.deletedAt)),
+            orderBy: (scenesTable, { asc }) => asc(scenesTable.order),
           },
         },
       });
@@ -123,6 +125,7 @@ export const renderRouter = createTRPCRouter({
       });
 
       // Prepare render configuration with audio from database
+      const collectedWarnings: Array<{ type: string; message: string; sceneId?: string; data?: any }> = [];
       const renderConfig = await prepareRenderConfig({
         projectId: input.projectId,
         scenes: scenesWithCode,
@@ -131,6 +134,7 @@ export const renderRouter = createTRPCRouter({
         playbackSpeed: input.playbackSpeed,
         projectProps: project.props,
         audio: project.audio || undefined, // Get audio from database (convert null to undefined)
+        onWarning: (w) => collectedWarnings.push(w),
       });
       
       // Log what prepareRenderConfig returned
@@ -171,7 +175,7 @@ export const renderRouter = createTRPCRouter({
           
           // Track export in database
           const totalDuration = scenesWithCode.reduce((sum, scene) => sum + (scene.duration || 150), 0);
-          await ExportTrackingService.trackExportStart({
+          const exportRecord = await ExportTrackingService.trackExportStart({
             userId: ctx.session.user.id,
             projectId: input.projectId,
             renderId: result.renderId,
@@ -179,6 +183,16 @@ export const renderRouter = createTRPCRouter({
             quality: input.quality,
             duration: totalDuration,
           });
+          // Persist initial warnings snapshot into metadata if present
+          if (exportRecord && collectedWarnings.length > 0) {
+            try {
+              await ExportTrackingService.updateExportMetadata(result.renderId, {
+                warnings: collectedWarnings,
+              });
+            } catch (e) {
+              console.warn('[Render] Failed to persist warnings metadata:', e);
+            }
+          }
           
           // Lambda render doesn't return outputUrl immediately
           // It will be available when checking render progress
@@ -292,10 +306,10 @@ export const renderRouter = createTRPCRouter({
             
             if (outputUrl) {
               // If it's already a full S3 URL, use it as-is
-              if (outputUrl.startsWith('https://')) {
+              if (typeof outputUrl === 'string' && outputUrl.startsWith('https://')) {
                 // Lambda already returns a complete, valid S3 URL
                 // Just use it directly without any modification
-                outputUrl = progress.outputFile;
+                outputUrl = progress.outputFile ?? outputUrl;
               } else {
                 // It's just a key, construct the full URL
                 const bucketName = job.bucketName || process.env.REMOTION_BUCKET_NAME || 'remotionlambda-useast1-yb1vzou9i7';
@@ -371,12 +385,20 @@ export const renderRouter = createTRPCRouter({
         }
       }
 
+      // Pull warnings from DB metadata if available
+      let warnings: any[] | undefined = undefined;
+      try {
+        const dbExport = await ExportTrackingService.getExportByRenderId(input.renderId);
+        warnings = (dbExport as any)?.metadata?.warnings;
+      } catch (_e) {}
+
       const response = {
         status: job.status,
         progress: job.progress,
         error: job.error,
         outputUrl: job.outputUrl,
         isFinalizingFFmpeg: job.isFinalizingFFmpeg,
+        warnings,
       };
       
       console.log(`[getRenderStatus] Returning response:`, response);

@@ -282,6 +282,7 @@ const useCompiledTemplate = (template: TemplateDefinition, format: string = 'lan
 
 export default function TemplatesPanelG({ projectId, onSceneGenerated }: TemplatesPanelGProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<'all' | 'colors' | 'ui' | 'text' | 'other'>("all");
   const [loadingTemplateId, setLoadingTemplateId] = useState<string | null>(null);
   
   // Get tRPC utils for cache invalidation
@@ -293,11 +294,55 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
   // Get current project format
   const currentFormat = getCurrentProps()?.meta?.format ?? 'landscape';
   
-  // Fetch database templates
-  const { data: databaseTemplates = [], isLoading: isLoadingDbTemplates } = api.templates.getAll.useQuery({
-    format: currentFormat,
-    limit: 100,
-  });
+  // Client-side cache for DB templates to prevent flicker and speed up initial paint
+  const cacheKey = `templates-cache-${currentFormat}`;
+  const [cachedDbTemplates, setCachedDbTemplates] = useState<any[]>([]);
+
+  useEffect(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(cacheKey) : null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setCachedDbTemplates(parsed);
+        }
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cacheKey]);
+
+  // Fetch database templates with a generous stale time; use cached as placeholder to avoid reorder flash
+  const { data: databaseTemplates = [], isLoading: isLoadingDbTemplates } = api.templates.getAll.useQuery(
+    { format: currentFormat, limit: 100 },
+    {
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      keepPreviousData: true,
+      placeholderData: cachedDbTemplates.length ? cachedDbTemplates : undefined,
+    }
+  );
+
+  // Persist latest DB templates to cache
+  useEffect(() => {
+    try {
+      if (databaseTemplates && databaseTemplates.length) {
+        localStorage.setItem(cacheKey, JSON.stringify(databaseTemplates));
+        // Update in-memory cache too so next re-render uses the same ordering
+        setCachedDbTemplates(databaseTemplates);
+      }
+    } catch {}
+  }, [databaseTemplates, cacheKey]);
+
+  // Classify a template into coarse categories for filtering
+  const classifyCategory = useCallback((t: TemplateDefinition): 'colors' | 'ui' | 'text' | 'other' => {
+    const raw = (t.category || '').toLowerCase();
+    const name = (t.name || '').toLowerCase();
+    const hay = `${raw} ${name}`;
+    if (/color|gradient|bg|background/.test(hay)) return 'colors';
+    if (/ui|app|card|button|form|login|signup|screen/.test(hay)) return 'ui';
+    if (/text|word|type|typography/.test(hay)) return 'text';
+    return 'other';
+  }, []);
   
   // Direct template addition mutation - bypasses LLM pipeline
   const addTemplateMutation = api.generation.addTemplate.useMutation({
@@ -325,12 +370,12 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
           await onSceneGenerated(result.scene.id);
         }
         
-        // Delay cache invalidation slightly to let video state settle and avoid double compilation
+        // Minimize preview re-renders: we already updated local VideoState optimistically
+        // Only invalidate chat messages (server adds a message). Skip scenes invalidate here.
         setTimeout(async () => {
-          console.log('[TemplatesPanelG] Invalidating caches after state settled...');
-          await utils.generation.getProjectScenes.invalidate({ projectId });
+          console.log('[TemplatesPanelG] Invalidating chat messages (skip scenes to avoid double refresh)...');
           await utils.chat.getMessages.invalidate({ projectId });
-        }, 200);
+        }, 100);
         
         console.log('[TemplatesPanelG] ✅ Video state updated and caches invalidated');
       } else {
@@ -373,50 +418,55 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
     addTemplateMutation.mutate(mutationParams);
   }, [projectId, addTemplateMutation, trackUsageMutation]);
 
-  // Combine hardcoded and database templates
+  // Combine hardcoded and database templates (DB sorted by newest first)
   const combinedTemplates = useMemo(() => {
-    // Convert database templates to TemplateDefinition format
-    const dbTemplatesFormatted: TemplateDefinition[] = databaseTemplates.map(dbTemplate => ({
+    // Prefer freshly fetched DB templates; fall back to cached when loading
+    const sourceDb = (databaseTemplates && databaseTemplates.length) ? databaseTemplates : cachedDbTemplates;
+    // Sort DB templates by createdAt desc if present
+    const dbSorted = [...(sourceDb || [])].sort((a: any, b: any) => {
+      const ad = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bd = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return bd - ad;
+    });
+    const dbTemplatesFormatted: TemplateDefinition[] = dbSorted.map((dbTemplate: any) => ({
       id: dbTemplate.id,
       name: dbTemplate.name,
       duration: dbTemplate.duration,
       previewFrame: dbTemplate.previewFrame || 15,
-      component: null, // Database templates don't have components (type allows null)
+      component: null,
       getCode: () => dbTemplate.tsxCode,
       supportedFormats: dbTemplate.supportedFormats as ('landscape' | 'portrait' | 'square')[],
-      isFromDatabase: true, // Mark as database template
+      isFromDatabase: true,
       isOfficial: dbTemplate.isOfficial,
       category: dbTemplate.category,
       creator: dbTemplate.creator,
     }));
-    
-    // Combine with hardcoded templates
-    return [...TEMPLATES, ...dbTemplatesFormatted];
-  }, [databaseTemplates]);
+    // DB templates first (newest first), then hardcoded
+    return [...dbTemplatesFormatted, ...TEMPLATES];
+  }, [databaseTemplates, cachedDbTemplates]);
+
+  // Optional: simple skeleton to avoid jarring reorder on first open without cache
+  const isInitialLoading = isLoadingDbTemplates && cachedDbTemplates.length === 0;
   
   // Filter templates based on search and format compatibility
   const filteredTemplates = useMemo(() => {
     let templates = combinedTemplates;
-    
-    // Filter by format compatibility
+    // Category filter
+    if (selectedCategory !== 'all') {
+      templates = templates.filter(t => classifyCategory(t) === selectedCategory);
+    }
+    // Format compatibility
     templates = templates.filter(template => {
-      // If template has no format restrictions, show it
-      if (!template.supportedFormats || template.supportedFormats.length === 0) {
-        return true;
-      }
-      // Otherwise, check if current format is supported
+      if (!template.supportedFormats || template.supportedFormats.length === 0) return true;
       return template.supportedFormats.includes(currentFormat);
     });
-    
-    // Filter by search query
+    // Search
     if (searchQuery.trim()) {
-      templates = templates.filter(template =>
-        template.name.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      const q = searchQuery.toLowerCase();
+      templates = templates.filter(template => template.name.toLowerCase().includes(q));
     }
-    
     return templates;
-  }, [searchQuery, currentFormat, combinedTemplates]);
+  }, [searchQuery, currentFormat, combinedTemplates, selectedCategory, classifyCategory]);
 
   // Get grid columns based on format for better layout
   const getGridColumns = (format: string) => {
@@ -437,7 +487,7 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
   return (
     <div className="flex flex-col h-full bg-white">
       {/* Search */}
-      <div className="flex-none p-2 border-b">
+      <div className="flex-none p-2 border-b space-y-2">
         <div className="relative">
           <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
@@ -446,6 +496,24 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
           />
+        </div>
+        {/* Category chips */}
+        <div className="flex flex-wrap items-center gap-2">
+          {[
+            { key: 'all', label: 'All' },
+            { key: 'colors', label: 'Colors' },
+            { key: 'ui', label: 'UI' },
+            { key: 'text', label: 'Text' },
+            { key: 'other', label: 'Other' },
+          ].map((c: any) => (
+            <button
+              key={c.key}
+              onClick={() => setSelectedCategory(c.key)}
+              className={`px-2 py-1 text-xs rounded-full border ${selectedCategory === c.key ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+            >
+              {c.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -461,20 +529,27 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
             </span> format
           </div>
         </div>
-        
-        <div className={`grid gap-2 sm:gap-3 ${getGridColumns(currentFormat)}`}>
-          {filteredTemplates.map((template) => (
-            <Card key={template.id} className="overflow-hidden hover:shadow-lg transition-shadow p-0">
-              {/* Clickable Full-Size Preview with correct aspect ratio */}
-              <TemplatePreview 
-                template={template} 
-                onClick={() => handleAddTemplate(template)}
-                isLoading={loadingTemplateId === template.id}
-                format={currentFormat}
-              />
-            </Card>
-          ))}
-        </div>
+        {isInitialLoading ? (
+          <div className="grid gap-2 sm:gap-3 grid-cols-2 sm:grid-cols-2 lg:grid-cols-2">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="h-36 rounded-lg border bg-gray-50 animate-pulse" />
+            ))}
+          </div>
+        ) : (
+          <div className={`grid gap-2 sm:gap-3 ${getGridColumns(currentFormat)}`}>
+            {filteredTemplates.map((template) => (
+              <Card key={template.id} className="overflow-hidden hover:shadow-lg transition-shadow p-0">
+                {/* Clickable Full-Size Preview with correct aspect ratio */}
+                <TemplatePreview 
+                  template={template} 
+                  onClick={() => handleAddTemplate(template)}
+                  isLoading={loadingTemplateId === template.id}
+                  format={currentFormat}
+                />
+              </Card>
+            ))}
+          </div>
+        )}
 
         {filteredTemplates.length === 0 && (
           <div className="text-center py-6 text-gray-500">

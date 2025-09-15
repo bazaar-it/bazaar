@@ -2,7 +2,7 @@
 
 "use client";
 
-import React, { useEffect, useMemo, Suspense, useState, useRef } from 'react';
+import React, { useEffect, useMemo, Suspense, useState, useRef, useCallback } from 'react';
 import { Player, type PlayerRef } from '@remotion/player';
 import { ErrorBoundary } from 'react-error-boundary';
 import { createPortal } from 'react-dom';
@@ -68,21 +68,68 @@ export default function RemotionPreview({
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const [playerElement, setPlayerElement] = useState<HTMLElement | null>(null);
   const hasAudio = !!(inputProps?.audio?.url);
+  const audioUnlockRef = useRef<boolean>(false);
   
-  // Update frame from player
+  // Helper: Try to resume any media elements inside the player (best-effort)
+  const resumeMediaElements = useCallback(async () => {
+    try {
+      const scope = playerContainerRef.current;
+      if (!scope) return;
+      const mediaEls: HTMLMediaElement[] = Array.from(scope.querySelectorAll('audio, video')) as any;
+      if (!mediaEls.length) return;
+      for (const m of mediaEls) {
+        try {
+          // Unmute and set volume for immediate sound
+          (m as any).muted = false;
+          if (typeof (m as any).volume === 'number') (m as any).volume = 1;
+          const p = (m as HTMLMediaElement).play?.();
+          if (p && typeof p.then === 'function') {
+            await p.catch((e: any) => {
+              try { console.warn('[RemotionPreview] Media play() blocked or failed:', e); } catch {}
+            });
+          }
+        } catch (err) {
+          try { console.warn('[RemotionPreview] Failed to resume media element:', err); } catch {}
+        }
+      }
+    } catch {}
+  }, []);
+  
+  // Update frame from player and infer play/pause state for external listeners
   useEffect(() => {
     if (!playerRef?.current) return;
-    const updateFrame = () => {
+    let lastFrame = -1;
+    let stillTicks = 0;
+    const tick = () => {
       try {
         const frame = (playerRef.current as any)?.getCurrentFrame?.() ?? 0;
         if (typeof frame === 'number') {
           setCurrentFrame(frame);
+          if (lastFrame === -1) lastFrame = frame;
+          if (frame !== lastFrame) {
+            stillTicks = 0;
+            // Went from paused -> playing
+            if (!(window as any).__previewPlaying) {
+              (window as any).__previewPlaying = true;
+              try { window.dispatchEvent(new CustomEvent('preview-play-state-change', { detail: { playing: true } })); } catch {}
+              try { onPlay?.(); } catch {}
+            }
+          } else {
+            stillTicks += 1;
+            // Consider paused if no frame advance for a few ticks
+            if ((window as any).__previewPlaying && stillTicks >= 3) {
+              (window as any).__previewPlaying = false;
+              try { window.dispatchEvent(new CustomEvent('preview-play-state-change', { detail: { playing: false } })); } catch {}
+              try { onPause?.(); } catch {}
+            }
+          }
+          lastFrame = frame;
         }
       } catch {}
     };
-    const interval = setInterval(updateFrame, 100);
+    const interval = setInterval(tick, 150);
     return () => clearInterval(interval);
-  }, [playerRef]);
+  }, [playerRef, onPlay, onPause]);
 
   // Find the player element for portal injection
   useEffect(() => {
@@ -110,6 +157,36 @@ export default function RemotionPreview({
     };
   }, [refreshToken]);
 
+  // One-time audio unlock using any pointer gesture inside the player container
+  useEffect(() => {
+    if (!hasAudio) return;
+    const el = playerContainerRef.current;
+    if (!el) return;
+    const onPointerDown = async () => {
+      if (audioUnlockRef.current) return;
+      audioUnlockRef.current = true;
+      try {
+        // Ensure browser considers this a user gesture for audio
+        const { enableAudioWithGesture } = await import('~/lib/utils/audioContext');
+        enableAudioWithGesture();
+      } catch {}
+      try {
+        const api: any = playerRef?.current as any;
+        if (api?.setMuted) api.setMuted(false);
+        if (api?.setVolume) api.setVolume(1);
+        if (api?.play) api.play();
+      } catch {}
+      // Directly try to resume underlying <audio>/<video> tags rendered by Remotion
+      try { await resumeMediaElements(); } catch {}
+      // Remove listener after first gesture
+      try { el.removeEventListener('pointerdown', onPointerDown, { capture: true } as any); } catch {}
+    };
+    el.addEventListener('pointerdown', onPointerDown, { capture: true } as any);
+    return () => {
+      try { el.removeEventListener('pointerdown', onPointerDown, { capture: true } as any); } catch {}
+    };
+  }, [hasAudio, playerRef, resumeMediaElements]);
+
   
   return (
     <ErrorBoundary FallbackComponent={ErrorFallback}>
@@ -119,6 +196,8 @@ export default function RemotionPreview({
         </div>
       }>
         <div className="w-full h-full flex items-center justify-center relative" ref={playerContainerRef}>
+          {/* Maintain composition aspect ratio to avoid stretching/zooming */}
+          <div style={{ width: '100%', maxHeight: '100%', aspectRatio: `${width} / ${height}` }} className="relative">
           <Player
             ref={playerRef}
             lazyComponent={lazyComponent}
@@ -140,30 +219,15 @@ export default function RemotionPreview({
             doubleClickToFullscreen
             clickToPlay
             loop={loop}
-            autoPlay={true}
+            autoPlay={false}
             playbackRate={playbackRate}
-            initiallyMuted={true}
             inFrame={inFrame}
             outFrame={outFrame}
-            // @ts-expect-error - onPlay and onPause work but aren't in type definitions
-            onPlay={() => {
-              try {
-                const ev = new CustomEvent('preview-play-state-change', { detail: { playing: true } });
-                window.dispatchEvent(ev);
-              } catch {}
-              onPlay?.();
-            }}
-            onPause={() => {
-              try {
-                const ev = new CustomEvent('preview-play-state-change', { detail: { playing: false } });
-                window.dispatchEvent(ev);
-              } catch {}
-              onPause?.();
-            }}
             key={refreshToken} // Force remount when refreshToken changes
             acknowledgeRemotionLicense
             className="remotion-player"
           />
+          </div>
           {playerElement && createPortal(
             <>
               {/* Frame counter with FPS label - synced with Remotion controls */}

@@ -53,7 +53,53 @@ export function GlobalDependencyProvider({ children }: { children: React.ReactNo
       
       (window as any).IconifyIcon = IconifyWrapper;
       
+      // NEW: Add __InlineIcon for runtime SVG rendering
+      (window as any).__InlineIcon = function InlineIcon({ icon, style, ...props }: { 
+        icon: string; 
+        style?: React.CSSProperties;
+        [key: string]: any;
+      }) {
+        // Get icon data from registry
+        const iconData = (window as any).__iconRegistry?.[icon];
+        
+        if (!iconData) {
+          // Fallback for missing icons - show a question mark
+          return React.createElement('div', {
+            style: {
+              width: '1em',
+              height: '1em',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '1px solid currentColor',
+              borderRadius: '50%',
+              fontSize: '0.8em',
+              color: 'currentColor',
+              ...style
+            },
+            ...props
+          }, '?');
+        }
+        
+        // Render inline SVG from preloaded data
+        return React.createElement('svg', {
+          viewBox: iconData.attributes.viewBox || '0 0 24 24',
+          width: iconData.attributes.width || '1em',
+          height: iconData.attributes.height || '1em',
+          fill: iconData.attributes.fill || 'currentColor',
+          style: {
+            display: 'inline-block',
+            verticalAlign: 'middle',
+            ...style
+          },
+          dangerouslySetInnerHTML: { __html: iconData.body },
+          ...props
+        });
+      };
+      
       // NEW: Add Font loader stub - fonts now load via CSS
+      // Simple idempotent cache to avoid repeated logs and work
+      (window as any).__fontLoadCache = (window as any).__fontLoadCache || new Set<string>();
       (window as any).RemotionGoogleFonts = {
         loadFont: async (fontNameOrOptions: string | any, options?: { weights?: string[], subsets?: string[] }) => {
           // Handle case where AI passes options as first parameter
@@ -70,22 +116,34 @@ export function GlobalDependencyProvider({ children }: { children: React.ReactNo
           }
           
           // Fonts are now loaded via CSS @import in fonts.css
-          // This is just a compatibility stub for scenes that still call loadFont
-          console.log(`[Font Stub] Font request for ${fontName} with weights ${weights.join(', ')} - loaded via CSS`);
-          
+          // Idempotent: only log first time per font+weights combo
+          try {
+            const key = `${fontName}::${[...weights].sort().join('-')}`;
+            if (!(window as any).__fontLoadCache.has(key)) {
+              (window as any).__fontLoadCache.add(key);
+              console.log(`[Font Stub] Font request for ${fontName} with weights ${weights.join(', ')} - loaded via CSS`);
+            }
+          } catch {}
+
           // Return immediately - fonts are already available via CSS
           return Promise.resolve();
         }
       };
       
-      // NEW: Add Avatar System - Ultra Simple (R2 Storage URLs)
-      (window as any).BazaarAvatars = {
-        'asian-woman': 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/Bazaar%20avatars/asian-woman.png',
-        'black-man': 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/Bazaar%20avatars/black-man.png', 
-        'hispanic-man': 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/Bazaar%20avatars/hispanic-man.png',
-        'middle-eastern-man': 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/Bazaar%20avatars/middle-eastern-man.png',
-        'white-woman': 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/Bazaar%20avatars/white-woman.png'
-      };
+      // NEW: Avatar System sourced from a single catalog
+      // Prefer NEXT_PUBLIC_CLOUDFLARE_R2_PUBLIC_URL on client
+      // Determine R2 public base for avatars
+      const FALLBACK_PUBLIC_R2 = 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev';
+      const publicBase = process.env.NEXT_PUBLIC_CLOUDFLARE_R2_PUBLIC_URL || (window as any).__R2_PUBLIC_URL || FALLBACK_PUBLIC_R2;
+      const avatarsDir = process.env.NEXT_PUBLIC_AVATARS_BASE_DIR || 'Bazaar avatars';
+      try {
+        const { buildAvatarMap, AVATAR_MAP } = require('~/lib/avatars/catalog');
+        const map = publicBase ? buildAvatarMap(publicBase, avatarsDir) : AVATAR_MAP;
+        (window as any).BazaarAvatars = map;
+      } catch (e) {
+        console.warn('[GlobalDependencyProvider] Failed to build avatar map from catalog, falling back to empty map', e);
+        (window as any).BazaarAvatars = {};
+      }
       
       console.log('✅ GlobalDependencyProvider: All dependencies loaded successfully');
       console.log('🎭 BazaarAvatars loaded:', (window as any).BazaarAvatars);

@@ -18,6 +18,9 @@ export const env = createEnv({
     AUTH_GOOGLE_SECRET: z.string(),
     DATABASE_URL: z.string().url(),
     DATABASE_URL_NON_POOLED: z.string().url(),
+    // Optional: Read templates from a separate read-only DB (prod) while developing
+    TEMPLATES_DB_URL_RO: z.string().url().optional(),
+    TEMPLATES_READ_FROM: z.enum(['local','prod']).optional().default('local'),
     // Default model for Animation Design Brief generation
     DEFAULT_ADB_MODEL: z.string().optional().default("o4-mini"),
     NODE_ENV: z
@@ -82,6 +85,14 @@ export const env = createEnv({
     LIVE_MODE: z.enum(["manual", "webhook"]).optional().default("manual"),
     // Admin notifications
     ADMIN_NOTIFICATION_EMAIL: z.string().email().optional(),
+    // Server-side compilation toggle (Sprint 106 Phase 1)
+    USE_SERVER_COMPILATION: z.preprocess(
+      (val) => {
+        if (val === undefined) return true; // default on
+        return String(val).toLowerCase() === 'true';
+      },
+      z.boolean().optional()
+    ),
   },
 
   /**
@@ -94,6 +105,7 @@ export const env = createEnv({
     NEXT_PUBLIC_LOG_AGENT_URL: z.string().url().optional().default('http://localhost:3002'),
     NEXT_PUBLIC_LOG_RUN_ID: z.string().optional(),
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string().min(1),
+    NEXT_PUBLIC_TEMPLATES_READ_FROM: z.enum(['local','prod']).optional().default('local'),
   },
 
   /**
@@ -108,6 +120,8 @@ export const env = createEnv({
     AUTH_GOOGLE_SECRET: process.env.AUTH_GOOGLE_SECRET,
     DATABASE_URL: process.env.DATABASE_URL,
     DATABASE_URL_NON_POOLED: process.env.DATABASE_URL_NON_POOLED,
+    TEMPLATES_DB_URL_RO: process.env.TEMPLATES_DB_URL_RO,
+    TEMPLATES_READ_FROM: process.env.TEMPLATES_READ_FROM,
     DEFAULT_ADB_MODEL: process.env.DEFAULT_ADB_MODEL,
     NODE_ENV: process.env.NODE_ENV,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
@@ -142,9 +156,11 @@ export const env = createEnv({
     LIVE_FORCE: process.env.LIVE_FORCE,
     LIVE_MODE: process.env.LIVE_MODE,
     ADMIN_NOTIFICATION_EMAIL: process.env.ADMIN_NOTIFICATION_EMAIL,
+    USE_SERVER_COMPILATION: process.env.USE_SERVER_COMPILATION,
     NEXT_PUBLIC_LOG_AGENT_URL: process.env.NEXT_PUBLIC_LOG_AGENT_URL,
     NEXT_PUBLIC_LOG_RUN_ID: process.env.NEXT_PUBLIC_LOG_RUN_ID,
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+    NEXT_PUBLIC_TEMPLATES_READ_FROM: process.env.NEXT_PUBLIC_TEMPLATES_READ_FROM,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

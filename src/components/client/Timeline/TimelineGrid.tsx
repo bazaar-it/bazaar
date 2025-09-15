@@ -240,6 +240,7 @@ const TimelineGrid: React.FC<TimelineGridProps> = ({
         
         {/* Timeline Content Column */}
         <div className="flex-1 relative overflow-hidden">
+          {/* Overlay counter/toggle removed – header provides these controls */}
           {/* Background grid lines */}
           <div className="absolute inset-0 pointer-events-none">
             {/* Horizontal grid lines */}

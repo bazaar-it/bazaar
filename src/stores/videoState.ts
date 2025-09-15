@@ -708,6 +708,7 @@ export const useVideoState = create<VideoState>()(
           type: 'custom' as const,
           start: 0,
           duration: scene.duration || 150,
+          order: 0,
           data: {
             code: scene.tsxCode,
             name: scene.name || 'Generated Scene',
@@ -744,6 +745,7 @@ export const useVideoState = create<VideoState>()(
         type: 'custom' as const,
         start: currentTotalDuration, // Start after all existing scenes
         duration: scene.duration || 150, // Use scene's actual duration
+        order: project.props.scenes.length, // Append at the end by default
         data: {
           code: scene.tsxCode,
           name: scene.name || 'Generated Scene',

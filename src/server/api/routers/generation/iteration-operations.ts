@@ -2,6 +2,8 @@ import { z } from "zod";
 import { protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
 import { scenes, projects, sceneIterations } from "~/server/db/schema";
+import { env } from "~/env";
+import { sceneCompiler } from "~/server/services/compilation/scene-compiler.service";
 import { eq, and, inArray } from "drizzle-orm";
 import { messageService } from "~/server/services/data/message.service";
 import { ResponseBuilder, getErrorCode } from "~/lib/api/response-helpers";
@@ -148,11 +150,19 @@ export const revertToIteration = protectedProcedure
         // Insert at the end
         const maxOrder = allScenes.length;
         
+        let compiledInsert = { jsCode: null as string | null, jsCompiledAt: null as Date | null };
+        if (env.USE_SERVER_COMPILATION) {
+          const res = await sceneCompiler.compileScene(iteration.codeBefore, { projectId, sceneId: iteration.sceneId });
+          compiledInsert = { jsCode: res.jsCode, jsCompiledAt: res.compiledAt };
+          console.log('[CompileMetrics] revert(delete) compiled=%s scene=%s', String(!!res.jsCode), iteration.sceneId);
+        }
         [revertedScene] = await db.insert(scenes).values({
           id: iteration.sceneId, // Restore with original ID
           projectId,
           name: `Restored Scene`,
           tsxCode: iteration.codeBefore,
+          jsCode: compiledInsert.jsCode,
+          jsCompiledAt: compiledInsert.jsCompiledAt,
           duration: 150, // Default duration
           order: maxOrder,
           props: {},
@@ -168,9 +178,17 @@ export const revertToIteration = protectedProcedure
           throw new Error("Scene not found");
         }
         
+        let compiledCreate = { jsCode: null as string | null, jsCompiledAt: null as Date | null };
+        if (env.USE_SERVER_COMPILATION) {
+          const res = await sceneCompiler.compileScene(iteration.codeAfter!, { projectId, sceneId: iteration.sceneId });
+          compiledCreate = { jsCode: res.jsCode, jsCompiledAt: res.compiledAt };
+          console.log('[CompileMetrics] revert(create) compiled=%s scene=%s', String(!!res.jsCode), iteration.sceneId);
+        }
         [revertedScene] = await db.update(scenes)
           .set({
             tsxCode: iteration.codeAfter!,
+            jsCode: compiledCreate.jsCode,
+            jsCompiledAt: compiledCreate.jsCompiledAt,
             updatedAt: new Date(),
           })
           .where(eq(scenes.id, iteration.sceneId))
@@ -191,9 +209,17 @@ export const revertToIteration = protectedProcedure
           throw new Error("No code history available for this iteration");
         }
         
+        let compiledEdit = { jsCode: null as string | null, jsCompiledAt: null as Date | null };
+        if (env.USE_SERVER_COMPILATION) {
+          const res = await sceneCompiler.compileScene(codeToRevertTo, { projectId, sceneId: iteration.sceneId });
+          compiledEdit = { jsCode: res.jsCode, jsCompiledAt: res.compiledAt };
+          console.log('[CompileMetrics] revert(edit) compiled=%s scene=%s', String(!!res.jsCode), iteration.sceneId);
+        }
         [revertedScene] = await db.update(scenes)
           .set({
             tsxCode: codeToRevertTo,
+            jsCode: compiledEdit.jsCode,
+            jsCompiledAt: compiledEdit.jsCompiledAt,
             updatedAt: new Date(),
           })
           .where(eq(scenes.id, iteration.sceneId))

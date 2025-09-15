@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure, protectedProcedure, adminProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
+import { getProdTemplatesDb } from "~/server/db/templates-prod";
+import { env } from "~/env";
 import { templates, scenes, projects, templateUsages } from "~/server/db/schema";
 import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -113,8 +115,32 @@ export const templatesRouter = createTRPCRouter({
         conditions.push(eq(templates.isOfficial, isOfficial));
       }
       
-      // Get templates
-      const allTemplates = await db.query.templates.findMany({
+      // Select data source (local by default, prod RO when enabled)
+      const prodDb = getProdTemplatesDb();
+      const sourceDb = prodDb || db;
+
+      // Get templates (explicit columns to support prod schema without js_code)
+      const allTemplates = await sourceDb.query.templates.findMany({
+        columns: {
+          id: true,
+          name: true,
+          description: true,
+          tsxCode: true,
+          duration: true,
+          previewFrame: true,
+          supportedFormats: true,
+          thumbnailUrl: true,
+          category: true,
+          tags: true,
+          isActive: true,
+          isOfficial: true,
+          createdBy: true,
+          sourceProjectId: true,
+          sourceSceneId: true,
+          usageCount: true,
+          createdAt: true,
+          updatedAt: true,
+        },
         where: and(...conditions),
         orderBy: [desc(templates.isOfficial), desc(templates.usageCount), desc(templates.createdAt)],
         limit,
@@ -138,7 +164,7 @@ export const templatesRouter = createTRPCRouter({
         });
       }
       
-      return filteredTemplates;
+      return filteredTemplates.map((t: any) => ({ ...t, __source: prodDb ? 'prod' : 'local' }));
     }),
 
   // Get template by ID (Public - for preview)
@@ -256,6 +282,10 @@ export const templatesRouter = createTRPCRouter({
   trackUsage: protectedProcedure
     .input(z.string().uuid())
     .mutation(async ({ input, ctx }) => {
+      if (env.TEMPLATES_READ_FROM === 'prod') {
+        // No-op in prod read mode (avoid writing to remote DB)
+        return { success: true } as const;
+      }
       await db.update(templates)
         .set({
           usageCount: sql`${templates.usageCount} + 1`,

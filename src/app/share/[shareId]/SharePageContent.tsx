@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { format } from "date-fns";
-import ShareVideoPlayerClient from "./ShareVideoPlayerClient";
+import ShareVideoPlayerClient from "./ShareVideoPlayerClientOptimized";
 import ShareButtons from "./SharePageClient";
 import { LoopToggle } from "~/components/ui/LoopToggle";
 import type { InputProps } from "~/lib/types/video/input-props";
@@ -58,8 +58,7 @@ export default function SharePageContent({
               loopState={loopState} 
               onStateChange={setLoopState}
               scenes={inputProps.scenes.map((scene, index) => ({ 
-                id: scene.id || `scene-${index}`, 
-                name: scene.name 
+                id: (scene as any).id || `scene-${index}`
               }))}
             />
             <ShareButtons

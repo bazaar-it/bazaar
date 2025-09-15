@@ -1,12 +1,26 @@
 # 🏆 Bazaar-Vid Progress Summary
 
+## 📝 Latest Update (Sep 15, 2025)
+- Marketing: Added Product Hunt featured badge to homepage (under hero CTA) ahead of launch. Link opens in new tab with noopener for safety; uses official PH SVG widget.
+
 ## 📝 Latest Update (Sep 11, 2025)
+## 📝 Latest Update (Sep 13, 2025)
+- Sprint 107: Fixed preview crash when scene names contained apostrophes (e.g., Build a' word slide template). Root cause was unescaped dynamic strings injected into generated composite code; Sucrase failed with "Invalid scope depth". Escaped dynamic values via JSON.stringify in `PreviewPanelG.tsx` and added a browser-safe console logger to avoid `setImmediate` errors from Winston in `use-auto-fix`.
+
+- Sprint 107: Prevented assistant code leakage in chat. Added server-side chat sanitizer and a suppression flag for silent flows (auto-fix). Clarification messages sanitized. Auto-fix now calls `generateScene` with `metadata.suppressAssistantMessage = true` to remain silent.
+
 - Sprint 107: Fixed intermittent horizontal scrollbar in ChatPanel by enforcing word wrapping and hiding horizontal overflow. Changes in `ChatPanelG.tsx` and `ChatMessage.tsx`. See `memory-bank/sprints/sprint107_general_reliability/analysis/chat-horizontal-overflow.md`.
 - Sprint 107: Disabled unfinished Website→Video pipeline behind feature flag. Orchestrator/Intent/Context updated to ignore website tool; chat no longer passes `websiteUrl`. Safe to paste URLs without triggering that workflow.
+
+## 📝 Latest Update (Sep 14, 2025)
+- Sprint 107: Multi‑scene stability — ensured every scene (TSX and precompiled JS) is wrapped in an IIFE and bound to a unique component name derived from the scene ID in `PreviewPanelG.tsx`. Prevents "Identifier 'X' has already been declared" when combining templates with similar component names (e.g., Rainbow stroke + word slide).
 
 ## 📝 Latest Update (Sep 08, 2025)
 - Sprint 116: Kickstarted “Unified Images” plan. New sprint docs under `memory-bank/sprints/sprint116_images/`. Strategy: remove separate image tool; Brain emits `imageAction`/`imageDirectives`; Sonnet 4 multimodal handles add/edit with minimal prompts; upload-time media metadata informs decisions.
 - Sprint 98: Added a full image upload → generation pipeline audit. See `memory-bank/sprints/sprint98_autofix_analysis/image-upload-pipeline-analysis.md`. Documented why tool choice (add vs image recreator) can vary for ambiguous prompts like “animate this”, and proposed deterministic pre-rules + lower Brain temperature for stability.
+
+## 📝 Latest Update (Sep 04, 2025)
+- Sprint 106: Phase 1 COMPLETE — server-side compilation validated and export works. No duplicate-declaration conflicts, templates stable, and `js_compiled_at` confirmed across scenes. Docs updated in `/memory-bank/sprints/sprint106_server_side_compilation/`. Next: monitor briefly, then Phase 2 (standardized artifacts + metrics).
 
 ## 📝 Latest Update (Sep 01, 2025)
 - Sprint 98: Fixed preview namespacing collisions causing new scenes to break with `Identifier 'SceneNS_*' has already been declared`. Changed namespace wrapper to `var` and made error-boundary helper names redeclaration‑safe. See `/memory-bank/sprints/sprint98_autofix_analysis/preview-namespacing-followups.md`.

@@ -116,8 +116,9 @@ export const authConfig = {
       // Create initial credits for new user
       console.log(`[Auth] Creating initial credits for new user: ${user.email}`);
       try {
+        const userId = String(user.id);
         await db.insert(userCredits).values({
-          userId: user.id,
+          userId,
           dailyCredits: 5,
           purchasedCredits: 100, // 100 signup bonus - increased from 20
           lifetimeCredits: 100,
@@ -131,10 +132,13 @@ export const authConfig = {
 
       // Send email notification to admin about new user
       try {
-        // Try to determine the provider from recent account entries
+        // Import the notification function
+        const { sendNewUserNotification } = await import('~/server/services/email/notifications');
+        
+        // Try to determine the provider from recent account entries (no createdAt column)
+        const userId = String(user.id);
         const recentAccount = await db.query.accounts.findFirst({
-          where: eq(accounts.userId, user.id),
-          orderBy: (accounts, { desc }) => [desc(accounts.createdAt)],
+          where: eq(accounts.userId, userId),
         });
         const provider = recentAccount?.provider || 'Unknown';
         

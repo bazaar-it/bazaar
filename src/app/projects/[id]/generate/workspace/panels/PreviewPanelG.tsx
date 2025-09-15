@@ -10,12 +10,15 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { transform } from 'sucrase';
 import RemotionPreview from '../../components/RemotionPreview';
 import { Player, type PlayerRef } from '@remotion/player';
+import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring, Sequence, Audio, Video, Img, staticFile } from 'remotion';
 import { api } from "~/trpc/react";
 import { PlaybackSpeedSlider } from "~/components/ui/PlaybackSpeedSlider";
 import { cn } from '~/lib/cn';
 import { detectProblematicScene, enhanceErrorMessage } from '~/lib/utils/scene-error-detector';
 import { computeSceneRanges, findSceneAtFrame } from '~/lib/utils/scene-ranges';
 import { wrapSceneNamespace } from '~/lib/video/wrapSceneNamespace';
+import { buildCompositeHeader } from '~/lib/video/buildCompositeHeader';
+import { buildSingleSceneModule, buildMultiSceneModule } from '~/lib/video/buildComposite';
 
 // Error fallback component
 function ErrorFallback({ error }: { error: Error }) {
@@ -27,6 +30,37 @@ function ErrorFallback({ error }: { error: Error }) {
   );
 }
 
+// Make Remotion components available on window for dynamically compiled scenes
+if (typeof window !== 'undefined') {
+  // Ensure React is available globally for dynamically imported modules
+  if (!(window as any).React) {
+    (window as any).React = React;
+  }
+
+  if (!(window as any).Remotion) {
+    (window as any).Remotion = {
+      AbsoluteFill,
+      useCurrentFrame,
+      useVideoConfig,
+      interpolate,
+      spring,
+      Sequence,
+      Audio,
+      Video,
+      Img,
+      staticFile,
+      // Add random function that scenes might use
+      random: (seed: number) => {
+        const x = Math.sin(seed) * 10000;
+        return x - Math.floor(x);
+      },
+      // Aliases for compatibility
+      Series: { Sequence }
+    };
+  }
+}
+
+
 export function PreviewPanelG({ 
   projectId, 
   initial,
@@ -36,6 +70,8 @@ export function PreviewPanelG({
   initial?: InputProps;
   selectedSceneId?: string | null;
 }) {
+  // Phase 1 metrics (lightweight, console-based)
+  const metricsRef = useRef({ precompiled: 0, slowPath: 0, errors: 0, runs: 0 });
   // ✅ FIXED: Use separate selectors to prevent infinite loops
   const currentProps = useVideoState((state) => {
     const project = state.projects[projectId];
@@ -49,13 +85,36 @@ export function PreviewPanelG({
   const projectRefreshToken = useVideoState((state) => state.projects[projectId]?.refreshToken);
   
   // Get scenes from database to ensure we have the latest data
-  const { data: dbScenes } = api.generation.getProjectScenes.useQuery(
+  const { data: dbScenes, dataUpdatedAt } = api.generation.getProjectScenes.useQuery(
     { projectId },
     { 
       refetchOnWindowFocus: false,
+      // Balance: give optimistic UI a moment before DB resync
+      staleTime: 1000,
       // This will be invalidated when scenes are created
     }
   );
+  
+  // Debug: Check if jsCode is coming from API and data updates
+  React.useEffect(() => {
+    if (dbScenes && dbScenes.length > 0) {
+      const firstScene = dbScenes[0];
+      if (firstScene) {
+        console.log('[PreviewPanelG] DB scenes received/updated:', {
+          dataUpdatedAt: new Date(dataUpdatedAt).toISOString(),
+          sceneCount: dbScenes.length,
+          firstScene: {
+            id: firstScene.id,
+            hasJsCode: !!firstScene.jsCode,
+            jsCodeLength: firstScene.jsCode?.length,
+            hasTsxCode: !!firstScene.tsxCode,
+            tsxCodeLength: firstScene.tsxCode?.length,
+            updatedAt: firstScene.updatedAt
+          }
+        });
+      }
+    }
+  }, [dbScenes, dataUpdatedAt]);
 
   // NOTE: Auto-fix hook is now only used in ChatPanelG to avoid duplicate event listeners
   // PreviewPanelG only dispatches errors, ChatPanelG handles the fixing
@@ -102,6 +161,17 @@ export function PreviewPanelG({
         }
         const localScene = currentProps.scenes?.find((s: any) => s.id === dbScene.id);
         const localName = (localScene as any)?.name || localScene?.data?.name;
+        const hasCompiled = !!(dbScene as any).jsCode;
+        // Per-scene visibility: whether compiled JS will be used
+        console.log('[PreviewPanelG] Scene source:', {
+          id: dbScene.id,
+          name: dbScene.name,
+          use: hasCompiled ? 'compiled-js' : 'tsx',
+          hasJsCode: hasCompiled,
+          jsCodeLength: hasCompiled ? ((dbScene as any).jsCode?.length || 0) : 0,
+          duration: sceneDuration,
+          order: dbScene.order ?? 0,
+        });
         const scene = {
           id: dbScene.id,
           type: 'custom' as const,
@@ -110,7 +180,10 @@ export function PreviewPanelG({
           order: dbScene.order ?? 0,
           name: localName || dbScene.name,
           data: {
-            code: dbScene.tsxCode,
+            // Prefer pre-compiled JS if available; fallback to TSX
+            code: (dbScene as any).jsCode || dbScene.tsxCode,
+            jsCode: (dbScene as any).jsCode,
+            tsxCode: dbScene.tsxCode,
             name: localName || dbScene.name,
             componentId: dbScene.id,
             props: dbScene.props || {}
@@ -120,6 +193,23 @@ export function PreviewPanelG({
         return scene;
       });
       const dedupedScenes = Array.from(new Map(convertedScenes.map((s: any) => [s.id, s])).values());
+      // Dedupe: If the server scenes are effectively identical to local (id/order/duration/code hash), skip replace
+      const sigFrom = (list: any[]) => list.map((s: any) => {
+        const order = s.order ?? 0;
+        const duration = s.duration || 150;
+        // Prefer compiled JS when present; otherwise use TSX
+        const code = (s?.data?.code || (s as any).jsCode || (s as any).tsxCode || '') as string;
+        const h = (typeof hashString === 'function') ? hashString(code) : String(code.length);
+        return `${s.id}:${order}:${duration}:${h}`;
+      }).join('|');
+      const serverSig = sigFrom(convertedScenes);
+      const localSig = sigFrom((currentProps.scenes || []) as any[]);
+
+      if (serverSig === localSig) {
+        console.log('[PreviewPanelG] ⚖️ Server scenes match local signature; skipping replace');
+        return;
+      }
+
       const updatedProps = {
         ...currentProps,
         scenes: dedupedScenes,
@@ -132,6 +222,13 @@ export function PreviewPanelG({
       if (dbScenes.length === 0) {
         replace(projectId, { ...currentProps, scenes: [], meta: { ...currentProps.meta, duration: 150 } });
       } else {
+        // Aggregate visibility: how many scenes use compiled JS vs TSX
+        const compiledCount = convertedScenes.filter((s: any) => !!(s?.data as any)?.jsCode).length;
+        console.log('[PreviewPanelG] Scene sources summary:', {
+          total: convertedScenes.length,
+          compiledJs: compiledCount,
+          tsxFallback: convertedScenes.length - compiledCount,
+        });
         replace(projectId, updatedProps);
       }
       }, 300); // 300ms debounce for DB sync
@@ -177,6 +274,10 @@ export function PreviewPanelG({
   );
   const ranges = useMemo(() => computeSceneRanges(scenes as any), [scenes]);
   const activeRange = useMemo(() => findSceneAtFrame(ranges, currentFrame), [ranges, currentFrame]);
+  
+  // hashString defined later in file; keep single definition to avoid redeclare
+  
+  // (Removed owner-only preview source indicator)
   
   // Force preview refresh when audio settings change
   useEffect(() => {
@@ -255,6 +356,32 @@ export function PreviewPanelG({
         }
       }
     };
+
+    // Explicit play request (no toggle)
+    const handleTimelinePlay = () => {
+      if (!playerRef.current) return;
+      try {
+        playerRef.current.play();
+        setIsPlaying(true);
+        const event = new CustomEvent('preview-play-state-change', { detail: { playing: true } });
+        window.dispatchEvent(event);
+      } catch (error) {
+        console.warn('Failed to play from timeline (explicit):', error);
+      }
+    };
+
+    // Explicit pause request (no toggle)
+    const handleTimelinePause = () => {
+      if (!playerRef.current) return;
+      try {
+        playerRef.current.pause();
+        setIsPlaying(false);
+        const event = new CustomEvent('preview-play-state-change', { detail: { playing: false } });
+        window.dispatchEvent(event);
+      } catch (error) {
+        console.warn('Failed to pause from timeline (explicit):', error);
+      }
+    };
     
     // New: Provide precise current frame on demand
     const handleRequestCurrentFrame = () => {
@@ -276,12 +403,16 @@ export function PreviewPanelG({
 
     window.addEventListener('timeline-seek' as any, handleTimelineSeek);
     window.addEventListener('timeline-play-pause' as any, handleTimelinePlayPause);
+    window.addEventListener('timeline-play' as any, handleTimelinePlay);
+    window.addEventListener('timeline-pause' as any, handleTimelinePause);
     window.addEventListener('request-play-state' as any, handleRequestPlayState);
     window.addEventListener('request-current-frame' as any, handleRequestCurrentFrame);
     
     return () => {
       window.removeEventListener('timeline-seek' as any, handleTimelineSeek);
       window.removeEventListener('timeline-play-pause' as any, handleTimelinePlayPause);
+      window.removeEventListener('timeline-play' as any, handleTimelinePlay);
+      window.removeEventListener('timeline-pause' as any, handleTimelinePause);
       window.removeEventListener('request-play-state' as any, handleRequestPlayState);
       window.removeEventListener('request-current-frame' as any, handleRequestCurrentFrame);
     };
@@ -317,6 +448,7 @@ export function PreviewPanelG({
   // Clear wrapper namespace cache when scene fingerprint changes
   useEffect(() => {
     try {
+      try { metricsRef.current.runs += 1; } catch {}
       nsCacheRef.current.clear();
       console.log('[PreviewPanelG] Cleared namespace cache due to scene fingerprint change');
     } catch {}
@@ -353,15 +485,25 @@ export function PreviewPanelG({
     }
   }, [loopState, selectedSceneRange?.start]);
 
-  // 🚨 SIMPLIFIED: Direct scene compilation
+  // 🚨 SIMPLIFIED: Direct scene compilation with pre-compiled JS support
   const compileSceneDirectly = useCallback(async (scene: any, index: number) => {
-    // Get code from scene.data.code (the correct location based on the type)
-    const sceneCode = (scene.data as any)?.code;
-    const sceneName = (scene.data as any)?.name || scene.id;
+    // Get code from scene (supporting both TSX and pre-compiled JS)
+    // PRIORITY: Use TSX/source first so manual edits reflect immediately, then fall back to pre-compiled JS
+    const preCompiledJS = scene.jsCode || (scene.data as any)?.jsCode; // Pre-compiled JavaScript from DB
+    const tsxCode = scene.tsxCode || (scene.data as any)?.tsxCode || (scene.data as any)?.code;
+    // Use JS if available, otherwise fall back to TSX
+    const sceneCode = preCompiledJS || tsxCode;
+    const sceneName = scene.name || (scene.data as any)?.name || scene.id;
     const sceneId = scene.id;
     
+    // Log if we have pre-compiled JS
+    if (preCompiledJS) {
+      console.log(`[PreviewPanelG] ✅ Scene ${index} (${sceneName}) has pre-compiled JS`);
+      try { metricsRef.current.precompiled += 1; } catch {}
+    }
+    
     if (!sceneCode) {
-      console.warn(`[PreviewPanelG] Scene ${index} has no code. Scene structure:`, {
+      console.warn(`[PreviewPanelG] Scene ${index} has no code (TSX or JS). Scene structure:`, {
         id: scene.id,
         hasDataCode: !!(scene.data as any)?.code,
         dataKeys: scene.data ? Object.keys(scene.data) : [],
@@ -376,77 +518,148 @@ export function PreviewPanelG({
 
     try {
       // Extract component name from the actual generated code
-      // Handle both: export default function ComponentName and export default ComponentName
-      let componentNameMatch = sceneCode.match(/export\s+default\s+function\s+(\w+)/);
-      let componentName = componentNameMatch ? componentNameMatch[1] : null;
-      
-      // If no function export, check for const declaration and export
+      // Prefer TSX for extraction; if missing, use JS. Also handle server-compiled JS with a trailing `return Name;`.
+      const codeForNameExtraction = tsxCode || sceneCode;
+      let componentName: string | null = null;
+      // 1) export default function Name
+      let m = codeForNameExtraction.match(/export\s+default\s+function\s+([A-Za-z_$][\w$]*)/);
+      if (m && m[1]) componentName = m[1];
+      // 2) export default Name
       if (!componentName) {
-        const constMatch = sceneCode.match(/const\s+(\w+)\s*=\s*\(/);
-        if (constMatch) {
-          componentName = constMatch[1];
-        }
+        m = codeForNameExtraction.match(/export\s+default\s+([A-Za-z_$][\w$]*)/);
+        if (m && m[1]) componentName = m[1];
       }
-      
-      // Fallback to generic name
+      // 3) const Name = (
       if (!componentName) {
-        componentName = `Scene${index}Component`;
+        m = codeForNameExtraction.match(/const\s+([A-Za-z_$][\w$]*)\s*=\s*\(/);
+        if (m && m[1]) componentName = m[1];
       }
+      // 4) function Name(  (server-compiled JS keeps function decl + trailing return)
+      if (!componentName) {
+        m = codeForNameExtraction.match(/function\s+([A-Za-z_$][\w$]*)\s*\(/);
+        if (m && m[1]) componentName = m[1];
+      }
+      // 5) trailing `return Name;` (most reliable for server-compiled JS)
+      if (!componentName && preCompiledJS) {
+        m = preCompiledJS.match(/return\s+([A-Za-z_$][\w$]*)\s*;\s*$/m);
+        if (m && m[1]) componentName = m[1];
+      }
+      // 6) Fallback to generic
+      if (!componentName) componentName = `Scene${index}Component`;
       
       // Log original code for debugging
       // Original scene code processing
       
-      // Clean the scene code for compilation (remove imports/exports that don't work in our system)
-      let cleanSceneCode = sceneCode
-        .replace(/import\s+\{[^}]+\}\s+from\s+['"]remotion['"];?\s*/g, '') // Remove remotion imports
-        .replace(/import\s+.*from\s+['"]react['"];?\s*/g, '') // Remove React imports
-        .replace(/const\s+\{\s*[^}]+\s*\}\s*=\s*window\.Remotion;\s*/g, '') // Remove window.Remotion destructuring
-        .replace(/export\s+default\s+function\s+\w+/, `function ${componentName}`) // Remove export default function
-        .replace(/export\s+default\s+\w+;?\s*/g, '') // Remove export default ComponentName
-        .replace(/export\s+const\s+\w+\s*=\s*[^;]+;?\s*/g, ''); // Remove export const statements
+      // Only clean TSX code if we're not using pre-compiled JS
+      let cleanSceneCode = '';
+      if (!preCompiledJS && tsxCode) {
+        cleanSceneCode = tsxCode
+          .replace(/import\s+\{[^}]+\}\s+from\s+['"]remotion['"];?\s*/g, '') // Remove remotion imports (scenes use window.Remotion)
+          .replace(/import\s+.*from\s+['"]react['"];?\s*/g, '') // Remove React imports
+          // IMPORTANT: Preserve window.Remotion destructuring so scene-local names (useCurrentFrame, etc.) are defined
+          .replace(/export\s+default\s+function\s+\w+/, `function ${componentName}`) // Remove export default function
+          .replace(/export\s+default\s+\w+;?\s*/g, '') // Remove export default ComponentName
+          .replace(/export\s+const\s+\w+\s*=\s*[^;]+;?\s*/g, '') // Remove export const statements
+          // Normalize icons to canonical runtime API (match server compiler)
+          .replace(/<\s*IconifyIcon(\s|>)/g, '<window.IconifyIcon$1')
+          .replace(/<\s*Icon(\s|>)/g, '<window.IconifyIcon$1')
+          .replace(/React\.createElement\(\s*IconifyIcon\s*,/g, 'React.createElement(window.IconifyIcon,')
+          .replace(/React\.createElement\(\s*Icon\s*,/g, 'React.createElement(window.IconifyIcon,');
+      }
       
       // Log cleaned code for debugging
       // Cleaned scene code processing
 
-      // 🚨 REAL COMPILATION TEST: Use Sucrase to verify the code actually compiles
-      const testCompositeCode = `
-const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring, random } = window.Remotion;
-
-${cleanSceneCode}
-
-export default function TestComponent() {
-  return <${componentName} />;
-}`;
-
-      // This is REAL validation - if Sucrase can't compile it, it's actually broken
+      // Use pre-compiled JS if available, otherwise compile TSX
       let transformedCode: string;
-      try {
-        const result = transform(testCompositeCode, {
-          transforms: ['typescript', 'jsx'],
-          jsxRuntime: 'classic',
-          production: false,
-        });
-        transformedCode = result.code;
-      } catch (syntaxError) {
-        // Sucrase compilation failed - this is a syntax error
-        console.error(`[PreviewPanelG] ❌ Scene ${index} (${sceneName}) has SYNTAX ERROR:`, syntaxError);
-        console.log('[PreviewPanelG] Dispatching preview-scene-error event for auto-fix');
+      let compiledSnippet: string = '';
+      
+      if (preCompiledJS) {
+        // 🚀 FAST PATH: Use pre-compiled JavaScript directly
+        console.log(`[PreviewPanelG] 🚀 Using pre-compiled JS for scene ${index} (${sceneName})`);
         
-        // Still dispatch the error event for auto-fix
-        const errorMessage = syntaxError instanceof Error ? syntaxError.message : 'Syntax error in scene code';
-        const errorEvent = new CustomEvent('preview-scene-error', {
-          detail: {
-            sceneId,
-            sceneName,
-            sceneIndex: index + 1,
-            error: new Error(`Syntax Error in ${sceneName}: ${errorMessage}`)
+        // Pre-compiled JS has export statements, we need to remove ALL of them
+        // 1. Remove export default function
+        // 2. Remove export const statements
+        // 3. Remove any other export statements
+        let cleanCompiledJS = preCompiledJS
+          .replace(/export\s+default\s+function\s+(\w+)/g, 'function $1')
+          .replace(/export\s+default\s+(\w+);?\s*/g, '') // Remove standalone export default
+          .replace(/export\s+const\s+(\w+)\s*=\s*([^;]+);?/g, 'const $1 = $2;') // Keep const but remove export
+          .replace(/export\s+\{[^}]*\};?\s*/g, '') // Remove named exports
+          // Strip import lines that cannot execute inside Function/concatenated context
+          .replace(/^[\t ]*import[^;]*;?\s*$/gmi, '');
+        
+        transformedCode = cleanCompiledJS;
+        // Ensure the name we use is a valid identifier (letters, digits, _, $) and not empty
+        if (!/^[A-Za-z_$][\w$]*$/.test(componentName)) {
+          componentName = `Scene${index}Component`;
+        }
+        // Create a unique, stable name per scene to avoid collisions across scenes
+        const shortId = (String(sceneId || '')).replace(/[^a-zA-Z0-9]/g, '').slice(0, 8) || `idx${index}`;
+        const uniqueComponentName = `${componentName}_${shortId}`;
+
+        // Wrap precompiled JS so its trailing `return Component;` runs in function scope
+        // and assign returned component to a uniquely named constant available in module scope.
+        const wrappedPrecompiled = `const ${uniqueComponentName} = (function(){\n${transformedCode}\n})();`;
+        compiledSnippet = wrappedPrecompiled;
+        componentName = uniqueComponentName;
+      } else {
+        // ⚠️ SLOW PATH: Client-side compilation (legacy)
+        console.log(`[PreviewPanelG] ⚠️ No pre-compiled JS, using client-side compilation for scene ${index} (${sceneName})`);
+        try { metricsRef.current.slowPath += 1; } catch {}
+
+        // Transform the cleaned TSX to plain JS (classic runtime)
+        try {
+          const tsxToCompile = cleanSceneCode || tsxCode;
+          const result = transform(tsxToCompile, {
+            transforms: ['typescript', 'jsx'],
+            jsxRuntime: 'classic',
+            production: false,
+          });
+          let jsOut = result.code
+            // Remove export statements to keep functions available by name
+            .replace(/export\s+default\s+function\s+(\w+)/g, 'function $1')
+            .replace(/export\s+default\s+(\w+);?\s*/g, '')
+            .replace(/export\s+const\s+(\w+)\s*=\s*([^;]+);?/g, 'const $1 = $2;')
+            .replace(/export\s+\{[^}]*\};?\s*/g, '');
+
+          transformedCode = jsOut;
+
+          // Ensure the name we use is a valid identifier (letters, digits, _, $) and not empty
+          if (!/^[A-Za-z_$][\w$]*$/.test(componentName)) {
+            componentName = `Scene${index}Component`;
           }
-        });
-        window.dispatchEvent(errorEvent);
-        console.log('[PreviewPanelG] Error event dispatched for scene:', sceneId);
-        
-        // Re-throw to handle in outer catch
-        throw syntaxError;
+          // Create a unique, stable name per scene to avoid collisions across scenes
+          const shortId = (String(sceneId || '')).replace(/[^a-zA-Z0-9]/g, '').slice(0, 8) || `idx${index}`;
+          const uniqueComponentName = `${componentName}_${shortId}`;
+
+          // Wrap TSX-compiled JS inside an IIFE and explicitly return the component to avoid
+          // leaking top-level declarations into module scope and to guarantee uniqueness.
+          const wrappedClientCompiled = `const ${uniqueComponentName} = (function(){\n${jsOut}\nreturn ${componentName};\n})();`;
+          compiledSnippet = wrappedClientCompiled;
+          componentName = uniqueComponentName;
+        } catch (syntaxError) {
+          console.error(`[PreviewPanelG] ❌ Scene ${index} (${sceneName}) has SYNTAX ERROR during client compile:`, syntaxError);
+          console.log('[PreviewPanelG] Dispatching preview-scene-error event for auto-fix');
+          const errorMessage = syntaxError instanceof Error ? syntaxError.message : 'Syntax error in scene code';
+          const errorEvent = new CustomEvent('preview-scene-error', {
+            detail: {
+              sceneId,
+              sceneName,
+              sceneIndex: index + 1,
+              error: new Error(`Syntax Error in ${sceneName}: ${errorMessage}`)
+            }
+          });
+          window.dispatchEvent(errorEvent);
+          throw syntaxError;
+        }
+      }
+
+      // Decide final compiled snippet for this scene
+      if (!compiledSnippet) {
+        // As a last resort, use the cleaned TSX (rare) - but this should usually be JS at this point
+        compiledSnippet = cleanSceneCode;
       }
 
       // Scene compiled successfully
@@ -460,14 +673,16 @@ export default function TestComponent() {
       });
       window.dispatchEvent(successEvent);
       
+      // Return the appropriate code based on what was used
       return {
         isValid: true,
-        compiledCode: cleanSceneCode,
+        compiledCode: compiledSnippet,
         componentName: componentName
       };
 
     } catch (error) {
       console.error(`[PreviewPanelG] ❌ Scene ${index} (${sceneName}) REAL compilation failed:`, error);
+      try { metricsRef.current.errors += 1; } catch {}
       
       // Enhanced error message with scene identification
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -507,9 +722,9 @@ function FallbackScene${sceneIndex}() {
     const autoFixEvent = new CustomEvent('trigger-autofix', {
       detail: {
         sceneId: '${sceneId || sceneName}', // Use actual scene ID if available
-        sceneName: '${sceneName || `Scene ${sceneIndex + 1}`}',
+        sceneName: ${JSON.stringify(sceneName || ('Scene ' + (sceneIndex + 1)))},
         sceneIndex: ${sceneIndex + 1},
-        error: { message: '${errorDetails || 'Compilation error'}' }
+        error: { message: ${JSON.stringify(errorDetails || 'Compilation error')} }
       }
     });
     window.dispatchEvent(autoFixEvent);
@@ -584,7 +799,7 @@ function FallbackScene${sceneIndex}() {
         top: '-50%',
         left: '-50%',
         opacity: 0.1,
-        transform: \`rotate(\${bgRotation}deg)\`,
+        transform: 'rotate(' + bgRotation + 'deg)',
       }}>
         <div style={{
           position: 'absolute',
@@ -613,7 +828,7 @@ function FallbackScene${sceneIndex}() {
         boxShadow: '0 20px 60px rgba(0,0,0,0.12)',
         maxWidth: '680px',
         textAlign: 'center',
-        transform: \`scale(\${scale})\`,
+        transform: 'scale(' + scale + ')',
         fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
         position: 'relative',
         zIndex: 1,
@@ -647,7 +862,7 @@ function FallbackScene${sceneIndex}() {
         <div style={{ 
           fontSize: '4.5rem', 
           marginBottom: '2rem',
-          transform: \`translateY(\${iconFloat}px)\`,
+          transform: 'translateY(' + iconFloat + 'px)',
           transition: 'transform 0.3s ease',
         }}>
           🤖
@@ -670,7 +885,7 @@ function FallbackScene${sceneIndex}() {
           lineHeight: '1.5',
           fontWeight: '500',
         }}>
-          Scene: <strong style={{ color: '#111827' }}>${sceneName || `Scene ${sceneIndex + 1}`}</strong>
+          Scene: ${sceneName || ('Scene ' + (sceneIndex + 1))}
         </p>
         
         <p style={{ 
@@ -681,10 +896,7 @@ function FallbackScene${sceneIndex}() {
           maxWidth: '500px',
           margin: '16px auto 32px',
         }}>
-          The AI-generated code has a compilation error that prevents it from running.
-          <strong style={{ color: '#059669', display: 'block', marginTop: '12px' }}>
-            Good news: Our AI agent is already working on a fix and will automatically update your video when ready!
-          </strong>
+          The AI-generated code has a compilation error that prevents it from running.\n\nGood news: Our AI agent is already working on a fix and will automatically update your video when ready!
         </p>
         
         {/* Progress indicator */}
@@ -747,70 +959,9 @@ function FallbackScene${sceneIndex}() {
           Other scenes continue playing normally
         </div>
         
-        ${errorDetails ? `
-        <div style={{ 
-          marginTop: '24px',
-          padding: '16px',
-          background: '#fef2f2',
-          borderRadius: '12px',
-          border: '1px solid #fecaca',
-          textAlign: 'left',
-        }}>
-          <div style={{ 
-            fontSize: '0.75rem',
-            fontWeight: '600',
-            color: '#991b1b',
-            marginBottom: '8px',
-          }}>
-            Technical Details:
-          </div>
-          <div style={{ 
-            fontSize: '0.7rem',
-            color: '#dc2626',
-            fontFamily: 'monospace',
-            lineHeight: '1.5',
-            wordBreak: 'break-word',
-            maxHeight: '120px',
-            overflowY: 'auto',
-          }}>
-            ${errorDetails}
-          </div>
-        </div>
-        ` : ''}
-        
-        <div style={{ 
-          fontSize: '0.75rem', 
-          color: '#9ca3af', 
-          marginTop: '24px', 
-          fontStyle: 'italic',
-          maxWidth: '420px',
-          margin: '24px auto 0',
-          lineHeight: '1.5',
-          paddingTop: '20px',
-          borderTop: '1px solid #e5e7eb',
-        }}>
-          "If you're not embarrassed by the first version of your product, you've launched too late."
-          <br />
-          <span style={{ fontWeight: '500' }}>— Reid Hoffman</span>
-        </div>
       </div>
       
-      <style jsx>{\`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.3; }
-        }
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      \`}</style>
       
-      <style jsx>{\`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
       \`}</style>
     </AbsoluteFill>
   );
@@ -825,10 +976,10 @@ function FallbackScene${sceneIndex}() {
     if (orderedScenes.length === 0) {
       // Provide a minimal placeholder component so the Player stays stable when there are no scenes
       const placeholder = `
-const { AbsoluteFill } = window.Remotion;
+const React = window.React;
 
 export default function EmptyComposition() {
-  return React.createElement(AbsoluteFill, { style: { backgroundColor: 'white' } });
+  return React.createElement(window.Remotion.AbsoluteFill, { style: { backgroundColor: 'white' } });
 }`;
       try {
         const { code: transformed } = transform(placeholder, {
@@ -878,6 +1029,15 @@ export default function EmptyComposition() {
       
       const validScenes = compiledScenes.filter(s => s.isValid).length;
       console.log(`[PreviewPanelG] 🛡️ ISOLATION: ${validScenes}/${compiledScenes.length} scenes compiled successfully - broken scenes isolated`);
+      try {
+        console.log('[PreviewPanelG][Metrics] Compilation summary (partial):', {
+          runs: metricsRef.current.runs,
+          scenes: compiledScenes.length,
+          precompiledUsed: metricsRef.current.precompiled,
+          slowPathUsed: metricsRef.current.slowPath,
+          errors: metricsRef.current.errors,
+        });
+      } catch {}
       
       // 🚨 CRITICAL FIX: Continue even if some scenes fail - we'll use fallbacks for broken scenes
       if (validScenes === 0 && compiledScenes.length > 0) {
@@ -919,111 +1079,36 @@ export default function EmptyComposition() {
         }
         
         const allImportsArray = Array.from(allImports);
-        const singleDestructuring = `const { ${allImportsArray.join(', ')} } = window.Remotion;`;
+        const singleDestructuring = ``; // Avoid module-scope destructuring; wrapper uses window.Remotion.*
 
         // Generate simple single scene composition
-        const compositeCode = `
-${singleDestructuring}
-// Preserve native Audio constructor for scenes that might need it
-const NativeAudio = window.NativeAudio || window.Audio;
-
-// Create a wrapper component that loads fonts before rendering the scene
-const FontLoader = ({ children }) => {
-  const [fontsLoaded, setFontsLoaded] = React.useState(false);
-  
-  React.useEffect(() => {
-    // Inject font styles directly into the document
-    if (!document.getElementById('bazaar-preview-fonts')) {
-      const style = document.createElement('style');
-      style.id = 'bazaar-preview-fonts';
-      style.textContent = \`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap');
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
-        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap');
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap');
-        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap');
-      \`;
-      document.head.appendChild(style);
-      
-      // Wait a bit for fonts to load
-      setTimeout(() => setFontsLoaded(true), 100);
-    } else {
-      setFontsLoaded(true);
-    }
-  }, []);
-  
-  // Show loading state while fonts load
-  if (!fontsLoaded) {
-    return React.createElement(AbsoluteFill, {
-      style: { backgroundColor: 'white' }
-    });
-  }
-  
-  return children;
-};
-
-// Create a REAL implementation of RemotionGoogleFonts that actually loads fonts
-if (!window.RemotionGoogleFontsLoaded) {
-  window.RemotionGoogleFontsLoaded = new Set();
-}
-
-window.RemotionGoogleFonts = {
-  loadFont: (fontFamily, options) => {
-    const fontKey = \`\${fontFamily}-\${JSON.stringify(options?.weights || [])}\`;
-    
-    if (!window.RemotionGoogleFontsLoaded.has(fontKey)) {
-      window.RemotionGoogleFontsLoaded.add(fontKey);
-      
-      // Build the Google Fonts URL with the specific weights
-      const weights = options?.weights || ['400'];
-      const weightString = weights.join(';');
-      const fontUrl = \`https://fonts.googleapis.com/css2?family=\${fontFamily.replace(' ', '+')}:wght@\${weightString}&display=swap\`;
-      
-      // Create and inject the font link
-      const linkId = \`font-\${fontFamily}-\${weightString}\`.replace(/[^a-zA-Z0-9-]/g, '');
-      if (!document.getElementById(linkId)) {
-        const link = document.createElement('link');
-        link.id = linkId;
-        link.rel = 'stylesheet';
-        link.href = fontUrl;
-        document.head.appendChild(link);
-        console.log(\`[PreviewPanelG] Loading font: \${fontFamily} with weights \${weights.join(', ')}\`);
+        // Check if scene already has window.Remotion destructuring
+        const sceneHasRemotionDestructuring = scene.compiledCode.includes('= window.Remotion');
         
-        // Force font loading by checking if it's available
-        if (document.fonts && document.fonts.check) {
-          setTimeout(() => {
-            weights.forEach(weight => {
-              const testString = \`\${weight} 16px "\${fontFamily}"\`;
-              if (!document.fonts.check(testString)) {
-                console.log(\`[PreviewPanelG] Font not yet loaded: \${testString}\`);
-                // Try to trigger loading by using the font
-                const testDiv = document.createElement('div');
-                testDiv.style.fontFamily = \`"\${fontFamily}", sans-serif\`;
-                testDiv.style.fontWeight = weight;
-                testDiv.style.position = 'absolute';
-                testDiv.style.visibility = 'hidden';
-                testDiv.textContent = 'Test';
-                document.body.appendChild(testDiv);
-                setTimeout(() => document.body.removeChild(testDiv), 100);
-              } else {
-                console.log(\`[PreviewPanelG] Font confirmed loaded: \${testString}\`);
-              }
-            });
-          }, 500); // Give time for CSS to load
+        const header = buildCompositeHeader({ includeIconFallback: true, includeFontsLoader: true });
+        const __unusedLegacyComposite = `
+${header}
+
+// Add IconifyIcon fallback to prevent runtime errors when icons haven't been replaced
+if (!window.IconifyIcon) {
+  window.IconifyIcon = (props) => {
+    const style = props?.style || {};
+    return React.createElement(
+      'span',
+      {
+        ...props,
+        style: {
+          display: 'inline-block',
+          width: style.width || '1em',
+          height: style.height || '1em',
+          background: style.background || 'currentColor',
+          borderRadius: style.borderRadius || '2px',
+          ...style,
         }
       }
-    }
-    
-    // Return a mock result similar to @remotion/google-fonts
-    return {
-      fontFamily: fontFamily,
-      fonts: {},
-      unicodeRanges: {},
-      waitUntilDone: () => Promise.resolve()
-    };
-  }
-};
+    );
+  };
+}
 
 ${scene.compiledCode}
 
@@ -1079,7 +1164,7 @@ class SingleSceneErrorBoundary extends React.Component {
               boxShadow: '0 20px 60px rgba(0,0,0,0.12)',
               maxWidth: '640px',
               textAlign: 'center',
-              transform: \`scale(\${scale})\`,
+              transform: 'scale(' + scale + ')',
               fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
               position: 'relative',
             }}>
@@ -1219,16 +1304,7 @@ class SingleSceneErrorBoundary extends React.Component {
               </div>
             </div>
             
-            <style jsx>{\`
-              @keyframes pulse {
-                0%, 100% { opacity: 1; }
-                50% { opacity: 0.3; }
-              }
-              @keyframes spin {
-                from { transform: rotate(0deg); }
-                to { transform: rotate(360deg); }
-              }
-            \`}</style>
+            
           </AbsoluteFill>
         );
       };
@@ -1282,8 +1358,8 @@ const EnhancedAudio = ({ audioData }) => {
     return null;
   }
   
-  return React.createElement(Sequence, { from: videoStartFrame, durationInFrames: audioDurationFrames },
-    React.createElement(Audio, {
+  return React.createElement(window.Remotion.Sequence, { from: videoStartFrame, durationInFrames: audioDurationFrames },
+    React.createElement(window.Remotion.Audio, {
       src: audioData.url,
       startFrom: audioOffsetFrames, // This is the key fix - offset within the audio file
       // endAt intentionally omitted; Sequence duration bounds playback
@@ -1298,7 +1374,7 @@ export default function SingleSceneComposition() {
   const projectAudio = window.projectAudio;
   
   return React.createElement(FontLoader, {},
-    React.createElement(AbsoluteFill, {},
+    React.createElement(window.Remotion.AbsoluteFill, {},
       projectAudio && projectAudio.url && React.createElement(EnhancedAudio, { audioData: projectAudio }),
       React.createElement(SingleSceneErrorBoundary)
     )
@@ -1306,14 +1382,23 @@ export default function SingleSceneComposition() {
 }
         `;
 
+        // Use unified builder for single-scene module to avoid inline duplication
+        const compositeCode = buildSingleSceneModule({ code: scene.compiledCode, componentName: scene.componentName }, { includeFontsLoader: true, includeIconFallback: true, withAudio: true });
         console.log('[PreviewPanelG] Generated single scene code:', compositeCode);
 
-        // Transform with Sucrase
-        const { code: transformedCode } = transform(compositeCode, {
-          transforms: ['typescript', 'jsx'],
-          jsxRuntime: 'classic',
-          production: false,
-        });
+        // Transform with Sucrase, but fall back to raw JS if parser hits an edge case
+        let transformedCode: string;
+        try {
+          const out = transform(compositeCode, {
+            transforms: ['typescript', 'jsx'],
+            jsxRuntime: 'classic',
+            production: false,
+          });
+          transformedCode = out.code;
+        } catch (e) {
+          console.warn('[PreviewPanelG] Sucrase failed on single-scene composite; using raw code fallback', e);
+          transformedCode = compositeCode;
+        }
 
         // Sucrase transformation successful
         
@@ -1406,6 +1491,13 @@ export default function SingleSceneComposition() {
               usedRemotionFns.forEach((fn) => allImports.add(fn));
 
               // ✅ VALID: Add working scene with error boundary for runtime protection
+              // Heuristic: If scene defines SVG defs/filters/gradients, disable premount to avoid DOM ID collisions
+              const hasSvgDefsOrFilters = /React\.createElement\(\s*['"]defs['"]/m.test(wrappedSceneCode!)
+                || /linearGradient/m.test(wrappedSceneCode!)
+                || /url\(#/m.test(wrappedSceneCode!)
+                || /clipPath/m.test(wrappedSceneCode!)
+                || /mask\s*:/m.test(wrappedSceneCode!);
+              const premountValue = hasSvgDefsOrFilters ? 0 : 60;
               const errorBoundaryWrapper = `
 // React Error Boundary for Scene ${index} (Valid)
 var ${sceneNamespaceName}ErrorBoundary = class extends React.Component {
@@ -1425,7 +1517,7 @@ var ${sceneNamespaceName}ErrorBoundary = class extends React.Component {
     const errorEvent = new CustomEvent('preview-scene-error', {
       detail: {
         sceneId: '${originalScene.id}',
-        sceneName: '${(originalScene.data as any)?.name || `Scene ${index + 1}`}',
+        sceneName: ${JSON.stringify((originalScene.data as any)?.name || ('Scene ' + (index + 1)))},
         error: error
       }
     });
@@ -1536,7 +1628,7 @@ var ${sceneNamespaceName}ErrorBoundary = class extends React.Component {
                 fontSize: '1.125rem',
                 fontWeight: '500'
               }
-            }, '${(originalScene.data as any)?.name || 'Unnamed Scene'}'),
+            }, ${JSON.stringify((originalScene.data as any)?.name || 'Unnamed Scene')}),
             
             React.createElement('p', {
               key: 'msg',
@@ -1689,7 +1781,7 @@ var ${sceneNamespaceName}WithErrorBoundary = function() {
               sceneImports.push(errorBoundaryWrapper);
               // Render with error boundary; offset applied via namespaced useCurrentFrame
               sceneComponents.push(`
-                React.createElement(Series.Sequence, { durationInFrames: ${originalScene.duration || 150}, premountFor: 60 },
+                React.createElement(window.Remotion.Series.Sequence, { durationInFrames: ${originalScene.duration || 150}, premountFor: ${premountValue} },
                   React.createElement(${sceneNamespaceName}WithErrorBoundary, {})
                 )
               `);
@@ -1701,7 +1793,7 @@ var ${sceneNamespaceName}WithErrorBoundary = function() {
               // ✅ INVALID: Add fallback scene (compiled.compiledCode is already the fallback)
               sceneImports.push(compiled.compiledCode);
               sceneComponents.push(`
-                React.createElement(Series.Sequence, { durationInFrames: ${originalScene.duration || 150}, premountFor: 60 },
+                React.createElement(window.Remotion.Series.Sequence, { durationInFrames: ${originalScene.duration || 150}, premountFor: 60 },
                   React.createElement(${compiled.componentName}, {})
                 )
               `);
@@ -1716,7 +1808,7 @@ var ${sceneNamespaceName}WithErrorBoundary = function() {
               );
               sceneImports.push(placeholderScene);
               sceneComponents.push(`
-                React.createElement(Series.Sequence, { durationInFrames: ${originalScene.duration || 150}, premountFor: 60 },
+                React.createElement(window.Remotion.Series.Sequence, { durationInFrames: ${originalScene.duration || 150}, premountFor: 60 },
                   React.createElement(FallbackScene${index}, {})
                 )
               `);
@@ -1812,8 +1904,8 @@ function EmergencyScene${index}() {
   );
 }`;
             sceneImports.push(emergencyFallback);
-            sceneComponents.push(`
-              React.createElement(Series.Sequence, { durationInFrames: ${originalScene.duration || 150}, premountFor: 60 },
+              sceneComponents.push(`
+              React.createElement(window.Remotion.Series.Sequence, { durationInFrames: ${originalScene.duration || 150}, premountFor: 60 },
                 React.createElement(EmergencyScene${index}, {})
               )
             `);
@@ -1830,28 +1922,28 @@ function EmergencyScene${index}() {
         }
         
         const allImportsArray = Array.from(allImports);
-        const singleDestructuring = `const { ${allImportsArray.join(', ')} } = window.Remotion;`;
+        const singleDestructuring = ``; // Avoid module-scope destructuring; wrapper uses window.Remotion.*
+
+        // Check if any scene already has window.Remotion destructuring
+        const anySceneHasRemotionDestructuring = sceneComponents.some(comp => 
+          comp.includes('= window.Remotion')
+        );
 
         // Generate the composite code with single destructuring at top
-        const compositeCode = `
-${singleDestructuring}
-// Preserve native Audio constructor for scenes that might need it
-const NativeAudio = window.NativeAudio || window.Audio;
-
+        const headerMulti = buildCompositeHeader({ includeIconFallback: true, includeFontsLoader: true });
+        const __unusedLegacyCompositeMulti = `
+${headerMulti}
 // Load Google Fonts for consistent rendering between preview and export
 if (typeof window !== 'undefined' && !window.bazaarFontsLoaded) {
   const link = document.createElement('link');
   link.rel = 'preconnect';
   link.href = 'https://fonts.googleapis.com';
   document.head.appendChild(link);
-  
   const link2 = document.createElement('link');
   link2.rel = 'preconnect';
   link2.href = 'https://fonts.gstatic.com';
   link2.crossOrigin = 'anonymous';
   document.head.appendChild(link2);
-  
-  // Load comprehensive font collection in batches to avoid URL length limits
   const fontGroups = [
     // Group 1: Core Sans-Serif - Ensure Inter 700 is explicitly included
     'Inter:wght@100;200;300;400;500;600;700;800;900&family=Roboto:wght@100;300;400;500;700;900&family=Poppins:wght@100..900&family=Montserrat:wght@100..900&family=Open+Sans:wght@300..800&family=Lato:wght@100;300;400;700;900&family=Raleway:wght@100..900&family=Ubuntu:wght@300..700&family=Oswald:wght@200..700&family=Nunito:wght@200..900',
@@ -1877,41 +1969,7 @@ if (typeof window !== 'undefined' && !window.bazaarFontsLoaded) {
   console.log('[Bazaar] Google Fonts loaded for consistent rendering');
 }
 
-// Create a wrapper component that loads fonts before rendering scenes
-const FontLoader = ({ children }) => {
-  const [fontsLoaded, setFontsLoaded] = React.useState(false);
-  
-  React.useEffect(() => {
-    // Inject font styles directly into the document
-    if (!document.getElementById('bazaar-preview-fonts')) {
-      const style = document.createElement('style');
-      style.id = 'bazaar-preview-fonts';
-      style.textContent = \`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap');
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
-        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap');
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap');
-        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap');
-      \`;
-      document.head.appendChild(style);
-      
-      // Wait a bit for fonts to load
-      setTimeout(() => setFontsLoaded(true), 100);
-    } else {
-      setFontsLoaded(true);
-    }
-  }, []);
-  
-  // Show loading state while fonts load
-  if (!fontsLoaded) {
-    return React.createElement(AbsoluteFill, {
-      style: { backgroundColor: 'white' }
-    });
-  }
-  
-  return children;
-};
+// FontLoader is defined by buildCompositeHeader; do not redeclare here
 
 // Create a REAL implementation of RemotionGoogleFonts that actually loads fonts
 if (!window.RemotionGoogleFontsLoaded) {
@@ -2044,10 +2102,10 @@ export default function MultiSceneComposition(props) {
   }, [projectAudio]);
   
   return React.createElement(FontLoader, {},
-    React.createElement(AbsoluteFill, {},
+    React.createElement(window.Remotion.AbsoluteFill, {},
       projectAudio && projectAudio.url && React.createElement(EnhancedAudio, { audioData: projectAudio }),
       // NO LOOP! Direct Series for proper frame mapping
-      React.createElement(Series, {},
+      React.createElement(window.Remotion.Series, {},
         ${sceneComponents.join(',\n          ')}
       )
     )
@@ -2056,15 +2114,22 @@ export default function MultiSceneComposition(props) {
         `;
 
         // Generated multi-scene composite code
+        // Use unified builder for multi-scene module
+        const compositeCode = buildMultiSceneModule({ sceneImports, sceneComponents, includeFontsLoader: true, includeIconFallback: true, totalDurationInFrames: totalDuration });
 
-        // Transform with Sucrase
-        const { code: transformedCode } = transform(compositeCode, {
-          transforms: ['typescript', 'jsx'],
-          jsxRuntime: 'classic',
-          production: false,
-        });
-
-        // Sucrase transformation successful
+        // Transform with Sucrase, but fall back to raw JS if parser hits an edge case
+        let transformedCode: string;
+        try {
+          const out = transform(compositeCode, {
+            transforms: ['typescript', 'jsx'],
+            jsxRuntime: 'classic',
+            production: false,
+          });
+          transformedCode = out.code;
+        } catch (e) {
+          console.warn('[PreviewPanelG] Sucrase failed on multi-scene composite; using raw code fallback', e);
+          transformedCode = compositeCode;
+        }
         
         // Cleanup old blob URL before creating new one
         if (componentBlobUrl) {
@@ -2566,10 +2631,11 @@ export default function FallbackComposition() {
       />
       
       <div className="relative flex-grow flex items-center justify-center">
+        {/* Preview source indicator removed in this branch */}
         {componentImporter && playerProps ? (
           <div 
             className={cn(
-              "relative bg-black shadow-xl flex items-center justify-center",
+              "relative bg-white shadow-xl flex items-center justify-center",
               // On mobile, optimize for viewport
               "w-full h-full"
             )}
@@ -2605,6 +2671,26 @@ export default function FallbackComposition() {
                 })()}
                 onPlay={() => {
                   setIsPlaying(true);
+                  try {
+                    // Ensure player is unmuted and volume up if API available
+                    try {
+                      const api: any = playerRef.current as any;
+                      if (api?.setMuted) api.setMuted(false);
+                      if (api?.setVolume) api.setVolume(1);
+                    } catch {}
+
+                    // Ensure audio starts at offset for immediate sound if project has audio
+                    const pa = (playerProps.inputProps as any)?.audio;
+                    const fps = playerProps.fps || 30;
+                    const offsetSec = Math.max(0, pa?.timelineOffsetSec || 0);
+                    if (playerRef.current && offsetSec > 0) {
+                      const current = (playerRef.current as any)?.getCurrentFrame?.() ?? 0;
+                      const target = Math.floor(offsetSec * fps);
+                      if (typeof current === 'number' && current < target) {
+                        playerRef.current.seekTo(target);
+                      }
+                    }
+                  } catch {}
                   const event = new CustomEvent('preview-play-state-change', { 
                     detail: { playing: true }
                   });

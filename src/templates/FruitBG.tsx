@@ -105,9 +105,8 @@ export const templateConfig = {
   name: 'Fruit BG',
   duration: 240, // 8 seconds
   previewFrame: 120,
-  getCode: () => `const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } = window.Remotion;
-
-export default function FruitBG() {
+  getCode: () => `function FruitBG() {
+  const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } = window.Remotion;
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
@@ -192,12 +191,10 @@ export default function FruitBG() {
 
   const gradientStyle = \`linear-gradient(\${angle}deg, hsl(\${hue1}, \${saturation1}%, \${lightness1}%), hsl(\${hue2}, \${saturation2}%, \${lightness2}%))\`;
 
-  return (
-    <AbsoluteFill
-      style={{
-        background: gradientStyle,
-      }}
-    />
-  );
+  return React.createElement(AbsoluteFill, {
+    style: {
+      background: gradientStyle,
+    }
+  });
 }`
 }; 

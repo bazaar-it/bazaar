@@ -1,8 +1,10 @@
 import { z } from "zod";
 import { protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
+import { env } from "~/env";
+import { sceneCompiler } from "~/server/services/compilation/scene-compiler.service";
 import { scenes, projects, messages, sceneOperations } from "~/server/db/schema";
-import { eq, and, desc, gte, sql } from "drizzle-orm";
+import { eq, and, desc, gte, sql, isNull } from "drizzle-orm";
 import { messageService } from "~/server/services/data/message.service";
 import { orchestrator } from "~/brain/orchestratorNEW";
 import type { BrainDecision } from "~/lib/types/ai/brain.types";
@@ -37,6 +39,8 @@ export const generateScene = protectedProcedure
     assistantMessageId: z.string().optional(), // For updating existing message
     metadata: z.object({
       timezone: z.string().optional(),
+      // NEW: Suppress assistant chat message creation (silent flows like auto-fix)
+      suppressAssistantMessage: z.boolean().optional(),
     }).optional(),
   }))
   .mutation(async ({ input, ctx }): Promise<SceneCreateResponse> => {
@@ -338,18 +342,28 @@ export const generateScene = protectedProcedure
         if (input.assistantMessageId) {
           // Update existing message from SSE
           assistantMessageId = input.assistantMessageId;
+          const { sanitizeAssistantMessage } = await import('~/lib/utils/chat-sanitizer');
+          const safeClarification = sanitizeAssistantMessage(
+            orchestratorResponse.chatResponse || 'Could you provide more details?',
+            'Could you provide more details?'
+          ).message;
           await db.update(messages)
             .set({
-              content: orchestratorResponse.chatResponse || "Could you provide more details?",
+              content: safeClarification,
               status: 'success', // Clarification is a successful response
               updatedAt: new Date(),
             })
             .where(eq(messages.id, input.assistantMessageId));
         } else {
           // Create new message if no SSE message exists (fallback)
+          const { sanitizeAssistantMessage } = await import('~/lib/utils/chat-sanitizer');
+          const safeClarification = sanitizeAssistantMessage(
+            orchestratorResponse.chatResponse || 'Could you provide more details?',
+            'Could you provide more details?'
+          ).message;
           const newAssistantMessage = await messageService.createMessage({
             projectId,
-            content: orchestratorResponse.chatResponse || "Could you provide more details?",
+            content: safeClarification,
             role: "assistant",
             status: "success",
           });
@@ -388,8 +402,15 @@ export const generateScene = protectedProcedure
         if ((!ctx.videoUrls || ctx.videoUrls.length === 0) && inheritedVideoUrls.length > 0) {
           ctx.videoUrls = inheritedVideoUrls;
         }
+        // Only inherit audio if the project currently has background audio set.
+        // If the user has deleted audio from the project (project.audio is null),
+        // do NOT resurrect audio from a previous user message unless the current
+        // request explicitly includes audioUrls.
         if ((!ctx.audioUrls || ctx.audioUrls.length === 0) && inheritedAudioUrls.length > 0) {
-          ctx.audioUrls = inheritedAudioUrls;
+          const projectHasAudio = !!(project as any)?.audio;
+          if (projectHasAudio) {
+            ctx.audioUrls = inheritedAudioUrls;
+          }
         }
         if ((!ctx.referencedSceneIds || ctx.referencedSceneIds.length === 0) && inheritedSceneUrls.length > 0) {
           ctx.referencedSceneIds = inheritedSceneUrls;
@@ -407,27 +428,46 @@ export const generateScene = protectedProcedure
       // 6. ✅ IMMEDIATE DELIVERY: Update or create assistant's response and deliver to chat immediately
       let assistantMessageId: string | undefined;
       
-      if (input.assistantMessageId) {
-        // Update existing message from SSE
-        assistantMessageId = input.assistantMessageId;
-        await db.update(messages)
-          .set({
-            content: decision.chatResponse || "Processing your request...",
-            status: 'success', // Mark as success immediately for user feedback delivery
-            updatedAt: new Date(),
-          })
-          .where(eq(messages.id, input.assistantMessageId));
-        console.log(`[${response.getRequestId()}] ✅ IMMEDIATE: Updated assistant message delivered to chat: ${assistantMessageId}`);
-      } else if (decision.chatResponse) {
-        // Create new message if no SSE message exists (fallback)
-        const newAssistantMessage = await messageService.createMessage({
-          projectId,
-          content: decision.chatResponse,
-          role: "assistant",
-          status: "success", // Mark as success immediately for user feedback delivery
-        });
-        assistantMessageId = newAssistantMessage?.id;
-        console.log(`[${response.getRequestId()}] ✅ IMMEDIATE: Created new assistant message delivered to chat: ${assistantMessageId}`);
+      // Build safe, user-friendly message; fallback based on operation and prompt
+      const opMap: Record<string, 'create' | 'edit' | 'delete' | 'trim'> = {
+        addScene: 'create',
+        editScene: 'edit',
+        deleteScene: 'delete',
+        trimScene: 'trim',
+      } as const;
+      const plannedOp = opMap[orchestratorResponse.result.toolName as keyof typeof opMap] || 'create';
+      const fallbackText = formatSceneOperationMessage(
+        plannedOp,
+        { name: 'Scene' },
+        { userPrompt: userMessage }
+      );
+      const { sanitizeAssistantMessage } = await import('~/lib/utils/chat-sanitizer');
+      const safeChat = sanitizeAssistantMessage(decision.chatResponse, fallbackText).message;
+
+      // Respect suppression flag (silent auto-fix or other system flows)
+      if (!input.metadata?.suppressAssistantMessage) {
+        if (input.assistantMessageId) {
+          // Update existing message from SSE
+          assistantMessageId = input.assistantMessageId;
+          await db.update(messages)
+            .set({
+              content: safeChat || 'Processing your request...',
+              status: 'success',
+              updatedAt: new Date(),
+            })
+            .where(eq(messages.id, input.assistantMessageId));
+          console.log(`[${response.getRequestId()}] ✅ IMMEDIATE: Updated assistant message delivered to chat: ${assistantMessageId}`);
+        } else if (safeChat) {
+          // Create new message if no SSE message exists (fallback)
+          const newAssistantMessage = await messageService.createMessage({
+            projectId,
+            content: safeChat,
+            role: 'assistant',
+            status: 'success',
+          });
+          assistantMessageId = newAssistantMessage?.id;
+          console.log(`[${response.getRequestId()}] ✅ IMMEDIATE: Created new assistant message delivered to chat: ${assistantMessageId}`);
+        }
       }
 
       // 7. Execute the tool
@@ -514,7 +554,7 @@ export const generateScene = protectedProcedure
             context: {
               reasoning: decision.reasoning,
               // Prefer explicit chatResponse from tool if present; fall back to decision text
-              chatResponse: (toolResult as any).chatResponse || (decision as any).chatResponse,
+              chatResponse: input.metadata?.suppressAssistantMessage ? undefined : ((toolResult as any).chatResponse || (decision as any).chatResponse),
             },
             assistantMessageId,
             additionalMessageIds: toolResult.additionalMessageIds || [],
@@ -610,7 +650,7 @@ export const generateScene = protectedProcedure
         ...successResponse,
         context: {
           reasoning: decision.reasoning,
-          chatResponse: decision.chatResponse,
+          chatResponse: input.metadata?.suppressAssistantMessage ? undefined : decision.chatResponse,
         },
         assistantMessageId, // Include the assistant message ID
         // ✅ INCLUDE ADDITIONAL MESSAGE IDs FOR CLIENT SYNC
@@ -727,12 +767,12 @@ export const removeScene = protectedProcedure
         }
       }
 
-      // 2. Delete the scene, then normalize order and bump revision
-      await db.delete(scenes).where(eq(scenes.id, sceneId));
+      // 2. Soft delete the scene, then normalize order and bump revision
+      await db.update(scenes).set({ deletedAt: new Date() }).where(eq(scenes.id, sceneId));
 
-      // Normalize orders 0..n-1
+      // Normalize orders 0..n-1 among non-deleted scenes
       const ordered = await db.query.scenes.findMany({
-        where: eq(scenes.projectId, projectId),
+        where: and(eq(scenes.projectId, projectId), isNull(scenes.deletedAt)),
         orderBy: [scenes.order],
       });
       await Promise.all(
@@ -809,22 +849,51 @@ export const restoreScene = protectedProcedure
       throw new TRPCError({ code: 'UNAUTHORIZED', message: "Access denied" });
     }
 
-    // Bump order of existing scenes at or after the target position
+    // Bump order of existing non-deleted scenes at or after the target position
     await db.update(scenes)
       .set({ order: sql`${scenes.order} + 1` })
-      .where(and(eq(scenes.projectId, projectId), gte(scenes.order, scene.order)));
+      .where(and(eq(scenes.projectId, projectId), isNull(scenes.deletedAt), gte(scenes.order, scene.order)));
 
-    // Insert scene back (preserve original ID)
-    const [restored] = await db.insert(scenes).values({
-      id: scene.id,
-      projectId,
-      name: scene.name,
-      tsxCode: scene.tsxCode,
-      duration: scene.duration,
-      order: scene.order,
-      props: scene.props as any,
-      layoutJson: scene.layoutJson as any,
-    }).returning();
+    // Restore scene: If a soft-deleted row exists, un-delete it; otherwise insert
+    const existing = await db.query.scenes.findFirst({ where: eq(scenes.id, scene.id) });
+
+    // Insert/compile only if needed
+    let compiled = { jsCode: null as string | null, jsCompiledAt: null as Date | null };
+    if (env.USE_SERVER_COMPILATION) {
+      const res = await sceneCompiler.compileScene(scene.tsxCode, { projectId, sceneId: scene.id });
+      compiled = { jsCode: res.jsCode, jsCompiledAt: res.compiledAt };
+      console.log('[CompileMetrics] restoreScene compiled=%s scene=%s', String(!!res.jsCode), scene.id);
+    }
+    let restored;
+    if (existing) {
+      [restored] = await db.update(scenes)
+        .set({
+          name: scene.name,
+          tsxCode: scene.tsxCode,
+          jsCode: compiled.jsCode,
+          jsCompiledAt: compiled.jsCompiledAt,
+          duration: scene.duration,
+          order: scene.order,
+          props: scene.props as any,
+          layoutJson: scene.layoutJson as any,
+          deletedAt: null,
+        })
+        .where(eq(scenes.id, scene.id))
+        .returning();
+    } else {
+      [restored] = await db.insert(scenes).values({
+        id: scene.id,
+        projectId,
+        name: scene.name,
+        tsxCode: scene.tsxCode,
+        jsCode: compiled.jsCode,
+        jsCompiledAt: compiled.jsCompiledAt,
+        duration: scene.duration,
+        order: scene.order,
+        props: scene.props as any,
+        layoutJson: scene.layoutJson as any,
+      }).returning();
+    }
 
     return { success: true, scene: restored };
   });
@@ -984,11 +1053,19 @@ export const trimLeft = protectedProcedure
     // Insert right-hand scene after current
     const rightName = `${scene.name || 'Scene'} (Part 2)`;
     const mergedProps: any = { ...(scene.props as any), startOffset: splitAt };
+    let compiledRight = { jsCode: null as string | null, jsCompiledAt: null as Date | null };
+    if (env.USE_SERVER_COMPILATION) {
+      const res = await sceneCompiler.compileScene(scene.tsxCode, { projectId, sceneId });
+      compiledRight = { jsCode: res.jsCode, jsCompiledAt: res.compiledAt };
+      console.log('[CompileMetrics] trimLeft compiled right=%s scene=%s', String(!!res.jsCode), sceneId);
+    }
     const [right] = await db.insert(scenes).values({
       projectId,
       order: scene.order + 1,
       name: rightName,
       tsxCode: scene.tsxCode, // safe since only right remains after delete
+      jsCode: compiledRight.jsCode,
+      jsCompiledAt: compiledRight.jsCompiledAt,
       props: mergedProps,
       duration: rightDuration,
       layoutJson: scene.layoutJson,

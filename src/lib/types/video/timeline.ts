@@ -100,6 +100,8 @@ export interface TimelineContextState {
   minDuration: number; // Minimum duration for any timeline item
   maxRows: number; // Maximum number of rows/tracks in timeline
   invalidDragOperation: boolean; // Flag to indicate if current drag operation is invalid
+  // Display unit for timeline: seconds or frames
+  timeUnit?: 'seconds' | 'frames';
 }
 
 /**
@@ -122,6 +124,7 @@ export interface TimelineActions {
   setPlayerRef: (ref: any) => void;
   seekToFrame: (frame: number) => void;
   setIsPlaying: (playing: boolean) => void;
+  setTimeUnit?: (unit: 'seconds' | 'frames') => void;
 }
 
 /**
