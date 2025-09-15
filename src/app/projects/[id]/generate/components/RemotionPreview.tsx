@@ -69,6 +69,23 @@ export default function RemotionPreview({
   const [playerElement, setPlayerElement] = useState<HTMLElement | null>(null);
   const hasAudio = !!(inputProps?.audio?.url);
   const audioUnlockRef = useRef<boolean>(false);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const [renderSize, setRenderSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
+  
+  const computeRenderSize = useCallback(() => {
+    const el = playerContainerRef.current;
+    if (!el) return;
+    const cw = el.clientWidth;
+    const ch = el.clientHeight;
+    if (!cw || !ch || !width || !height) {
+      setRenderSize({ w: 0, h: 0 });
+      return;
+    }
+    const scale = Math.min(cw / width, ch / height);
+    const w = Math.max(0, Math.floor(width * scale));
+    const h = Math.max(0, Math.floor(height * scale));
+    setRenderSize({ w, h });
+  }, [width, height]);
   
   // Helper: Try to resume any media elements inside the player (best-effort)
   const resumeMediaElements = useCallback(async () => {
@@ -157,6 +174,24 @@ export default function RemotionPreview({
     };
   }, [refreshToken]);
 
+  // Recompute render size on container resize and when composition size changes
+  useEffect(() => {
+    computeRenderSize();
+    const el = playerContainerRef.current;
+    if (!el) return;
+    try {
+      const ro = new ResizeObserver(() => computeRenderSize());
+      ro.observe(el);
+      resizeObserverRef.current = ro;
+    } catch {}
+    const onWindowResize = () => computeRenderSize();
+    window.addEventListener('resize', onWindowResize);
+    return () => {
+      try { resizeObserverRef.current?.disconnect(); } catch {}
+      window.removeEventListener('resize', onWindowResize);
+    };
+  }, [computeRenderSize]);
+
   // One-time audio unlock using any pointer gesture inside the player container
   useEffect(() => {
     if (!hasAudio) return;
@@ -195,38 +230,36 @@ export default function RemotionPreview({
           Loading component...
         </div>
       }>
-        <div className="w-full h-full flex items-center justify-center relative" ref={playerContainerRef}>
-          {/* Maintain composition aspect ratio to avoid stretching/zooming */}
-          <div style={{ width: '100%', maxHeight: '100%', aspectRatio: `${width} / ${height}` }} className="relative">
-          <Player
-            ref={playerRef}
-            lazyComponent={lazyComponent}
-            inputProps={inputProps}
-            durationInFrames={durationInFrames}
-            compositionWidth={width}
-            compositionHeight={height}
-            fps={fps}
-            style={{
-              width: '100%',
-              height: '100%',
-              maxWidth: '100%',
-              maxHeight: '100%',
-              objectFit: 'contain',
-              backgroundColor: 'white',
-            }}
-            controls
-            showVolumeControls
-            doubleClickToFullscreen
-            clickToPlay
-            loop={loop}
-            autoPlay={false}
-            playbackRate={playbackRate}
-            inFrame={inFrame}
-            outFrame={outFrame}
-            key={refreshToken} // Force remount when refreshToken changes
-            acknowledgeRemotionLicense
-            className="remotion-player"
-          />
+        <div className="w-full h-full flex items-center justify-center relative overflow-hidden" ref={playerContainerRef}>
+          {/* Fit composition into container keeping aspect ratio, for both landscape and portrait */}
+          <div style={{ width: `${renderSize.w}px`, height: `${renderSize.h}px` }} className="relative">
+            <Player
+              ref={playerRef}
+              lazyComponent={lazyComponent}
+              inputProps={inputProps}
+              durationInFrames={durationInFrames}
+              compositionWidth={width}
+              compositionHeight={height}
+              fps={fps}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                backgroundColor: 'white',
+              }}
+              controls
+              showVolumeControls
+              doubleClickToFullscreen
+              clickToPlay
+              loop={loop}
+              autoPlay={true}
+              playbackRate={playbackRate}
+              inFrame={inFrame}
+              outFrame={outFrame}
+              key={refreshToken} // Force remount when refreshToken changes
+              acknowledgeRemotionLicense
+              className="remotion-player"
+            />
           </div>
           {playerElement && createPortal(
             <>
