@@ -1,5 +1,7 @@
 // src/lib/logger.ts
 import { createLogger, format, transports, type Logger } from 'winston';
+// Note: winston-daily-rotate-file is only relevant on the server. Keeping the import
+// here is safe for SSR, but we avoid using winston entirely on the client below.
 import 'winston-daily-rotate-file';
 import path from 'path';
 import fs from 'fs';
@@ -44,7 +46,7 @@ const fileFormat = format.combine(
 let systemFileTransportInitialized = false;
 
 // Create either a server logger or a console logger
-let logger: Logger;
+let logger: Logger | any;
 
 // Safe directory creation function
 const safeCreateDir = (dir: string): boolean => {
@@ -175,45 +177,39 @@ if (isServer) {
   // console.log(`Logger initialized with log directories: main=${logsDir}, error=${errorLogsDir}, combined=${combinedLogsDir}`);
 
 } else {
-  // Simple console logger for client-side
-  logger = createLogger({
-    level: 'info',
-    format: fileFormat,
-    transports: [
-      new transports.Console({
-        format: consoleFormat,
-      }),
-    ],
-  });
+  // Browser-safe console-based logger to avoid setImmediate/process issues
+  type SimpleLogger = {
+    debug: (msg?: any, meta?: any) => SimpleLogger;
+    info: (msg?: any, meta?: any) => SimpleLogger;
+    warn: (msg?: any, meta?: any) => SimpleLogger;
+    error: (msg?: any, meta?: any) => SimpleLogger;
+    child: (_meta?: any) => SimpleLogger;
+    transports?: any[];
+  };
 
-  // Create a separate system logger
-  const systemLogger = createLogger({
-    level: 'info',
-    format: fileFormat,
-    defaultMeta: { system: true },
-    transports: [
-      new transports.Console({
-        format: consoleFormat,
-      }),
-    ],
-  });
+  const makeConsoleLogger = (prefix?: string): SimpleLogger => {
+    const p = prefix ? `[${prefix}]` : '';
+    const self: SimpleLogger = {
+      debug: (msg, meta) => { try { console.debug(p, msg, meta ?? ''); } catch {} return self; },
+      info: (msg, meta) => { try { console.info(p, msg, meta ?? ''); } catch {} return self; },
+      warn: (msg, meta) => { try { console.warn(p, msg, meta ?? ''); } catch {} return self; },
+      error: (msg, meta) => { try { console.error(p, msg, meta ?? ''); } catch {} return self; },
+      child: (_meta) => makeConsoleLogger(prefix),
+      transports: [],
+    };
+    return self;
+  };
 
-  // Create a separate components logger
-  const componentsLogger = createLogger({
-    level: 'info',
-    format: fileFormat,
-    defaultMeta: {},
-    transports: [
-      new transports.Console({
-        format: consoleFormat,
-      }),
-    ],
-  });
-
+  logger = makeConsoleLogger('client');
 }
 
 // Function to initialize system file transport if requested
 export const initializeSystemFileTransport = (): void => {
+  // Do nothing on client/browser
+  if (typeof window !== 'undefined') {
+    systemFileTransportInitialized = true;
+    return;
+  }
   // Skip file transport initialization in serverless production environments
   if (isServerlessProduction) {
     // console.log('[LOGGER] Skipping system file transport initialization in serverless environment');
@@ -460,14 +456,15 @@ const systemLogger = logger.child({ module: 'system' });
 
 // Configure console transport level specifically
 // console.log(`[DEBUG_LOGGER] Configuring system logger console level. LOGGING_MODE: ${process.env.LOGGING_MODE}`);
-const systemConsoleTransport = systemLogger.transports.find(
-  (t) => t instanceof transports.Console
-);
-if (systemConsoleTransport) {
-  systemConsoleTransport.level = process.env.LOG_LEVEL || 'info';
-  // console.log(`[DEBUG_LOGGER] System logger console level set to: ${systemConsoleTransport.level}`);
-} else {
-  // console.log('[DEBUG_LOGGER] Could not find system logger console transport to configure!');
+if (isServer) {
+  const systemConsoleTransport = systemLogger.transports.find(
+    (t) => t instanceof transports.Console
+  );
+  if (systemConsoleTransport) {
+    systemConsoleTransport.level = process.env.LOG_LEVEL || 'info';
+  } else {
+    // noop on client
+  }
 }
 
 // Other child loggers

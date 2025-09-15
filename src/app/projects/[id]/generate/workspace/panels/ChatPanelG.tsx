@@ -1943,7 +1943,8 @@ export default function ChatPanelG({
                     </Tooltip>
                   </TooltipProvider> */}
                   
-                  {/* Enhance Prompt Button */}
+                  {/* Enhance Prompt Button — temporarily disabled */}
+                  {/**
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -1971,6 +1972,7 @@ export default function ChatPanelG({
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
+                  **/}
 
                   <Button
                     type="submit"

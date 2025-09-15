@@ -119,6 +119,8 @@ export default function RemotionPreview({
         </div>
       }>
         <div className="w-full h-full flex items-center justify-center relative" ref={playerContainerRef}>
+          {/* Maintain composition aspect ratio to avoid stretching/zooming */}
+          <div style={{ width: '100%', maxHeight: '100%', aspectRatio: `${width} / ${height}` }} className="relative">
           <Player
             ref={playerRef}
             lazyComponent={lazyComponent}
@@ -140,9 +142,9 @@ export default function RemotionPreview({
             doubleClickToFullscreen
             clickToPlay
             loop={loop}
-            autoPlay={true}
+            autoPlay={false}
             playbackRate={playbackRate}
-            initiallyMuted={true}
+            initiallyMuted={false}
             inFrame={inFrame}
             outFrame={outFrame}
             // @ts-expect-error - onPlay and onPause work but aren't in type definitions
@@ -164,6 +166,7 @@ export default function RemotionPreview({
             acknowledgeRemotionLicense
             className="remotion-player"
           />
+          </div>
           {playerElement && createPortal(
             <>
               {/* Frame counter with FPS label - synced with Remotion controls */}
