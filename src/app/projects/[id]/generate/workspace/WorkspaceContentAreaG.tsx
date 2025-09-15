@@ -117,7 +117,7 @@ function SortablePanelG({ id, children, style, className, onRemove, projectId, c
     <div
       ref={setNodeRef}
       style={mergedStyle}
-      className={`rounded-[15px] border border-gray-200 overflow-hidden flex flex-col h-full ${isDragging ? 'dragging' : ''} ${className ?? ''}`}
+      className={`rounded-[15px] border border-gray-200 overflow-hidden flex flex-col h-full min-h-0 min-w-0 ${isDragging ? 'dragging' : ''} ${className ?? ''}`}
     >
       {!isCodePanel && (
         <div 
@@ -941,7 +941,7 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
             items={openPanels.map(p => p.id)} 
             strategy={horizontalListSortingStrategy}
           >
-            <div className="h-full w-full relative">
+            <div className="h-full min-h-0 w-full min-w-0 relative">
               {/* Allow drop from sidebar anywhere in the panel area */}
               <div
                 className="absolute inset-0 z-0 pointer-events-none"
@@ -965,7 +965,7 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
                   // Keep key stable across layout changes to avoid remount loops
                   key={`pg-${openPanels.map(p=>p.id).join('-')}`}
                   direction="horizontal" 
-                  className="h-full"
+                  className="h-full min-h-0 min-w-0"
                   onLayout={(layout) => {
                     // Avoid update storms: only set if changed
                     if (!Array.isArray(layout)) return;
@@ -993,7 +993,7 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
                           }}
                         >
                           <div
-                            className="h-full w-full"
+                            className="h-full min-h-0 w-full min-w-0"
                             style={{
                               transition: `transform ${PANEL_ANIM_MS}ms cubic-bezier(0.25, 1, 0.5, 1), opacity ${PANEL_ANIM_MS}ms cubic-bezier(0.25, 1, 0.5, 1), box-shadow ${PANEL_ANIM_MS}ms` ,
                               transform: panelAnim[panel?.id || ''] === 'enter' 
