@@ -6,9 +6,7 @@
 import Stripe from 'stripe';
 
 // Initialize Stripe with test key (you can replace this)
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_dummy', {
-  apiVersion: '2024-09-30.acacia',
-});
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_dummy', {});
 
 async function testStripeWebhook() {
   console.log("🧪 Testing Stripe webhook processing...\n");

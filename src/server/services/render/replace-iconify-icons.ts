@@ -27,8 +27,15 @@ type SvgDef = { attributes: Record<string, string>, body: string };
  */
 export async function replaceIconifyIcons(code: string, hook?: WarningHook): Promise<string> {
   // Check if already transformed (idempotency)
-  if (code.includes('__INLINE_ICON_MAP') || code.includes('__InlineIcon')) {
-    console.log('[Icon Replace] Code already transformed, skipping');
+  const alreadyTransformed =
+    code.includes('__INLINE_ICON_MAP') || // legacy global map marker
+    code.includes('__InlineIcon') || // legacy global renderer marker
+    /__ICON_REGISTRY_[A-Za-z0-9_]+/.test(code) || // scene-scoped registry present
+    /__RenderIcon_[A-Za-z0-9_]+/.test(code) || // scene-scoped renderer present
+    /__ResolveIcon_[A-Za-z0-9_]+/.test(code); // scene-scoped resolver present
+
+  if (alreadyTransformed) {
+    console.log('[Icon Replace] Detected prior icon transformation — skipping');
     return code;
   }
   

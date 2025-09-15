@@ -95,20 +95,41 @@ export default function RemotionPreview({
     } catch {}
   }, []);
   
-  // Update frame from player
+  // Update frame from player and infer play/pause state for external listeners
   useEffect(() => {
     if (!playerRef?.current) return;
-    const updateFrame = () => {
+    let lastFrame = -1;
+    let stillTicks = 0;
+    const tick = () => {
       try {
         const frame = (playerRef.current as any)?.getCurrentFrame?.() ?? 0;
         if (typeof frame === 'number') {
           setCurrentFrame(frame);
+          if (lastFrame === -1) lastFrame = frame;
+          if (frame !== lastFrame) {
+            stillTicks = 0;
+            // Went from paused -> playing
+            if (!(window as any).__previewPlaying) {
+              (window as any).__previewPlaying = true;
+              try { window.dispatchEvent(new CustomEvent('preview-play-state-change', { detail: { playing: true } })); } catch {}
+              try { onPlay?.(); } catch {}
+            }
+          } else {
+            stillTicks += 1;
+            // Consider paused if no frame advance for a few ticks
+            if ((window as any).__previewPlaying && stillTicks >= 3) {
+              (window as any).__previewPlaying = false;
+              try { window.dispatchEvent(new CustomEvent('preview-play-state-change', { detail: { playing: false } })); } catch {}
+              try { onPause?.(); } catch {}
+            }
+          }
+          lastFrame = frame;
         }
       } catch {}
     };
-    const interval = setInterval(updateFrame, 100);
+    const interval = setInterval(tick, 150);
     return () => clearInterval(interval);
-  }, [playerRef]);
+  }, [playerRef, onPlay, onPause]);
 
   // Find the player element for portal injection
   useEffect(() => {
@@ -202,22 +223,6 @@ export default function RemotionPreview({
             playbackRate={playbackRate}
             inFrame={inFrame}
             outFrame={outFrame}
-            onPlay={() => {
-              try {
-                const ev = new CustomEvent('preview-play-state-change', { detail: { playing: true } });
-                window.dispatchEvent(ev);
-              } catch {}
-              // Try resuming underlying media again on explicit play
-              try { resumeMediaElements(); } catch {}
-              onPlay?.();
-            }}
-            onPause={() => {
-              try {
-                const ev = new CustomEvent('preview-play-state-change', { detail: { playing: false } });
-                window.dispatchEvent(ev);
-              } catch {}
-              onPause?.();
-            }}
             key={refreshToken} // Force remount when refreshToken changes
             acknowledgeRemotionLicense
             className="remotion-player"

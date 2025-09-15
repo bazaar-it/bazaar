@@ -488,7 +488,7 @@ export function PreviewPanelG({
   // 🚨 SIMPLIFIED: Direct scene compilation with pre-compiled JS support
   const compileSceneDirectly = useCallback(async (scene: any, index: number) => {
     // Get code from scene (supporting both TSX and pre-compiled JS)
-    // PRIORITY: Use pre-compiled JS first, then check for TSX code
+    // PRIORITY: Use TSX/source first so manual edits reflect immediately, then fall back to pre-compiled JS
     const preCompiledJS = scene.jsCode || (scene.data as any)?.jsCode; // Pre-compiled JavaScript from DB
     const tsxCode = scene.tsxCode || (scene.data as any)?.tsxCode || (scene.data as any)?.code;
     // Use JS if available, otherwise fall back to TSX

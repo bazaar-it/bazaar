@@ -58,8 +58,7 @@ export default function SharePageContent({
               loopState={loopState} 
               onStateChange={setLoopState}
               scenes={inputProps.scenes.map((scene, index) => ({ 
-                id: scene.id || `scene-${index}`, 
-                name: scene.name 
+                id: (scene as any).id || `scene-${index}`
               }))}
             />
             <ShareButtons

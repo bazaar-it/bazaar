@@ -105,11 +105,6 @@ export function PromptUsageDisplay() {
             <Progress 
               value={Math.min(percentage, 100)} 
               className="h-2"
-              indicatorClassName={
-                percentage >= 100 ? 'bg-gray-400' : 
-                percentage >= 80 ? 'bg-orange-500' : 
-                'bg-blue-500'
-              }
             />
           </div>
         )}
@@ -129,8 +124,8 @@ export function PromptUsageDisplay() {
       </div>
 
       <PurchaseModal 
-        open={showPurchaseModal} 
-        onOpenChange={setShowPurchaseModal} 
+        isOpen={showPurchaseModal} 
+        onClose={() => setShowPurchaseModal(false)} 
       />
     </>
   );

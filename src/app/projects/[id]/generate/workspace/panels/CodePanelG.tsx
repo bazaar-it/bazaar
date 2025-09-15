@@ -424,15 +424,15 @@ export function CodePanelG({
     );
   }
 
-  const currentSceneIndex = scenes.findIndex(s => s.id === selectedScene.id);
-  const sceneName = getSceneName(selectedScene, currentSceneIndex);
+  const currentSceneIndex = scenes.findIndex(s => s.id === selectedScene!.id);
+  const sceneName = getSceneName(selectedScene as Scene, currentSceneIndex);
 
   return (
     <div className="flex flex-col h-full bg-white">
       {/* Header with scene selection dropdown */}
       <div className="flex items-center justify-between px-3 py-2 border-b bg-gray-50">
         <div className="flex items-center gap-2">
-          <Select value={selectedScene.id} onValueChange={handleSceneSelect}>
+          <Select value={(selectedScene as Scene).id} onValueChange={handleSceneSelect}>
             <SelectTrigger className="w-32 h-6 text-xs font-medium">
               <SelectValue />
             </SelectTrigger>
@@ -481,7 +481,7 @@ export function CodePanelG({
           height="100%"
           language="typescript"
           // Hint Monaco to parse TSX by giving the model a .tsx path
-          path={`inmemory://model/${selectedScene.id}.tsx`}
+          path={`inmemory://model/${(selectedScene as Scene).id}.tsx`}
           value={localCode}
           onChange={handleCodeChange}
           theme={theme === 'dark' ? 'vs-dark' : 'vs-light'}

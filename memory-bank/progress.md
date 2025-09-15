@@ -1,5 +1,8 @@
 # 🏆 Bazaar-Vid Progress Summary
 
+## 📝 Latest Update (Sep 15, 2025)
+- Marketing: Added Product Hunt featured badge to homepage (under hero CTA) ahead of launch. Link opens in new tab with noopener for safety; uses official PH SVG widget.
+
 ## 📝 Latest Update (Sep 11, 2025)
 ## 📝 Latest Update (Sep 13, 2025)
 - Sprint 107: Fixed preview crash when scene names contained apostrophes (e.g., Build a' word slide template). Root cause was unescaped dynamic strings injected into generated composite code; Sucrase failed with "Invalid scope depth". Escaped dynamic values via JSON.stringify in `PreviewPanelG.tsx` and added a browser-safe console logger to avoid `setImmediate` errors from Winston in `use-auto-fix`.
