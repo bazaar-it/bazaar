@@ -3277,12 +3277,14 @@ export default function GeneratedScene() {
         .groupBy(paywallEvents.eventType);
 
       // Get daily analytics
+      const startStr = startDate.toISOString().slice(0, 10);
+      const endStr = endDate.toISOString().slice(0, 10);
       const dailyStats = await db.select()
         .from(paywallAnalytics)
         .where(
           and(
-            gte(paywallAnalytics.date, startDate.toISOString().split('T')[0]),
-            lte(paywallAnalytics.date, endDate.toISOString().split('T')[0])
+            gte(paywallAnalytics.date, startStr),
+            lte(paywallAnalytics.date, endStr)
           )
         )
         .orderBy(paywallAnalytics.date);
@@ -3388,7 +3390,8 @@ export default function GeneratedScene() {
       let usersOver500Prompts = 0;
 
       // Track users by bracket for identification
-      const usersByBracket: Record<string, Array<{ id: string; name: string | null; email: string | null; count: number; activeDays: number }>> = {
+      type BracketKey = 'noPrompts' | 'under5' | '5to10' | '10to20' | '20to50' | '50to100' | '100to200' | '200to500' | 'over500';
+      const usersByBracket: Record<BracketKey, Array<{ id: string; name: string | null; email: string | null; count: number; activeDays: number }>> = {
         noPrompts: [],
         under5: [],
         '5to10': [],
@@ -4026,7 +4029,7 @@ export default function GeneratedScene() {
       format: z.object({
         width: z.number(),
         height: z.number(),
-        format: z.string()
+        format: z.enum(["landscape", "portrait", "square"])
       })
     }))
     .mutation(async ({ input }) => {

@@ -32,6 +32,7 @@ import { api } from '~/trpc/react';
 import { extractSceneColors } from '~/lib/utils/extract-scene-colors';
 import { PlaybackSpeedSlider } from "~/components/ui/PlaybackSpeedSlider";
 import { computeSceneRanges, findSceneAtFrame } from '~/lib/utils/scene-ranges';
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 
 // Constants from React Video Editor Pro
 const ROW_HEIGHT = 60;
@@ -633,6 +634,8 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     }
     // If timestamps are equal or local is newer, keep local state (no flicker!)
   }, [dbProject?.audioUpdatedAt, dbProject?.audio, projectId, updateProjectAudio]);
+
+  
   
   // Get current frame from PreviewPanelG via event system
   const [currentFrame, setCurrentFrame] = useState(0);
@@ -1808,9 +1811,15 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     try {
       const idx = scenes.findIndex((s: any) => s.id === sceneId);
       const neighborIds: string[] = [];
-      if (idx > 0) neighborIds.push(scenes[idx - 1]?.id);
-      if (idx < scenes.length - 1) neighborIds.push(scenes[idx + 1]?.id);
-      markMerging(neighborIds.filter(Boolean) as string[]);
+      if (idx > 0) {
+        const prevId = scenes[idx - 1]?.id;
+        if (prevId) neighborIds.push(prevId);
+      }
+      if (idx < scenes.length - 1) {
+        const nextId = scenes[idx + 1]?.id;
+        if (nextId) neighborIds.push(nextId);
+      }
+      markMerging(neighborIds);
     } catch {}
 
     // Push undo snapshot prior to removal
@@ -2436,90 +2445,126 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
               )}
               aria-hidden
             />
-            <button
-              onClick={() => setDisplayMode('time')}
-              className={cn(
-                'relative z-10 px-2 py-[2px] text-xs rounded-md h-6 transition-colors duration-150 flex items-center justify-center',
-                displayMode === 'time' ? 'text-white dark:text-gray-900' : 'text-gray-700 dark:text-gray-300'
-              )}
-              title="Seconds"
-              aria-label="Seconds"
-            >
-              <Clock className="w-3.5 h-3.5" />
-              <span className="sr-only">Seconds</span>
-            </button>
-            <button
-              onClick={() => setDisplayMode('frames')}
-              className={cn(
-                'relative z-10 px-2 py-[2px] text-xs rounded-md h-6 transition-colors duration-150 flex items-center justify-center',
-                displayMode === 'frames' ? 'text-white dark:text-gray-900' : 'text-gray-700 dark:text-gray-300'
-              )}
-              title="Frames"
-              aria-label="Frames"
-            >
-              <Film className="w-3.5 h-3.5" />
-              <span className="sr-only">Frames</span>
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setDisplayMode('time')}
+                  className={cn(
+                    'relative z-10 px-2 py-[2px] text-xs rounded-md h-6 transition-colors duration-150 flex items-center justify-center',
+                    displayMode === 'time' ? 'text-white dark:text-gray-900' : 'text-gray-700 dark:text-gray-300'
+                  )}
+                  aria-label="Seconds"
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  <span className="sr-only">Seconds</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Seconds</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setDisplayMode('frames')}
+                  className={cn(
+                    'relative z-10 px-2 py-[2px] text-xs rounded-md h-6 transition-colors duration-150 flex items-center justify-center',
+                    displayMode === 'frames' ? 'text-white dark:text-gray-900' : 'text-gray-700 dark:text-gray-300'
+                  )}
+                  aria-label="Frames"
+                >
+                  <Film className="w-3.5 h-3.5" />
+                  <span className="sr-only">Frames</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Frames</TooltipContent>
+            </Tooltip>
           </div>
 
           {/* Edit & History Controls (moved left, CapCut-style) */}
           <div className="flex items-center gap-3">
             {/* Edit Controls: Trim Left, Split, Trim Right */}
             <div className="flex items-center gap-2 bg-white dark:bg-gray-800 rounded-lg px-2 py-1 shadow-sm h-8 border border-gray-200 dark:border-gray-700">
-              <button
-                onClick={handleTrimLeftClick}
-                disabled={!selectedSceneId}
-                className="grid place-items-center w-8 h-6 rounded-md text-xs transition-colors disabled:opacity-50 hover:bg-gray-100 dark:hover:bg-gray-700"
-                title="Trim start to playhead ([)"
-              >
-                [
-              </button>
-              <button
-                onClick={() => selectedSceneId && handleSplitAtPlayhead(selectedSceneId)}
-                disabled={!selectedSceneId || isSplitBusy || splitSceneMutation.isPending}
-                className="grid place-items-center w-8 h-6 rounded-md text-xs transition-colors disabled:opacity-50 hover:bg-gray-100 dark:hover:bg-gray-700"
-                title={isSplitBusy || splitSceneMutation.isPending ? "Splitting…" : "Split at playhead (|)"}
-              >
-                {isSplitBusy || splitSceneMutation.isPending ? (
-                  <span className="inline-block w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  '|'
-                )}
-              </button>
-              <button
-                onClick={handleTrimRightClick}
-                disabled={!selectedSceneId}
-                className="grid place-items-center w-8 h-6 rounded-md text-xs transition-colors disabled:opacity-50 hover:bg-gray-100 dark:hover:bg-gray-700"
-                title="Trim end to playhead (])"
-              >
-                ]
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleTrimLeftClick}
+                    disabled={!selectedSceneId}
+                    className="grid place-items-center w-8 h-6 rounded-md text-xs transition-colors disabled:opacity-50 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    aria-label="Trim start to playhead"
+                  >
+                    [
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Trim start to playhead</TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => selectedSceneId && handleSplitAtPlayhead(selectedSceneId)}
+                    disabled={!selectedSceneId || isSplitBusy || splitSceneMutation.isPending}
+                    className="grid place-items-center w-8 h-6 rounded-md text-xs transition-colors disabled:opacity-50 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    aria-label="Split at playhead"
+                  >
+                    {isSplitBusy || splitSceneMutation.isPending ? (
+                      <span className="inline-block w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      '|'
+                    )}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">{isSplitBusy || splitSceneMutation.isPending ? 'Splitting…' : 'Split at playhead'}</TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleTrimRightClick}
+                    disabled={!selectedSceneId}
+                    className="grid place-items-center w-8 h-6 rounded-md text-xs transition-colors disabled:opacity-50 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    aria-label="Trim end to playhead"
+                  >
+                    ]
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Trim end to playhead</TooltipContent>
+              </Tooltip>
             </div>
 
             {/* Undo/Redo */}
             <div className="flex items-center gap-2 bg-white dark:bg-gray-800 rounded-lg px-2 py-1 shadow-sm h-8 border border-gray-200 dark:border-gray-700">
-              <button
-                onClick={performUndo}
-                disabled={undoSize === 0}
-                className={cn(
-                  "grid place-items-center w-8 h-6 rounded-md transition-colors",
-                  undoSize === 0 ? "opacity-40 cursor-not-allowed" : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
-                )}
-                title="Undo (⌘Z / Ctrl+Z)"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={performRedo}
-                disabled={redoSize === 0}
-                className={cn(
-                  "grid place-items-center w-8 h-6 rounded-md transition-colors",
-                  redoSize === 0 ? "opacity-40 cursor-not-allowed" : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
-                )}
-                title="Redo (⇧⌘Z / Shift+Ctrl+Z)"
-              >
-                <RotateCw className="w-3.5 h-3.5" />
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={performUndo}
+                    disabled={undoSize === 0}
+                    className={cn(
+                      "grid place-items-center w-8 h-6 rounded-md transition-colors",
+                      undoSize === 0 ? "opacity-40 cursor-not-allowed" : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                    )}
+                    aria-label="Undo"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Undo</TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={performRedo}
+                    disabled={redoSize === 0}
+                    className={cn(
+                      "grid place-items-center w-8 h-6 rounded-md transition-colors",
+                      redoSize === 0 ? "opacity-40 cursor-not-allowed" : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+                    )}
+                    aria-label="Redo"
+                  >
+                    <RotateCw className="w-3.5 h-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Redo</TooltipContent>
+              </Tooltip>
             </div>
           </div>
         </div>
@@ -2527,43 +2572,52 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         {/* Center cluster: playback controls */}
         <div className="flex-1 flex items-center justify-center">
           <div className="flex items-center gap-2 bg-white dark:bg-gray-800 rounded-lg px-2 py-1 shadow-sm h-8 border border-gray-200 dark:border-gray-700">
-            <button
-              onClick={() => {
-                const newFrame = Math.max(0, currentFrame - 30);
-                const event = new CustomEvent('timeline-seek', { 
-                  detail: { frame: newFrame }
-                });
-                window.dispatchEvent(event);
-                setCurrentFrame(newFrame);
-              }}
-              className="grid place-items-center w-8 h-6 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300 transition-colors"
-              title="Previous second"
-            >
-              <SkipBack className="w-3.5 h-3.5" />
-            </button>
-            
-            <button
-              onClick={togglePlayPause}
-              className="grid place-items-center w-8 h-6 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-800 dark:text-gray-200 transition-colors"
-              title={isPlaying ? "Pause" : "Play"}
-            >
-              {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-            </button>
-            
-            <button
-              onClick={() => {
-                const newFrame = Math.min(totalDuration - 1, currentFrame + 30);
-                const event = new CustomEvent('timeline-seek', { 
-                  detail: { frame: newFrame }
-                });
-                window.dispatchEvent(event);
-                setCurrentFrame(newFrame);
-              }}
-              className="grid place-items-center w-8 h-6 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300 transition-colors"
-              title="Next second"
-            >
-              <SkipForward className="w-3.5 h-3.5" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => {
+                    const newFrame = Math.max(0, currentFrame - 1);
+                    try { window.dispatchEvent(new CustomEvent('timeline-seek', { detail: { frame: newFrame } })); } catch {}
+                    setCurrentFrame(newFrame);
+                  }}
+                  className="grid place-items-center w-8 h-6 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300 transition-colors"
+                  aria-label="Previous frame"
+                >
+                  <SkipBack className="w-3.5 h-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Previous frame (←)</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={togglePlayPause}
+                  className="grid place-items-center w-8 h-6 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-800 dark:text-gray-200 transition-colors"
+                  aria-label={isPlaying ? 'Pause' : 'Play'}
+                >
+                  {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{isPlaying ? 'Pause' : 'Play'}</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => {
+                    const newFrame = Math.min(totalDuration - 1, currentFrame + 1);
+                    try { window.dispatchEvent(new CustomEvent('timeline-seek', { detail: { frame: newFrame } })); } catch {}
+                    setCurrentFrame(newFrame);
+                  }}
+                  className="grid place-items-center w-8 h-6 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300 transition-colors"
+                  aria-label="Next frame"
+                >
+                  <SkipForward className="w-3.5 h-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Next frame (→)</TooltipContent>
+            </Tooltip>
           </div>
         </div>
 
@@ -2572,7 +2626,9 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
 
           {/* Loop Control – Spotify-style cycle: Off → Video → Scene */}
           <div className="flex items-center bg-white dark:bg-gray-800 rounded-lg p-1 shadow-sm h-8 border border-gray-200 dark:border-gray-700">
-            <button
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
               onClick={() => {
                 const next = loopState === 'off' ? 'video' : loopState === 'video' ? 'scene' : 'off';
                 setLoopState(next);
@@ -2606,9 +2662,6 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                 "grid place-items-center w-8 h-6 rounded-md transition-colors",
                 loopState === 'off' ? "text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700" : "bg-gray-900 text-white dark:bg-gray-200 dark:text-gray-900"
               )}
-              title={loopState === 'off' ? 'Loop: Off (click to loop video)'
-                : loopState === 'video' ? 'Loop: Video (click to loop scene)'
-                : 'Loop: Scene (click to turn off)'}
               aria-label="Toggle loop mode"
             >
               {loopState === 'scene' ? (
@@ -2616,7 +2669,12 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
               ) : (
                 <Repeat className="w-3.5 h-3.5" />
               )}
-            </button>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {loopState === 'off' ? 'Loop: Off' : loopState === 'video' ? 'Loop: Video' : 'Loop: Scene'}
+              </TooltipContent>
+            </Tooltip>
           </div>
 
           {/* Playback Speed — hidden per request */}
@@ -2639,37 +2697,45 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
 
           {/* Zoom Controls */}
           <div className="flex items-center gap-2 bg-white dark:bg-gray-800 rounded-lg px-2 py-1 shadow-sm">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setZoomScale(prev => Math.max(0.25, Math.round((prev - 0.1) * 100) / 100))}
+                  className="grid place-items-center w-8 h-6 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300 transition-colors"
+                  aria-label="Zoom out"
+                >
+                  <ZoomOut className="w-3.5 h-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Zoom out</TooltipContent>
+            </Tooltip>
 
-          <button
-            onClick={() => setZoomScale(prev => Math.max(0.25, Math.round((prev - 0.1) * 100) / 100))}
-            className="grid place-items-center w-8 h-6 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300 transition-colors"
-            title="Zoom out"
-          >
-            <ZoomOut className="w-3.5 h-3.5" />
-          </button>
-          
-          <button
-            onClick={() => setZoomScale(1)}
-            className="grid place-items-center w-12 h-6 text-sm text-gray-700 dark:text-gray-300 text-center font-medium hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
-            title={`Zoom: ${Math.round(zoomScale * 100)}%\n${
-              zoomScale >= 3 ? 'Frame-level precision' :
-              zoomScale >= 2 ? '5-frame precision' :
-              zoomScale >= 1.5 ? '10-frame precision' :
-              zoomScale >= 1 ? '0.5 second precision' :
-              '1-2 second precision'
-            }\n(Shift+drag for no snapping)`}
-          >
-            {Math.round(zoomScale * 100)}%
-          </button>
-          
-          <button
-            onClick={() => setZoomScale(prev => Math.min(4, Math.round((prev + 0.1) * 100) / 100))}
-            className="grid place-items-center w-8 h-6 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300 transition-colors"
-            title="Zoom in"
-          >
-            <ZoomIn className="w-3.5 h-3.5" />
-          </button>
-        </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setZoomScale(1)}
+                  className="grid place-items-center w-12 h-6 text-sm text-gray-700 dark:text-gray-300 text-center font-medium hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                  aria-label="Reset zoom"
+                >
+                  {Math.round(zoomScale * 100)}%
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Reset zoom to 100%</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setZoomScale(prev => Math.min(4, Math.round((prev + 0.1) * 100) / 100))}
+                  className="grid place-items-center w-8 h-6 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300 transition-colors"
+                  aria-label="Zoom in"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Zoom in</TooltipContent>
+            </Tooltip>
+          </div>
         
         {/* Close button */}
         {onClose && (
