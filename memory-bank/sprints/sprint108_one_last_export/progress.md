@@ -65,3 +65,31 @@ This affects all 5 chunks in the video export, happening in VideoComposition com
     - `icon-replacement/visitors.ts` (JSX/CallExpression visitors)
   - Orchestrator remains `replace-iconify-icons.ts`
   - No runtime behavior change intended; improves readability and ownership boundaries
+
+## 2025-09-15
+- Implemented robust false-positive filtering in `extract-icon-names.ts`:
+  - Whitelisted known prefixes (mdi, material-symbols, lucide, etc.)
+  - Rejected time-like strings (e.g., 9:41) and emoji/Unicode
+  - Tightened generic token pattern to require letter-led prefixes and valid tail
+- Guaranteed runtime injection for `__InlineIcon` in `replace-iconify-icons.ts`:
+  - If any `__InlineIcon` usage exists after transforms and no dynamic map was injected, inject a minimal runtime placeholder to avoid `__InlineIcon is not defined`
+  - Keeps existing dynamic runtime map path when dynamic icons are detected
+- Rationale: Addresses root causes from ICON_REPLACEMENT_ANALYSIS.md — false positives and missing runtime function
+- Next: Run tests and re-validate export with a scene that includes time strings and dynamic icon arrays
+
+### Test Run (icon isolation suite)
+- Command: `npm run test -- src/server/services/render/__tests__/icon-isolation.test.ts`
+- Result: 7 passed, 1 failing
+  - Passing: valid icon inline, unknown set fallback, missing icon name fallback, dynamic runtime map, scene isolation (x2), Lambda compilation
+  - Failing: post-validation “no IconifyIcon references” — regex still matches `IconifyIcon` in emitted code
+    - Likely cause: leftover literal in emitted code (comment or rare path); internal post-validation passes, so mismatch is due to string content rather than unresolved usage
+    - Plan: Inspect output strings for the 4 post-validation cases; remove any literal `IconifyIcon` mentions in injected snippets (already removed), add final hard sweep if needed
+
+## 2025-09-15 (avatars dynamic fix)
+- Root cause: Export preprocess only replaced static `window.BazaarAvatars['literal']`, but scenes use dynamic `window.BazaarAvatars[avatarName]` → undefined in Lambda
+- Implemented dynamic avatar handling in `render.service.ts`:
+  - Injects `__AVATAR_REGISTRY` (built from catalog) and `__ResolveAvatar(name)`
+  - Transforms `window.BazaarAvatars[expr]` → `__ResolveAvatar(expr)`
+  - Keeps existing static replacements and direct path rewrites
+  - Placeholder: transparent 1x1 PNG data URL for unknown names
+- Expected result: Avatar-heavy scenes export correctly; no dependency on `window.BazaarAvatars` in Lambda

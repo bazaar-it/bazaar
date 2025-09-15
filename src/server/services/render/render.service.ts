@@ -93,7 +93,20 @@ async function preprocessSceneForLambda(scene: any, onWarning?: RenderConfig['on
   });
   
   // Database scenes have tsxCode directly, not in data.code
-  const tsxCode = scene.tsxCode;
+  let tsxCode = scene.tsxCode;
+  // Ensure any third-party remote assets are cached to our R2 for Lambda reliability
+  try {
+    if (typeof scene.projectId === 'string' && tsxCode && tsxCode.includes('src="http')) {
+      const { ensureRemoteAssetsCachedInCode } = await import('~/server/services/media/remoteCache.service');
+      const cached = await ensureRemoteAssetsCachedInCode(tsxCode, scene.projectId);
+      if (cached.rewrites.length > 0) {
+        console.log(`[Preprocess] RemoteCache rewrote ${cached.rewrites.length} asset URL(s) for scene ${scene.id}`);
+      }
+      tsxCode = cached.code;
+    }
+  } catch (e) {
+    console.warn('[Preprocess] RemoteCache step failed (continuing with original code):', e);
+  }
   
   // Emergency switch: Force fallback component for all scenes
   const FORCE_FALLBACK = process.env.RENDER_FORCE_FALLBACK === '1';
@@ -187,12 +200,22 @@ async function preprocessSceneForLambda(scene: any, onWarning?: RenderConfig['on
     // Import sucrase for server-side compilation
     const { transform } = require('sucrase');
     
+    // Capture default export identifier from original TSX (before any mutations)
+    let defaultExportName: string | null = null;
+    try {
+      const mFn = tsxCode.match(/export\s+default\s+function\s+(\w+)/);
+      const mVar = tsxCode.match(/export\s+default\s+([A-Za-z_$][\w$]*)\s*;?/);
+      defaultExportName = (mFn && mFn[1]) || (mVar && mVar[1]) || null;
+    } catch {}
+
     // Transform TypeScript/JSX to JavaScript
     let { code: transformedCode } = transform(tsxCode, {
       transforms: ['typescript', 'jsx'],
       jsxRuntime: 'classic',
       production: true,
     });
+    // Remove ESM import statements for Lambda-compatible Function constructor
+    transformedCode = transformedCode.replace(/^\s*import\s+[^;]+;?\s*$/gm, '');
     
     // Replace Iconify icons with inline SVGs for Lambda
     console.log(`[Preprocess] Replacing Iconify icons for scene ${scene.id}...`);
@@ -238,14 +261,9 @@ async function preprocessSceneForLambda(scene: any, onWarning?: RenderConfig['on
     // can reference these identifiers directly from the function scope.
     
     // Keep export default for Lambda compatibility - Lambda expects proper ES6 modules
-    // Only convert to const Component if there's no export default
-    if (!transformedCode.includes('export default')) {
-      // If there's a function without export, wrap it as export default
-      transformedCode = transformedCode.replace(
-        /^function\s+(\w+)/gm,
-        'export default function $1'
-      );
-    }
+    // Note: We'll strip export statements later for Function constructor, but first
+    // detect whether a default export exists so we can bind it to `Component`.
+    const hasExportDefaultBeforeStrip = /export\s+default\s+/.test(transformedCode);
     
     // Keep arrow function exports as export default for Lambda
     // No need to convert them to const Component
@@ -293,36 +311,107 @@ async function preprocessSceneForLambda(scene: any, onWarning?: RenderConfig['on
     }
     
     // Fix avatar URLs - replace window.BazaarAvatars with actual URLs
-    // This handles the window.BazaarAvatars['avatar-name'] pattern
+    // Compute URLs from env to avoid hardcoding domains/paths
+    const publicBase = (process.env.CLOUDFLARE_R2_PUBLIC_URL || '').replace(/\/$/, '');
+    const avatarsDir = process.env.AVATARS_BASE_DIR || 'Bazaar avatars';
+    const enc = (s: string) => s.split('/').map(encodeURIComponent).join('/');
+    const urlFor = (file: string) => `${publicBase}/${encodeURIComponent(avatarsDir)}/${enc(file)}`;
+
+    const avatarUrlMap: Record<string, string> = {
+      // Canonical 5
+      'asian-woman': urlFor('asian-woman.png'),
+      'black-man': urlFor('black-man.png'),
+      'hispanic-man': urlFor('hispanic-man.png'),
+      'middle-eastern-man': urlFor('middle-eastern-man.png'),
+      'white-woman': urlFor('white-woman.png'),
+      // Expanded set
+      'jackatar': urlFor('Jackatar.png'),
+      'markatar': urlFor('Markatar.png'),
+      'downie': urlFor('downie.png'),
+      'hotrussian': urlFor('hotrussian.png'),
+      'hottie': urlFor('hottie.png'),
+      'irish-guy': urlFor('irish guy.png'),
+      'nigerian-princess': urlFor('nigerian princess.png'),
+      'norway-girl': urlFor('norway girl.png'),
+      'wise-ceo': urlFor('wise-ceo.png'),
+      // Aliases
+      'Jackatar': urlFor('Jackatar.png'),
+      'Markatar': urlFor('Markatar.png'),
+    };
+
     transformedCode = transformedCode.replace(
       /window\.BazaarAvatars\[['"]([^'"]+)['"]\]/g,
       (match: string, avatarId: string) => {
-        // Map avatar IDs to their full public R2 URLs
-        const avatarUrls: Record<string, string> = {
-          'asian-woman': 'https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/avatars/asian-woman.png',
-          'black-man': 'https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/avatars/black-man.png',
-          'hispanic-man': 'https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/avatars/hispanic-man.png',
-          'middle-eastern-man': 'https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/avatars/middle-eastern-man.png',
-          'white-woman': 'https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/avatars/white-woman.png'
-        };
-        console.log(`[Preprocess] Replacing avatar: ${avatarId} with URL: ${avatarUrls[avatarId]}`);
-        return `"${avatarUrls[avatarId] || 'https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/avatars/default.png'}"`;
+        const to = avatarUrlMap[avatarId];
+        if (to) {
+          console.log(`[Preprocess] Replacing avatar: ${avatarId} -> ${to}`);
+          return `"${to}"`;
+        }
+        return match; // leave untouched if not known
       }
     );
-    
-    // Also fix direct avatar path references (fallback)
-    transformedCode = transformedCode.replace(
-      /\/avatars\/(asian-woman|black-man|hispanic-man|middle-eastern-man|white-woman)\.png/g,
-      'https://pub-80969e2c6b73496db98ed52f98a48681.r2.dev/avatars/$1.png'
-    );
+
+    // Also fix direct avatar path references under /avatars and /Bazaar avatars
+    transformedCode = transformedCode
+      .replace(/\/(?:Bazaar\s+avatars|avatars)\/(asian-woman|black-man|hispanic-man|middle-eastern-man|white-woman)\.png/gi, (_m, id) => urlFor(`${id}.png`))
+      .replace(/\/(?:Bazaar\s+avatars|avatars)\/(Jackatar|Markatar|downie|hotrussian|hottie)\.png/gi, (_m, file) => urlFor(`${file}.png`))
+      .replace(/\/(?:Bazaar\s+avatars|avatars)\/irish\s+guy\.png/gi, urlFor('irish guy.png'))
+      .replace(/\/(?:Bazaar\s+avatars|avatars)\/nigerian\s+princess\.png/gi, urlFor('nigerian princess.png'))
+      .replace(/\/(?:Bazaar\s+avatars|avatars)\/norway\s+girl\.png/gi, urlFor('norway girl.png'))
+      .replace(/\/(?:Bazaar\s+avatars|avatars)\/wise-ceo\.png/gi, urlFor('wise-ceo.png'));
+
+    // Handle dynamic avatar references: window.BazaarAvatars[avatarName]
+    // Replace with runtime resolver and inject an inline registry for Lambda
+    let dynamicAvatarUsages = 0;
+    transformedCode = transformedCode.replace(/window\.BazaarAvatars\[(.*?)\]/g, (match, expr) => {
+      dynamicAvatarUsages += 1;
+      return `__ResolveAvatar(${expr})`;
+    });
+
+    if (dynamicAvatarUsages > 0) {
+      const registryEntries = Object.entries(avatarUrlMap)
+        .map(([k, v]) => `  "${k}": "${v}"`)
+        .join(',\n');
+      const avatarRuntime = `
+// Inline avatar registry for dynamic avatar usage
+const __AVATAR_REGISTRY = {
+${registryEntries}
+};
+function __ResolveAvatar(name) {
+  try {
+    if (name == null) return '';
+    const key = String(name);
+    const url = __AVATAR_REGISTRY[key] || __AVATAR_REGISTRY[key.toLowerCase?.()] || '';
+    if (url) return url;
+  } catch (_) {}
+  // Minimal placeholder (transparent PNG 1x1)
+  return 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAgUB6mY7tL8AAAAASUVORK5CYII=';
+}
+`;
+      transformedCode = avatarRuntime + '\n' + transformedCode;
+      console.log(`[Preprocess] Injected avatar runtime with ${Object.keys(avatarUrlMap).length} entries; dynamic usages: ${dynamicAvatarUsages}`);
+    }
     
     // FOR LAMBDA: Function constructor cannot handle ANY export statements
-    // Remove ALL export statements and convert to variable assignments
+    // Remove ALL export statements. Do not duplicate Component declarations.
     transformedCode = transformedCode
-      .replace(/export\s+default\s+function\s+(\w+)/g, 'const Component = function $1')  // export default function -> const Component
-      .replace(/export\s+default\s+([a-zA-Z_$][\w$]*);?\s*$/gm, 'const Component = $1;')  // export default variable -> const Component
-      .replace(/export\s+const\s+\w+\s*=\s*[^;]+;?/g, '')  // Remove export const
-      .replace(/export\s+{\s*[^}]*\s*};?/g, '');            // Remove export { ... }
+      .replace(/export\s+default\s+function\s+(\w+)/g, 'function $1')  // strip export default from function decl
+      .replace(/export\s+default\s+([a-zA-Z_$][\w$]*);?\s*$/gm, '')    // remove bare export default lines
+      .replace(/export\s+const\s+\w+\s*=\s*[^;]+;?/g, '')             // Remove export const
+      .replace(/export\s+{\s*[^}]*\s*};?/g, '');                        // Remove export { ... }
+
+    // If we had a default export, bind it to Component so Lambda can render it.
+    if (!/\bconst\s+Component\s*=/.test(transformedCode)) {
+      // Prefer the original default export name from TSX if available
+      if (defaultExportName) {
+        transformedCode += `\nconst Component = ${defaultExportName};\n`;
+      } else if (hasExportDefaultBeforeStrip) {
+        // Fallback: try to recover a default identifier from transformed code patterns
+        const mVar = transformedCode.match(/export\s+default\s+([A-Za-z_$][\w$]*)/);
+        const guess = mVar && mVar[1];
+        if (guess) transformedCode += `\nconst Component = ${guess};\n`;
+      }
+    }
 
     // SAFETY NET: Ensure a valid React component is always defined for Lambda rendering
     // If transformation did not produce a Component, provide a minimal fallback to prevent React error #130
@@ -560,4 +649,19 @@ export async function renderVideo(_config: RenderConfig) {
   throw new Error(
     "Direct rendering is not available. Please set up AWS Lambda following the guide in /memory-bank/sprints/sprint63_export/lambda-setup.md"
   );
+}
+
+// Test helper: process raw TSX scene code through the same pipeline
+// Used by unit tests to validate preprocess + icon replacement without full render config
+export async function processSceneCode(tsxCode: string, sceneId: string = 'test-scene') {
+  const scene = {
+    id: sceneId,
+    name: `Scene-${sceneId}`,
+    tsxCode,
+    duration: 150,
+    order: 0,
+  } as any;
+
+  const processed = await preprocessSceneForLambda(scene);
+  return processed.jsCode || processed.compiledCode || tsxCode;
 }
