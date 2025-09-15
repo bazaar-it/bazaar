@@ -60,6 +60,27 @@ export async function GET(request: NextRequest) {
   const encoder = new TextEncoder();
   const stream = new TransformStream();
   const writer = stream.writable.getWriter();
+  let sseClosed = false;
+  const pendingTasks: Promise<unknown>[] = [];
+
+  // Best-effort safe write that ignores attempts after close
+  const safeWrite = async (data: any) => {
+    if (sseClosed) return;
+    try {
+      await writer.write(encoder.encode(formatSSE(data)));
+    } catch (err) {
+      sseClosed = true;
+      try { console.warn('[SSE] Attempted write after stream close; ignoring'); } catch {}
+    }
+  };
+
+  try {
+    // Abort handling: close stream if client disconnects
+    (request as any)?.signal?.addEventListener?.('abort', async () => {
+      sseClosed = true;
+      try { await writer.close(); } catch {}
+    });
+  } catch {}
 
   // Start the async work
   (async () => {
@@ -119,7 +140,7 @@ export async function GET(request: NextRequest) {
             console.log(`[SSE] Project has default title "${currentTitle}", generating new title...`);
             
             // Generate title asynchronously to avoid blocking scene generation
-            generateTitle({
+            const titleTask = generateTitle({
               prompt: userMessage,
               contextId: projectId,
             }).then(async (titleResult) => {
@@ -166,15 +187,16 @@ export async function GET(request: NextRequest) {
             console.log(`[SSE] Generated and set title: "${finalTitle}" for project ${projectId}`);
             
               // ✅ NEW: Send title update to client so it can invalidate queries
-              await writer.write(encoder.encode(formatSSE({
+              await safeWrite({
                 type: 'title_updated',
                 title: finalTitle,
                 projectId: projectId
-              })));
+              });
             }).catch((titleError) => {
               // Don't fail the whole request if title generation fails
               console.error('[SSE] Title generation failed:', titleError);
             });
+            pendingTasks.push(titleTask);
           } else {
             console.log(`[SSE] Project already has custom title "${currentTitle}", skipping title generation`);
           }
@@ -189,11 +211,11 @@ export async function GET(request: NextRequest) {
         console.log('[SSE] Website-to-video pipeline detected:', websiteUrl);
         
         // Send initial analysis message
-        await writer.write(encoder.encode(formatSSE({
+        await safeWrite({
           type: 'assistant_message_chunk',
           message: `Analyzing ${new URL(websiteUrl).hostname} and extracting brand data...`,
           isComplete: false
-        })));
+        });
         
         // Setup streaming callback for real-time updates
         let assistantMessageContent = `Analyzing ${new URL(websiteUrl).hostname} and extracting brand data...`;
@@ -206,21 +228,21 @@ export async function GET(request: NextRequest) {
             const progressMessage = `Creating Scene ${event.data.sceneIndex + 1}/${event.data.totalScenes}: ${event.data.sceneName}...`;
             assistantMessageContent += `\n\n${progressMessage} ✅`;
             
-            await writer.write(encoder.encode(formatSSE({
+            await safeWrite({
               type: 'assistant_message_chunk',
               message: progressMessage,
               isComplete: false
-            })));
+            });
             
             // Send scene addition event for immediate timeline update
-            await writer.write(encoder.encode(formatSSE({
+            await safeWrite({
               type: 'scene_added',
               data: {
                 sceneId: event.data.sceneId,
                 sceneName: event.data.sceneName,
                 progress: Math.round(((event.data.sceneIndex + 1) / event.data.totalScenes) * 100)
               }
-            })));
+            });
           }
           
           if (event.type === 'all_scenes_complete') {
@@ -229,11 +251,11 @@ export async function GET(request: NextRequest) {
             const completionMessage = `\n\n✨ Complete! Generated ${event.data.totalScenes} branded scenes using ${domain}'s colors and messaging.`;
             assistantMessageContent += completionMessage;
             
-            await writer.write(encoder.encode(formatSSE({
+            await safeWrite({
               type: 'assistant_message_chunk', 
               message: completionMessage,
               isComplete: true
-            })));
+            });
           }
         };
         
@@ -254,7 +276,7 @@ export async function GET(request: NextRequest) {
         
       } else {
         // 3. Just send the user data back - no assistant message yet (regular flow)
-        await writer.write(encoder.encode(formatSSE({
+        await safeWrite({
           type: 'ready',
           userMessageId: userMsg.id,
           userMessage: userMessage,
@@ -264,7 +286,7 @@ export async function GET(request: NextRequest) {
           sceneUrls: parsedSceneUrls,
           modelOverride: modelOverride,
           useGitHub: useGitHub
-        })));
+        });
       }
 
     } catch (error) {
@@ -285,19 +307,22 @@ export async function GET(request: NextRequest) {
         }
         
         // Send error to client
-        await writer.write(encoder.encode(formatSSE({
+        await safeWrite({
           type: 'error',
           error: errorMessage,
           canRetry: true // ✅ NEW: Hint to client that retry is possible
-        })));
+        });
       } catch (writeError) {
         console.error('[SSE] Failed to write error:', writeError);
       }
     } finally {
+      // Await any background tasks (e.g., title generation) before closing
+      try { await Promise.allSettled(pendingTasks); } catch {}
       // Small delay to ensure the last message is sent
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 50));
       
       try {
+        sseClosed = true;
         await writer.close();
       } catch (closeError) {
         // Stream might already be closed
