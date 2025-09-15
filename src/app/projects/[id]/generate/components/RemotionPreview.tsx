@@ -230,7 +230,7 @@ export default function RemotionPreview({
           Loading component...
         </div>
       }>
-        <div className="w-full h-full flex items-center justify-center relative overflow-hidden" ref={playerContainerRef}>
+        <div className="w-full h-full min-w-0 min-h-0 flex items-center justify-center relative overflow-hidden" ref={playerContainerRef}>
           {/* Fit composition into container keeping aspect ratio, for both landscape and portrait */}
           <div style={{ width: `${renderSize.w}px`, height: `${renderSize.h}px` }} className="relative">
             <Player

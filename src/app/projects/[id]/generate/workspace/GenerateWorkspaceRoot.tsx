@@ -341,7 +341,7 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
       <div className="h-[10px] w-full flex-shrink-0 bg-white dark:bg-gray-900"></div>
       
       {/* Main container with horizontal buffer zones on both sides */}
-      <div className="flex-1 relative overflow-hidden px-[10px]">
+      <div className="flex-1 min-h-0 relative overflow-hidden px-[10px]">
         {/* Main Content Area - Fixed position with sidebar width */}
         <div
           className="absolute inset-0 z-0 bg-white dark:bg-gray-900 rounded-lg overflow-hidden" 

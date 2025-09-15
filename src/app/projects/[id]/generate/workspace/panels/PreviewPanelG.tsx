@@ -2621,7 +2621,7 @@ export default function FallbackComposition() {
   }, [currentProps?.meta?.format]);
 
   return (
-    <div className="h-full flex flex-col bg-gray-100 relative overflow-hidden">
+    <div className="h-full min-h-0 min-w-0 flex flex-col bg-gray-100 relative overflow-hidden">
       {/* Hidden refresh button that the upper header can trigger */}
       <button 
         id="refresh-preview-button-g"
@@ -2630,7 +2630,7 @@ export default function FallbackComposition() {
         aria-hidden="true"
       />
       
-      <div className="relative flex-grow flex items-center justify-center">
+      <div className="relative flex-grow min-h-0 min-w-0 flex items-center justify-center">
         {/* Preview source indicator removed in this branch */}
         {componentImporter && playerProps ? (
           <div 
