@@ -67,6 +67,22 @@ export class ContextBuilder {
       const projectAssets = await assetContext.getProjectAssets(input.projectId);
       console.log(`📚 [CONTEXT BUILDER] Found ${projectAssets.assets.length} persistent assets`);
       console.log(`📚 [CONTEXT BUILDER] Logos: ${projectAssets.logos.length}`);
+
+      // 5.1 Build compact Media Library (images/videos) for Brain-driven selection
+      let mediaLibrary: ContextPacket['mediaLibrary'] | undefined = undefined;
+      try {
+        const [imagesLib, videosLib] = await Promise.all([
+          assetContext.listProjectAssets(input.projectId, { types: ['image', 'logo'], limit: 50 }),
+          assetContext.listProjectAssets(input.projectId, { types: ['video'], limit: 50 }),
+        ]);
+        mediaLibrary = {
+          images: imagesLib,
+          videos: videosLib,
+        };
+        console.log(`📚 [CONTEXT BUILDER] MediaLibrary built: images=${imagesLib.length}, videos=${videosLib.length}`);
+      } catch (e) {
+        console.warn('📚 [CONTEXT BUILDER] Failed to build MediaLibrary (non-fatal):', e);
+      }
       
       // 6. NEW: Build template context when appropriate
       const templateContext = await this.buildTemplateContext(input, scenesWithCode);
@@ -113,7 +129,10 @@ export class ContextBuilder {
         } : undefined,
         
         // NEW: Template context for improved generation
-        templateContext: templateContext
+        templateContext: templateContext,
+
+        // NEW: Compact Media Library for Intent Analyzer
+        mediaLibrary
       };
 
     } catch (error) {

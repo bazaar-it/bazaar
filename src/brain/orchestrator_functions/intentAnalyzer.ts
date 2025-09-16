@@ -42,6 +42,41 @@ export class IntentAnalyzer {
       
       let result = this.processBrainDecision(parsed, input);
 
+      // Optionally capture mediaPlan if Brain provided one
+      try {
+        const plan = (parsed as any)?.mediaPlan;
+        const validArray = (a: any) => Array.isArray(a) && a.every((x) => typeof x === 'string');
+        if (plan && (validArray(plan.imagesOrdered) || validArray(plan.videosOrdered))) {
+          result = {
+            ...result,
+            mediaPlan: {
+              imagesOrdered: validArray(plan.imagesOrdered) ? plan.imagesOrdered : undefined,
+              videosOrdered: validArray(plan.videosOrdered) ? plan.videosOrdered : undefined,
+              mapping: plan.mapping && typeof plan.mapping === 'object' ? plan.mapping : undefined,
+              unmet: Array.isArray(plan.unmet) ? plan.unmet : undefined,
+              rationale: typeof plan.rationale === 'string' ? plan.rationale : undefined,
+            }
+          };
+        }
+      } catch {}
+
+      // Fallback: if no tool was selected, default to 'addScene' to keep UX flowing
+      if (!result.toolName) {
+        const hasUserImages = Array.isArray(input.userContext?.imageUrls) && (input.userContext!.imageUrls as string[]).length > 0;
+        const hasPlanImages = !!(result as any).mediaPlan?.imagesOrdered?.length;
+        const defaultReason = hasUserImages || hasPlanImages
+          ? 'No explicit tool in Brain JSON; defaulting to addScene to generate from provided images.'
+          : 'No explicit tool in Brain JSON; defaulting to addScene.';
+        console.warn('🎯 [INTENT] No toolName returned by Brain. Using safe default: addScene');
+        result = {
+          ...result,
+          success: true,
+          toolName: 'addScene',
+          reasoning: result.reasoning || defaultReason,
+          userFeedback: result.userFeedback || 'I will add a new scene based on your request.'
+        };
+      }
+
       // Soft tie-breaker: if imageAction is undefined and attached images look like UI, prefer 'recreate'
       try {
         if (!result.imageAction && Array.isArray(input.userContext?.imageUrls) && input.userContext!.imageUrls!.length > 0) {
@@ -250,10 +285,27 @@ The AI has access to visual screenshots of this website and can reference them f
       assetInfo += `\nHint tags may include kind:logo/ui, layout:*, color:#xxxxxx, hasText, hint:embed/hint:recreate.`;
     }
 
+    // MEDIA LIBRARY (compact) for Brain-driven media resolution
+    let mediaLibInfo = '';
+    const ml = (contextPacket as any).mediaLibrary as ContextPacket['mediaLibrary'] | undefined;
+    if (ml && ((ml.images?.length || 0) + (ml.videos?.length || 0) > 0)) {
+      const previewImages = (ml.images || []).slice(0, 20).map((a) =>
+        `IMG id:${a.id} name:${(a.originalName || '').slice(0,40)} ord:${a.ordinal} tags:${(a.tags||[]).slice(0,3).join('|')} tokens:${(a.nameTokens||[]).slice(0,3).join('|')} created:${a.createdAt}`
+      ).join('\n');
+      const previewVideos = (ml.videos || []).slice(0, 8).map((a) =>
+        `VID id:${a.id} name:${(a.originalName || '').slice(0,40)} ord:${a.ordinal} tags:${(a.tags||[]).slice(0,3).join('|')} tokens:${(a.nameTokens||[]).slice(0,3).join('|')} created:${a.createdAt}`
+      ).join('\n');
+
+      mediaLibInfo = `\nMEDIA LIBRARY (compact preview)\nNOTE: Resolve references using IDs from this library via tokens, tags, and recency.\n${previewImages ? `\nIMAGES (showing up to 20):\n${previewImages}` : ''}${previewVideos ? `\n\nVIDEOS (showing up to 8):\n${previewVideos}` : ''}`;
+    }
+
+    // DECISION + MEDIA-RESOLUTION TASK (explicit schema)
+    const mediaResolutionTask = `\n\nDECISION REQUIREMENT:\n- You MUST return a JSON object matching this shape (toolName REQUIRED):\n{\n  "toolName": "addScene" | "editScene" | "deleteScene" | "trimScene" | "addAudio" | "websiteToVideo",\n  "reasoning": string,\n  "targetSceneId": string | null,\n  "targetDuration": number | null,\n  "referencedSceneIds": string[] | null,\n  "websiteUrl": string | null,\n  "userFeedback": string | null,\n  "needsClarification": boolean,\n  "clarificationQuestion": string | null,\n  "mediaPlan"?: {\n    "imagesOrdered"?: string[],\n    "videosOrdered"?: string[],\n    "mapping"?: Record<string,string>,\n    "unmet"?: string[],\n    "rationale"?: string\n  }\n}\n- If unsure which tool to choose for a creation request, DEFAULT to "addScene".\n\nMEDIA-RESOLUTION TASK:\n- Only include a "mediaPlan" when the user referenced media explicitly (e.g., image/screenshot/photo/logo/background/overlay) or attached media in the message.\n- Read the user text and the MEDIA LIBRARY.\n- Resolve media references (e.g., ordinals like first/last/previous/2nd, name tokens, tags like kind:logo/ui, layout:*, and recency).\n- Put your media resolution under "mediaPlan" using ASSET IDS (not URLs).\n- Do NOT return mediaPlan as a standalone object; it must be nested in the decision JSON.`;
+
     return `USER: "${prompt}"
 
 STORYBOARD:
-${storyboardInfo}${attachedScenesInfo}${imageInfo}${chatInfo}${webInfo}${assetInfo}
+${storyboardInfo}${attachedScenesInfo}${imageInfo}${chatInfo}${webInfo}${assetInfo}${mediaLibInfo}${mediaResolutionTask}
 
 Respond with JSON only.`;
   }

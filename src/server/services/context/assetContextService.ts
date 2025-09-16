@@ -74,6 +74,80 @@ export class AssetContextService {
   }
   
   /**
+   * List compact project assets for Media Library (images/videos)
+   * Safe, read-only helper that returns only essential fields with lightweight
+   * tokenizable metadata for LLM reasoning. Results are ordered by recency.
+   */
+  async listProjectAssets(
+    projectId: string,
+    opts?: { types?: Array<'image' | 'video' | 'audio' | 'logo'>; limit?: number }
+  ): Promise<Array<{
+    id: string;
+    url: string;
+    originalName: string;
+    type: string;
+    mimeType: string | null;
+    createdAt: string;
+    tags: string[];
+    nameTokens: string[];
+    ordinal: number;
+  }>> {
+    const limit = Math.min(Math.max(opts?.limit ?? 50, 1), 100);
+
+    // Base query similar to getProjectAssets but with a narrow projection
+    let rows = await db
+      .select({
+        id: assets.id,
+        url: assets.url,
+        originalName: assets.originalName,
+        type: assets.type,
+        mimeType: assets.mimeType,
+        createdAt: assets.createdAt,
+        tags: assets.tags,
+      })
+      .from(assets)
+      .innerJoin(projectAssets, eq(assets.id, projectAssets.assetId))
+      .where(and(
+        eq(projectAssets.projectId, projectId),
+        isNull(assets.deletedAt)
+      ))
+      .orderBy(desc(assets.createdAt));
+
+    // Optional type filtering
+    if (opts?.types && opts.types.length > 0) {
+      const allowed = new Set(opts.types);
+      rows = rows.filter(r => allowed.has((r.type as any) || ''));
+    }
+
+    // Trim to limit and compute nameTokens + ordinal
+    const limited = rows.slice(0, limit);
+    const out = limited.map((r, idx) => {
+      const name = r.originalName || '';
+      const base = name.replace(/\.[^/.]+$/, '');
+      const tokens = base
+        .split(/[^a-zA-Z0-9]+/)
+        .map(t => t.trim().toLowerCase())
+        .filter(Boolean)
+        // Keep numeric tokens; for alphabetic tokens require length ≥3
+        .filter(t => /\d/.test(t) || t.length >= 3);
+      const deduped = Array.from(new Set(tokens));
+      return {
+        id: r.id,
+        url: r.url,
+        originalName: r.originalName,
+        type: r.type as any,
+        mimeType: r.mimeType || null,
+        createdAt: r.createdAt.toISOString(),
+        tags: Array.isArray(r.tags) ? (r.tags as any) : [],
+        nameTokens: deduped,
+        ordinal: idx + 1, // 1 = newest
+      };
+    });
+
+    return out;
+  }
+
+  /**
    * Get all assets for a project
    */
   async getProjectAssets(projectId: string): Promise<AssetContext> {

@@ -220,6 +220,33 @@ export interface ContextPacket {
     message: string;
     matchDetails: string;
   };
+
+  // Optional: Compact Media Library for Brain-driven media resolution
+  // Add-only field to avoid impacting existing flows
+  mediaLibrary?: {
+    images: Array<{
+      id: string;
+      url: string;
+      originalName: string;
+      type: 'image' | 'logo' | string;
+      mimeType?: string | null;
+      createdAt: string;
+      tags: string[];
+      nameTokens: string[];
+      ordinal: number; // 1 = newest
+    }>;
+    videos: Array<{
+      id: string;
+      url: string;
+      originalName: string;
+      type: 'video' | string;
+      mimeType?: string | null;
+      createdAt: string;
+      tags: string[];
+      nameTokens: string[];
+      ordinal: number; // 1 = newest
+    }>;
+  };
 }
 
 // ============================================================================
@@ -246,6 +273,15 @@ export interface ToolSelectionResult {
   userFeedback?: string;
   requestedDurationSeconds?: number;
   workflow?: Array<any>;
+
+  // Optional Brain-driven media plan for tools to consume
+  mediaPlan?: {
+    imagesOrdered?: string[];
+    videosOrdered?: string[];
+    mapping?: Record<string, string>;
+    unmet?: string[];
+    rationale?: string;
+  };
 }
 
 // ============================================================================
