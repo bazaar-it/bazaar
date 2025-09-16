@@ -58,16 +58,29 @@ export default function Homepage() {
 
   return (
     <div className="min-h-screen bg-white flex flex-col animate-fade-in">
-      <MarketingHeader ref={marketingHeaderRef} redirectTo='/' />
+      <MarketingHeader ref={marketingHeaderRef} redirectTo='/' showLiveButton />
 
       {/* Main content */}
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-4 md:py-8 max-w-6xl mx-auto w-full relative overflow-hidden">
         {/* Advanced Floating Particles - Hero Section Only */}
         <ParticleEffect />
 
-        {/* Live on X indicator (shows only when live) */}
+        {/* Top badge area: Product Hunt badge moved here */}
         <div className="w-full mb-8 flex justify-center">
-          <LiveBadge />
+          <a
+            href="https://www.producthunt.com/products/bazaar-2?embed=true&utm_source=badge-featured&utm_medium=badge&utm_source=badge-bazaar-2"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="See Bazaar on Product Hunt"
+          >
+            <img
+              src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=996887&theme=light"
+              alt="Bazaar – Vibe Code your Software Demo Video on Product Hunt"
+              width={250}
+              height={54}
+              className="w-[250px] h-[54px]"
+            />
+          </a>
         </div>
         
         <div className="mb-8 md:mb-16 w-full text-center">
@@ -131,22 +144,7 @@ export default function Homepage() {
           <p className="text-center text-gray-500 text-sm mt-2 mb-0">
             Start with 100 free prompts
           </p>
-          <div className="mt-4 flex justify-center">
-            <a
-              href="https://www.producthunt.com/products/bazaar-2?embed=true&utm_source=badge-featured&utm_medium=badge&utm_source=badge-bazaar-2"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="See Bazaar on Product Hunt"
-            >
-              <img
-                src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=996887&theme=light"
-                alt="Bazaar – Vibe Code your Software Demo Video on Product Hunt"
-                width={250}
-                height={54}
-                className="w-[250px] h-[54px]"
-              />
-            </a>
-          </div>
+          {/* Product Hunt badge moved to top */}
         </div>
         
         {/* Marketing Video Player - responsive positioning */}
@@ -173,7 +171,7 @@ export default function Homepage() {
                 <iframe
                   width="100%"
                   height="100%"
-                  src="https://www.youtube.com/embed/vTx7ZwA2G6k?si=wKqcpCqGhDiWlha1"
+                  src="https://www.youtube.com/embed/zZgUWZfQjxM?si=QFlsfGu1Ya1Z68oD&controls=0&modestbranding=1&rel=0&playsinline=1&iv_load_policy=3&fs=0&disablekb=1"
                   title="YouTube video player"
                   frameBorder="0"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
