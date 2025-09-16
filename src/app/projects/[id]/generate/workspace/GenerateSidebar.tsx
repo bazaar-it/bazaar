@@ -178,6 +178,10 @@ export function GenerateSidebar({
             // Close any open format dropdowns when hovering over navigation items
             document.dispatchEvent(new CustomEvent('closeFormatDropdown'));
           }}
+          onMouseDown={() => {
+            // Close format dropdown before clicks land, to avoid overlay intercepting first click
+            document.dispatchEvent(new CustomEvent('closeFormatDropdown'));
+          }}
         >
           {visibleNavItems.map((item) => (
             <Tooltip key={item.id}>

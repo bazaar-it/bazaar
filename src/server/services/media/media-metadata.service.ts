@@ -36,6 +36,28 @@ export class MediaMetadataService {
     console.log('🔍 [MediaMetadata] Image URL:', url);
     
     try {
+      // Load existing asset metadata (mime/type/tags) once
+      const existing = await db.query.assets.findFirst({
+        where: eq(assets.id, assetId),
+        columns: { id: true, tags: true, mimeType: true, type: true }
+      });
+      if (!existing) throw new Error('Asset not found when tagging');
+
+      // Gate: Skip AI analysis for SVG by MIME (fallback to extension check)
+      const isSvg = (existing.mimeType && existing.mimeType.toLowerCase() === 'image/svg+xml') || /\.svg(\?|$)/i.test(url);
+      if (isSvg) {
+        console.log('🔍 [MediaMetadata] Skipping AI analysis for SVG; tagging heuristically');
+        // Use DB asset.type if available to decide kind
+        const kindTag = existing.type === 'logo' ? 'kind:logo' : 'kind:icon';
+        const svgTags = [kindTag, 'hint:embed'];
+        const merged = Array.from(new Set([...(existing.tags || []), ...svgTags]));
+        await db.update(assets)
+          .set({ tags: merged, updatedAt: new Date() })
+          .where(eq(assets.id, assetId));
+        console.log('✅ [MediaMetadata] Tagged SVG asset with', svgTags);
+        return;
+      }
+
       const model = getModel('promptEnhancer'); // fast/cheap model
       console.log('🔍 [MediaMetadata] Using model:', model.provider, model.model);
       
@@ -90,16 +112,6 @@ export class MediaMetadataService {
       console.log('🔍 [MediaMetadata] Generated tags:', tags);
 
       // Append tags (dedup) without using db.raw (Neon-safe)
-      const existing = await db.query.assets.findFirst({
-        where: eq(assets.id, assetId),
-        columns: { id: true, tags: true }
-      });
-
-      if (!existing) {
-        console.error('🔍 [MediaMetadata] Asset not found in DB:', assetId);
-        throw new Error('Asset not found when tagging');
-      }
-
       const merged = Array.from(new Set([...(existing.tags || []), ...tags]));
       console.log('🔍 [MediaMetadata] Merged tags (old + new):', merged);
 
