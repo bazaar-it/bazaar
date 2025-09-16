@@ -47,6 +47,7 @@ function UserAvatar({ name }: { name: string }) {
 
 interface MarketingHeaderProps {
   redirectTo?: string;
+  showLiveButton?: boolean;
 }
 
 export interface MarketingHeaderRef {
@@ -54,7 +55,7 @@ export interface MarketingHeaderRef {
 }
 
 const MarketingHeader = forwardRef<MarketingHeaderRef, MarketingHeaderProps>(
-  ({ redirectTo = '/' }, ref) => {
+  ({ redirectTo = '/', showLiveButton = false }, ref) => {
     const { data: session, status } = useSession();
     const router = useRouter();
     const [showLogin, setShowLogin] = useState(false);
@@ -97,15 +98,26 @@ const MarketingHeader = forwardRef<MarketingHeaderRef, MarketingHeaderProps>(
     return (
       <>
         <header className="w-full h-16 md:h-20 border-b shadow-sm flex items-center px-4 md:px-12 justify-between bg-white z-10">
-          <div className="flex items-end gap-2">
-            <div className="flex items-baseline gap-2 font-inter">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-4 md:gap-5 font-inter">
               <span onClick={() => router.push('/')} className="text-2xl md:text-3xl font-semibold text-black cursor-pointer">Bazaar</span>
-              <span className="text-sm md:text-base font-medium bg-gradient-to-r from-pink-500 to-orange-500 bg-clip-text text-transparent">V2</span>
+              <span className="text-sm md:text-base font-medium bg-gradient-to-r from-pink-500 to-orange-500 bg-clip-text text-transparent">V3</span>
+              {(isLiveStreaming || showLiveButton) && (
+                <a
+                  href="https://x.com/bazaar_ai"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-2.5 md:px-3 py-1 md:py-1.5 rounded-full text-red-600 bg-red-50 border border-red-200 shadow-sm hover:bg-red-100/70 transition-colors"
+                >
+                  <span className="inline-flex h-2 w-2 rounded-full bg-red-500" />
+                  <span className="text-[0.7rem] md:text-sm">The boys are live</span>
+                </a>
+              )}
             </div>
           </div>
           
-          {/* Live Streaming Button */}
-          {isLiveStreaming && (
+          {/* Live Streaming Button (centered fallback when not showing header pill) */}
+          {isLiveStreaming && !showLiveButton && (
             <div className="absolute left-1/2 transform -translate-x-1/2">
               <a
                 href="https://x.com/bazaar_ai"
