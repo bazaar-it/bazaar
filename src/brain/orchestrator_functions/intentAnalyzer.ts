@@ -299,8 +299,8 @@ The AI has access to visual screenshots of this website and can reference them f
       mediaLibInfo = `\nMEDIA LIBRARY (compact preview)\nNOTE: Resolve references using IDs from this library via tokens, tags, and recency.\n${previewImages ? `\nIMAGES (showing up to 20):\n${previewImages}` : ''}${previewVideos ? `\n\nVIDEOS (showing up to 8):\n${previewVideos}` : ''}`;
     }
 
-    // DECISION + MEDIA-RESOLUTION TASK (explicit schema)
-    const mediaResolutionTask = `\n\nDECISION REQUIREMENT:\n- You MUST return a JSON object matching this shape (toolName REQUIRED):\n{\n  "toolName": "addScene" | "editScene" | "deleteScene" | "trimScene" | "addAudio" | "websiteToVideo",\n  "reasoning": string,\n  "targetSceneId": string | null,\n  "targetDuration": number | null,\n  "referencedSceneIds": string[] | null,\n  "websiteUrl": string | null,\n  "userFeedback": string | null,\n  "needsClarification": boolean,\n  "clarificationQuestion": string | null,\n  "mediaPlan"?: {\n    "imagesOrdered"?: string[],\n    "videosOrdered"?: string[],\n    "mapping"?: Record<string,string>,\n    "unmet"?: string[],\n    "rationale"?: string\n  }\n}\n- If unsure which tool to choose for a creation request, DEFAULT to "addScene".\n\nMEDIA-RESOLUTION TASK:\n- Only include a "mediaPlan" when the user referenced media explicitly (e.g., image/screenshot/photo/logo/background/overlay) or attached media in the message.\n- Read the user text and the MEDIA LIBRARY.\n- Resolve media references (e.g., ordinals like first/last/previous/2nd, name tokens, tags like kind:logo/ui, layout:*, and recency).\n- Put your media resolution under "mediaPlan" using ASSET IDS (not URLs).\n- Do NOT return mediaPlan as a standalone object; it must be nested in the decision JSON.`;
+    // DECISION + MEDIA-RESOLUTION TASK (explicit schema, attachments-first, clarify when ambiguous)
+    const mediaResolutionTask = `\n\nDECISION REQUIREMENT:\n- You MUST return a JSON object matching this shape (toolName REQUIRED):\n{\n  "toolName": "addScene" | "editScene" | "deleteScene" | "trimScene" | "addAudio" | "websiteToVideo",\n  "reasoning": string,\n  "targetSceneId": string | null,\n  "targetDuration": number | null,\n  "referencedSceneIds": string[] | null,\n  "websiteUrl": string | null,\n  "userFeedback": string | null,\n  "needsClarification": boolean,\n  "clarificationQuestion": string | null,\n  "mediaPlan"?: {\n    "imagesOrdered"?: string[],\n    "videosOrdered"?: string[],\n    "mapping"?: Record<string,string>,\n    "imageDirectives"?: Array<{ urlOrId: string; action: "embed" | "recreate"; target?: any }>,\n    "unmet"?: string[],\n    "rationale"?: string\n  }\n}\n- If unsure which tool to choose for a creation request, DEFAULT to "addScene".\n\nATTACHMENTS-FIRST RULE:\n- If the current user message has attachments (images/videos), you MUST base the mediaPlan on these attachments (ordered), unless the user explicitly says to use previous/older assets or "not these".\n- When multiple attachments and the user did not specify which/how to use them, set "needsClarification": true and provide a concise "clarificationQuestion" listing short options (e.g., filenames, brief tags).\n\nNO ATTACHMENTS RULE:\n- Only include a mediaPlan when the user references media (by name, pronouns like this/that/it/these/those/them, or words like image/screenshot/photo/logo/icon/background/overlay/ui, or "previous").\n- If multiple library assets are plausible and the prompt is not specific enough, set "needsClarification": true with a short choice list instead of guessing.\n\nMEDIA-RESOLUTION TASK:\n- Read the user text and the provided MEDIA LIBRARY and ATTACHMENTS info.\n- Resolve references using ASSET IDS (not URLs).\n- Use per-image directives (imageDirectives) when different assets require different actions (embed vs recreate).\n- Do NOT return mediaPlan as a standalone object; it must be nested in the decision JSON.`;
 
     return `USER: "${prompt}"
 
@@ -349,20 +349,14 @@ Respond with JSON only.`;
     
     // Handle clarification responses
     if (parsed.needsClarification) {
-      // If brain provided both tool and clarification, prefer the tool
-      if (parsed.toolName) {
-        console.log('🎯 [INTENT] Brain wants clarification but chose tool - proceeding with tool:', parsed.toolName);
-        // Continue to normal processing
-      } else {
-        // Only clarification, no tool
-        return {
-          success: true,
-          needsClarification: true,
-          clarificationQuestion: parsed.clarificationQuestion,
-          reasoning: parsed.reasoning,
-          toolName: undefined  // Optional field, use undefined instead of null
-        };
-      }
+      // Always prioritize clarification over execution to avoid wrong guesses
+      return {
+        success: true,
+        needsClarification: true,
+        clarificationQuestion: parsed.clarificationQuestion,
+        reasoning: parsed.reasoning,
+        toolName: undefined
+      };
     }
 
     // Single tool operation

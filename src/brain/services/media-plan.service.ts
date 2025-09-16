@@ -29,7 +29,7 @@ export class MediaPlanService {
     videoUrls?: string[];
     imageDirectives?: ImageDirective[];
     imageAction?: 'embed' | 'recreate';
-    suppressed: boolean;
+    suppressed: boolean; // kept for compatibility; always false in Simple Mode
     reason?: string;
   } {
     const result: {
@@ -42,10 +42,9 @@ export class MediaPlanService {
     } = { suppressed: false };
 
     // Quick exits
-    if (!toolSelection) return { suppressed: true, reason: 'No toolSelection' };
+    if (!toolSelection) return { suppressed: false, reason: 'No toolSelection' };
     const plan = toolSelection.mediaPlan;
-    if (!isMediaPlan(plan)) return { suppressed: true, reason: 'No mediaPlan in selection' };
-    if (!hasMediaLibrary(context)) return { suppressed: true, reason: 'No mediaLibrary in context' };
+    if (!hasMediaLibrary(context)) return { suppressed: false, reason: 'No mediaLibrary in context' };
 
     // Build ID → URL map
     const idToUrl = new Map<string, string>();
@@ -65,7 +64,9 @@ export class MediaPlanService {
     const mappedDirectives: ImageDirective[] | undefined = Array.isArray((plan as any).imageDirectives)
       ? (plan as any).imageDirectives
           .map((d: any) => {
-            const u = typeof d?.url === 'string' ? (idToUrl.get(d.url) || (d.url.startsWith('http') ? d.url : undefined)) : undefined;
+            const token = typeof d?.urlOrId === 'string' ? d.urlOrId : (typeof d?.url === 'string' ? d.url : undefined);
+            if (!token) return undefined;
+            const u = idToUrl.get(token) || (token.startsWith('http') ? token : undefined);
             return u && isValidAction(d?.action) ? { url: u, action: d.action as 'embed' | 'recreate', target: d.target } : undefined;
           })
           .filter((x: any): x is ImageDirective => !!x)
@@ -75,34 +76,31 @@ export class MediaPlanService {
     const isHttp = (u: any) => typeof u === 'string' && /^https?:\/\//i.test(u);
     const attachmentsImages = (userCtx?.imageUrls || []).filter(isHttp);
     const attachmentsVideos = (userCtx?.videoUrls || []).filter(isHttp);
-    const mergedImages = Array.from(new Set([...(plannedImages || []), ...attachmentsImages]));
-    const mergedVideos = Array.from(new Set([...(plannedVideos || []), ...attachmentsVideos]));
+    let mergedImages = Array.from(new Set([...(plannedImages || []), ...attachmentsImages]));
+    let mergedVideos = Array.from(new Set([...(plannedVideos || []), ...attachmentsVideos]));
 
-    // Suppression rule: if it's not an edit and there's no explicit media intent and no attachments, drop planned media
-    const isEdit = toolSelection.toolName === 'editScene';
-    const p = (prompt || '').toLowerCase();
-    const mediaIntent = /\b(image|images|screenshot|screenshots|photo|photos|logo|icon|background|overlay|ui)\b/.test(p)
-      || /use\s+(my|the|previous|this|that)\b/.test(p)
-      || /\bembed\b/.test(p);
-    const hasAttachments = attachmentsImages.length > 0 || attachmentsVideos.length > 0;
-
-    if (!isEdit && !mediaIntent && !hasAttachments && (mergedImages.length || mergedVideos.length)) {
-      return { suppressed: true, reason: 'Plain add without media intent; suppressing plan' };
-    }
-
-    // Heuristic: for editScene, if any planned asset is UI-like (kind:ui or layout:*), prefer recreate
-    if (isEdit) {
+    // Simple Mode fallback: ONLY when exactly one attachment is present and the Brain omitted media
+    const totalAttachments = attachmentsImages.length + attachmentsVideos.length;
+    if (totalAttachments === 1 && mergedImages.length === 0 && mergedVideos.length === 0) {
+      mergedImages = attachmentsImages;
+      mergedVideos = attachmentsVideos;
+      // Optional: derive a minimal imageAction for UI-like attachments if none set by Brain
       try {
-        const plannedIds = (plan.imagesOrdered || []).filter(Boolean);
-        const tagsOfPlanned = plannedIds
-          .map((id) => context.mediaLibrary.images.find((a) => a.id === id)?.tags || [])
+        const tagsOfAttachments = attachmentsImages
+          .map((u) => context.mediaLibrary.images.find((a) => a.url === u)?.tags || [])
           .flat()
           .map((t) => String(t));
-        const hasUiLike = tagsOfPlanned.some((t) => t.startsWith('kind:ui') || t.startsWith('layout:'));
-        if (hasUiLike) result.imageAction = 'recreate';
+        if (!result.imageAction && tagsOfAttachments.some((t) => t.startsWith('kind:ui') || t.startsWith('layout:'))) {
+          result.imageAction = 'recreate';
+        }
       } catch {}
     }
 
+    // Derive overall imageAction if not explicitly provided by the Brain
+    if (!result.imageAction && mappedDirectives && mappedDirectives.length) {
+      if (mappedDirectives.some(d => d.action === 'recreate')) result.imageAction = 'recreate';
+      else if (mappedDirectives.every(d => d.action === 'embed')) result.imageAction = 'embed';
+    }
     // Fallback to Brain-provided action if valid
     if (!result.imageAction && isValidAction((toolSelection as any).imageAction)) {
       result.imageAction = (toolSelection as any).imageAction as 'embed' | 'recreate';
@@ -116,4 +114,3 @@ export class MediaPlanService {
 }
 
 export const mediaPlanService = new MediaPlanService();
-

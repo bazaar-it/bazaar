@@ -232,7 +232,7 @@ export class Orchestrator {
       const planned = mediaPlanService.resolvePlan(
         toolSelection,
         contextPacket,
-        enhancedInput.prompt,
+        input.prompt,
         { imageUrls: input.userContext?.imageUrls as string[] | undefined, videoUrls: input.userContext?.videoUrls as string[] | undefined }
       );
       if (!planned.suppressed && ((planned.imageUrls?.length || 0) > 0 || (planned.videoUrls?.length || 0) > 0)) {
