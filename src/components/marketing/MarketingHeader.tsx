@@ -104,7 +104,7 @@ const MarketingHeader = forwardRef<MarketingHeaderRef, MarketingHeaderProps>(
               <span className="text-sm md:text-base font-medium bg-gradient-to-r from-pink-500 to-orange-500 bg-clip-text text-transparent">V3</span>
               {(isLiveStreaming || showLiveButton) && (
                 <a
-                  href="https://x.com/bazaar_ai"
+                  href="https://x.com/Bazaar___it"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 px-2.5 md:px-3 py-1 md:py-1.5 rounded-full text-red-600 bg-red-50 border border-red-200 shadow-sm hover:bg-red-100/70 transition-colors"
@@ -120,7 +120,7 @@ const MarketingHeader = forwardRef<MarketingHeaderRef, MarketingHeaderProps>(
           {isLiveStreaming && !showLiveButton && (
             <div className="absolute left-1/2 transform -translate-x-1/2">
               <a
-                href="https://x.com/bazaar_ai"
+                href="https://x.com/Bazaar___it"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2 px-3 md:px-4 py-1.5 md:py-2 bg-red-500 text-white rounded-full font-semibold text-xs md:text-sm hover:bg-red-600 transition-all duration-200 shadow-lg animate-pulse"
