@@ -169,8 +169,9 @@ ${contextInstructions} Return the complete modified code.`
           }
         ];
         
-        // Add all images (web screenshots first, then user images)
+        // Add only non-SVG images to image content; SVGs are referenced by URL in text only
         for (const imageUrl of allImageUrls) {
+          if (/\.svg(\?|$)/i.test(imageUrl)) continue; // skip SVG for model image payloads
           messageContent.push({
             type: 'image_url',
             image_url: { url: imageUrl }
@@ -225,7 +226,10 @@ Please edit the code according to the user request. Return the complete modified
       }
       
       const baseContent = getSystemPrompt('CODE_EDITOR');
-      const mode = input.imageAction === 'recreate' ? IMAGE_RECREATE_MODE : (input.imageUrls?.length ? IMAGE_EMBED_MODE : '');
+      // Enforce EMBED mode if any SVG is present
+      const hasSvg = Array.isArray(input.imageUrls) && input.imageUrls.some(u => /\.svg(\?|$)/i.test(u));
+      const effectiveAction = hasSvg ? 'embed' : input.imageAction;
+      const mode = effectiveAction === 'recreate' ? IMAGE_RECREATE_MODE : (input.imageUrls?.length ? IMAGE_EMBED_MODE : '');
       const systemPrompt = { role: 'system' as const, content: `${baseContent}\n${TECHNICAL_GUARDRAILS_BASE}\n${mode}` };
 
       // DEBUG: Log request size
