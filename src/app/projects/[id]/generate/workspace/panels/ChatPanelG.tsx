@@ -396,6 +396,13 @@ export default function ChatPanelG({
     e.preventDefault();
     if (!message.trim() || isGenerating) return;
 
+    // Block sending while any attachments are still uploading to avoid losing media
+    const uploadingCount = uploadedImages.filter((m) => m.status === 'uploading').length;
+    if (uploadingCount > 0) {
+      toast.warning(`Uploading ${uploadingCount} file${uploadingCount > 1 ? 's' : ''}… I\'ll send once done.`);
+      return;
+    }
+
     let trimmedMessage = message.trim();
     const originalMessage = trimmedMessage; // Keep original for display
     

@@ -48,8 +48,8 @@ var EnhancedAudio = ({ audioData }) => {
   );
 };
 
-export default function SingleSceneComposition() {
-  const projectAudio = window.projectAudio;
+export default function SingleSceneComposition(props) {
+  const projectAudio = (props && props.audio) || window.projectAudio;
   return React.createElement(FontLoader, {},
     React.createElement(window.Remotion.AbsoluteFill, {},
       projectAudio && projectAudio.url && React.createElement(EnhancedAudio, { audioData: projectAudio }),
@@ -69,8 +69,8 @@ export function buildMultiSceneModule(args: { sceneImports: string[]; sceneCompo
   parts.push(header);
   parts.push(args.sceneImports.join('\n'));
   parts.push(`
-export default function MultiSceneComposition() {
-  const projectAudio = window.projectAudio;
+export default function MultiSceneComposition(props) {
+  const projectAudio = (props && props.audio) || window.projectAudio;
   return React.createElement(FontLoader, {},
     React.createElement(window.Remotion.AbsoluteFill, {},
       projectAudio && projectAudio.url && React.createElement((function(){
@@ -80,7 +80,7 @@ export default function MultiSceneComposition() {
         return function EA(){
           const frame = useCurrentFrame();
           const { fps } = useVideoConfig();
-          const audio = window.projectAudio || {};
+          const audio = projectAudio || {};
           const trimStart = audio.startTime || 0;
           const trimEnd = audio.endTime || audio.duration || 0;
           const trimmedSec = Math.max(0, trimEnd - trimStart);

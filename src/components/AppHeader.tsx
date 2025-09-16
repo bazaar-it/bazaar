@@ -91,7 +91,7 @@ export default function AppHeader({
   // Create share mutation
   const createShare = api.share.createShare.useMutation({
     onSuccess: async (data) => {
-      // Copy to clipboard and open in new tab
+      // Copy the newly created share link to clipboard
       await handleShareSuccess(data.shareUrl, false);
       setIsSharing(false);
     },
@@ -168,10 +168,6 @@ export default function AppHeader({
       toast.info(`Share link: ${shareUrl}`, { duration: 10000 });
     }
 
-    // Auto-open in new tab after a short delay
-    setTimeout(() => {
-      window.open(shareUrl, '_blank');
-    }, 1000);
   };
 
   // Export/render mutations
@@ -265,7 +261,7 @@ export default function AppHeader({
     
     // Check if share already exists
     if (existingShare) {
-      // Share exists - copy to clipboard and redirect
+      // Share exists - copy to clipboard
       await handleShareSuccess(existingShare.shareUrl, true);
       setIsSharing(false);
     } else {

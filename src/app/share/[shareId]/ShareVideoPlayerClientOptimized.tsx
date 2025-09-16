@@ -4,8 +4,9 @@
 import React, { useMemo, useState, useEffect, lazy, Suspense } from 'react';
 import { Player } from '@remotion/player';
 import { AbsoluteFill, Sequence } from 'remotion';
+import * as Remotion from 'remotion';
 import type { InputProps } from '~/lib/types/video/input-props';
-import { LoopToggle } from '~/components/ui/LoopToggle';
+// Loop control is rendered outside the player (in SharePageContent)
 
 // Lazy load Sucrase only if needed
 const loadSucrase = () => import('sucrase').then(module => module.transform);
@@ -33,17 +34,49 @@ const DynamicScene: React.FC<{ code: string; sceneProps: any; isPreCompiled?: bo
 
             try {
                 let finalCode = code;
-                
-                // Only transform if not pre-compiled
-                if (!isPreCompiled) {
+
+                // Ensure globals for dynamically imported modules
+                // Scenes may reference window.React and window.Remotion
+                (window as any).React = (window as any).React || React;
+                (window as any).Remotion = (window as any).Remotion || Remotion;
+
+                // If code was precompiled for Lambda, adapt it to ESM for dynamic import
+                if (isPreCompiled) {
+                    console.log('[ShareVideoPlayerClient] Adapting Lambda-compiled JS to ESM for Share page');
+                    const hasExportDefault = /export\s+default\s+/.test(finalCode);
+
+                    // Build header conditionally to avoid redeclaration errors
+                    const headerParts: string[] = [];
+                    const hasReactVar = /\b(?:const|let|var)\s+React\b/.test(finalCode);
+                    if (!hasReactVar) headerParts.push('const React = window.React;');
+                    const hasRemotionDestructure = /\bconst\s*\{[^}]*\}\s*=\s*window\.Remotion\b/.test(finalCode);
+                    if (!hasRemotionDestructure) {
+                      headerParts.push(
+                        'const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring, random, Sequence, Audio, Video, Img, staticFile } = (window.Remotion || {});'
+                      );
+                    }
+                    const header = headerParts.length ? headerParts.join('\n') + '\n' : '';
+
+                    // Wrap entire code in an IIFE that returns the component, then export that value.
+                    // Keep header at top-level; export an expression only.
+                    if (!hasExportDefault) {
+                      const iife = `(function __bazaar_module__(){\n${finalCode}\n})();`;
+                      finalCode = `${header}const __bazaar_default__ = ${iife}\nexport default __bazaar_default__;`;
+                    } else {
+                      finalCode = `${header}${finalCode}`;
+                    }
+                } else {
+                    // Only transform TSX if not pre-compiled
                     console.log('[ShareVideoPlayerClient] Compiling TSX on client (slow path)');
                     const transform = await loadSucrase();
                     finalCode = transform(code, {
                         transforms: ['typescript', 'jsx'],
                         production: true,
                     }).code;
-                } else {
-                    console.log('[ShareVideoPlayerClient] Using pre-compiled JS (fast path)');
+                    // Ensure React identifier is available in module scope (only if not already declared)
+                    if (!/\b(?:const|let|var)\s+React\b/.test(finalCode)) {
+                      finalCode = `const React = window.React;\n` + finalCode;
+                    }
                 }
                 
                 const blob = new Blob([finalCode], { type: 'application/javascript' });
@@ -134,6 +167,12 @@ export default function ShareVideoPlayerClientOptimized({ inputProps, audio, isL
       }
     };
   }, [audio]);
+  
+  // Ensure React and Remotion are accessible for dynamically imported scene modules
+  useEffect(() => {
+    (window as any).React = (window as any).React || React;
+    (window as any).Remotion = (window as any).Remotion || Remotion;
+  }, []);
   
   // Log performance metrics
   useEffect(() => {
@@ -251,11 +290,6 @@ export default function ShareVideoPlayerClientOptimized({ inputProps, audio, isL
             </AbsoluteFill>
           )}
         />
-        
-        {/* Loop Toggle */}
-        <div className="absolute top-4 right-4 z-10">
-          <LoopToggle isLooping={isLooping} onToggle={setIsLooping} />
-        </div>
       </div>
     </div>
   );

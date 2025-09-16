@@ -264,3 +264,16 @@ The system was over-engineered. We were trying to "fix" code that was already co
 **Success**: All goals met or exceeded
 
 The most important fix was the simplest: **Stop breaking working code.**
+
+---
+
+## 2025-09-16: Share Flow Polish
+
+- Prevented project header Share button from opening the share page after copy.
+- Ensures clipboard-only behavior to keep users inside the editor while they distribute links.
+
+## 2025-09-16: Preview Audio Restoration
+
+- Rewired `buildComposite.ts` single- and multi-scene wrappers to read audio from Remotion Player props with a window fallback.
+- Fixes silent in-browser previews when `window.projectAudio` is stripped, while exports already carried sound.
+- Ensured `RemotionPreview.tsx` unlocks audio synchronously on pointer gestures with a document-level listener, so Chrome accepts the gesture and plays audio immediately.

@@ -6,6 +6,7 @@ import React, { useEffect, useMemo, Suspense, useState, useRef, useCallback } fr
 import { Player, type PlayerRef } from '@remotion/player';
 import { ErrorBoundary } from 'react-error-boundary';
 import { createPortal } from 'react-dom';
+import { enableAudioWithGesture } from '~/lib/utils/audioContext';
 
 // Error fallback component to display when component loading fails
 function ErrorFallback({ error }: { error: Error }) {
@@ -88,7 +89,7 @@ export default function RemotionPreview({
   }, [width, height]);
   
   // Helper: Try to resume any media elements inside the player (best-effort)
-  const resumeMediaElements = useCallback(async () => {
+  const resumeMediaElements = useCallback(() => {
     try {
       const scope = playerContainerRef.current;
       if (!scope) return;
@@ -99,9 +100,9 @@ export default function RemotionPreview({
           // Unmute and set volume for immediate sound
           (m as any).muted = false;
           if (typeof (m as any).volume === 'number') (m as any).volume = 1;
-          const p = (m as HTMLMediaElement).play?.();
-          if (p && typeof p.then === 'function') {
-            await p.catch((e: any) => {
+          const playPromise = (m as HTMLMediaElement).play?.();
+          if (playPromise && typeof playPromise.catch === 'function') {
+            playPromise.catch((e: any) => {
               try { console.warn('[RemotionPreview] Media play() blocked or failed:', e); } catch {}
             });
           }
@@ -109,6 +110,12 @@ export default function RemotionPreview({
           try { console.warn('[RemotionPreview] Failed to resume media element:', err); } catch {}
         }
       }
+    } catch {}
+  }, []);
+
+  const unlockAudioContext = useCallback(() => {
+    try {
+      enableAudioWithGesture();
     } catch {}
   }, []);
   
@@ -202,33 +209,54 @@ export default function RemotionPreview({
 
   // One-time audio unlock using any pointer gesture inside the player container
   useEffect(() => {
+    if (!hasAudio || typeof document === 'undefined') return;
+    const handleFirstInteraction = () => {
+      if (audioUnlockRef.current) return;
+      audioUnlockRef.current = true;
+      unlockAudioContext();
+      try {
+        document.removeEventListener('pointerdown', handleFirstInteraction, true);
+        document.removeEventListener('keydown', handleFirstInteraction, true);
+        document.removeEventListener('touchstart', handleFirstInteraction, true);
+      } catch {}
+    };
+    document.addEventListener('pointerdown', handleFirstInteraction, true);
+    document.addEventListener('keydown', handleFirstInteraction, true);
+    document.addEventListener('touchstart', handleFirstInteraction, true);
+    return () => {
+      try {
+        document.removeEventListener('pointerdown', handleFirstInteraction, true);
+        document.removeEventListener('keydown', handleFirstInteraction, true);
+        document.removeEventListener('touchstart', handleFirstInteraction, true);
+      } catch {}
+    };
+  }, [hasAudio, unlockAudioContext]);
+
+  useEffect(() => {
     if (!hasAudio) return;
     const el = playerContainerRef.current;
     if (!el) return;
-    const onPointerDown = async () => {
-      if (audioUnlockRef.current) return;
+    const onPointerDown = () => {
+      unlockAudioContext();
       audioUnlockRef.current = true;
-      try {
-        // Ensure browser considers this a user gesture for audio
-        const { enableAudioWithGesture } = await import('~/lib/utils/audioContext');
-        enableAudioWithGesture();
-      } catch {}
       try {
         const api: any = playerRef?.current as any;
         if (api?.setMuted) api.setMuted(false);
         if (api?.setVolume) api.setVolume(1);
-        if (api?.play) api.play();
+        const playPromise = api?.play?.();
+        if (playPromise && typeof playPromise.catch === 'function') {
+          playPromise.catch((err: any) => {
+            try { console.warn('[RemotionPreview] Player play() blocked or failed:', err); } catch {}
+          });
+        }
       } catch {}
-      // Directly try to resume underlying <audio>/<video> tags rendered by Remotion
-      try { await resumeMediaElements(); } catch {}
-      // Remove listener after first gesture
-      try { el.removeEventListener('pointerdown', onPointerDown, { capture: true } as any); } catch {}
+      try { resumeMediaElements(); } catch {}
     };
-    el.addEventListener('pointerdown', onPointerDown, { capture: true } as any);
+    el.addEventListener('pointerdown', onPointerDown, true);
     return () => {
-      try { el.removeEventListener('pointerdown', onPointerDown, { capture: true } as any); } catch {}
+      try { el.removeEventListener('pointerdown', onPointerDown, true); } catch {}
     };
-  }, [hasAudio, playerRef, resumeMediaElements]);
+  }, [hasAudio, playerRef, unlockAudioContext, resumeMediaElements]);
 
   
   return (
