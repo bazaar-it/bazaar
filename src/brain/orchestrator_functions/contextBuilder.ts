@@ -57,19 +57,34 @@ export class ContextBuilder {
       // Include ALL messages for complete conversation understanding
       const recentChat = (input.chatHistory || []);
 
-      // 3. Build image context from conversation
-      const imageContext = await this.buildImageContext(input);
-      
-      // 4. Build web analysis context from URL detection
-      const webContext = await this.buildWebContext(input);
-      
-      // 5. Get persistent asset context
-      const projectAssets = await assetContext.getProjectAssets(input.projectId);
+      // 3-6. Parallelize independent context ops for performance
+      const [
+        imageContext,
+        webContext,
+        projectAssets,
+        mediaLibImages,
+        mediaLibVideos,
+        templateContext
+      ] = await Promise.all([
+        this.buildImageContext(input),
+        this.buildWebContext(input),
+        assetContext.getProjectAssets(input.projectId),
+        assetContext.listProjectAssets(input.projectId, { types: ['image', 'logo'], limit: 50 }),
+        assetContext.listProjectAssets(input.projectId, { types: ['video'], limit: 50 }),
+        this.buildTemplateContext(input, scenesWithCode),
+      ]);
+
       console.log(`📚 [CONTEXT BUILDER] Found ${projectAssets.assets.length} persistent assets`);
       console.log(`📚 [CONTEXT BUILDER] Logos: ${projectAssets.logos.length}`);
+
+      let mediaLibrary: ContextPacket['mediaLibrary'] | undefined = undefined;
+      try {
+        mediaLibrary = { images: mediaLibImages, videos: mediaLibVideos };
+        console.log(`📚 [CONTEXT BUILDER] MediaLibrary built: images=${mediaLibImages.length}, videos=${mediaLibVideos.length}`);
+      } catch (e) {
+        console.warn('📚 [CONTEXT BUILDER] Failed to construct MediaLibrary (non-fatal):', e);
+      }
       
-      // 6. NEW: Build template context when appropriate
-      const templateContext = await this.buildTemplateContext(input, scenesWithCode);
       if (templateContext) {
         console.log(`📚 [CONTEXT BUILDER] Added ${templateContext.examples.length} template examples for better generation`);
       }
@@ -113,7 +128,10 @@ export class ContextBuilder {
         } : undefined,
         
         // NEW: Template context for improved generation
-        templateContext: templateContext
+        templateContext: templateContext,
+
+        // NEW: Compact Media Library for Intent Analyzer
+        mediaLibrary
       };
 
     } catch (error) {

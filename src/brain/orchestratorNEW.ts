@@ -10,6 +10,7 @@ import type {
   OrchestrationOutput 
 } from "~/lib/types/ai/brain.types";
 import { FEATURES } from "~/config/features";
+import { mediaPlanService } from "./services/media-plan.service";
 
 export class Orchestrator {
   private contextBuilder = new ContextBuilder();
@@ -227,6 +228,25 @@ export class Orchestrator {
         console.log(`🧠 [ORCHESTRATOR] Parsed duration from prompt: ${requestedDurationFrames} frames`);
       }
 
+      // Resolve media plan via service (maps IDs→URLs, merges attachments, applies suppression & heuristics)
+      const planned = mediaPlanService.resolvePlan(
+        toolSelection,
+        contextPacket,
+        input.prompt,
+        { imageUrls: input.userContext?.imageUrls as string[] | undefined, videoUrls: input.userContext?.videoUrls as string[] | undefined }
+      );
+      if (!planned.suppressed && ((planned.imageUrls?.length || 0) > 0 || (planned.videoUrls?.length || 0) > 0)) {
+        console.log('🧠 [NEW ORCHESTRATOR][MediaPlan] Using planned media', {
+          images: planned.imageUrls?.length || 0,
+          videos: planned.videoUrls?.length || 0,
+          rationale: toolSelection.mediaPlan?.rationale || 'n/a'
+        });
+      } else if (planned.suppressed) {
+        console.log('🛑 [NEW ORCHESTRATOR][MediaPlan] Suppressing planned media', { reason: planned.reason });
+      }
+
+      // Heuristics for imageAction are handled inside mediaPlanService
+
       const result = {
         success: true,
         toolUsed: toolSelection.toolName,
@@ -243,8 +263,9 @@ export class Orchestrator {
             referencedSceneIds: toolSelection.referencedSceneIds,
             // Website pipeline disabled: do not pass websiteUrl
             websiteUrl: FEATURES.WEBSITE_TO_VIDEO_ENABLED ? toolSelection.websiteUrl : undefined,
-            imageUrls: (input.userContext?.imageUrls as string[]) || undefined,
-            videoUrls: (input.userContext?.videoUrls as string[]) || undefined,
+            // Prefer Brain mediaPlan; merge with any user attachments (dedup)
+            imageUrls: planned.suppressed ? ((input.userContext?.imageUrls as string[]) || undefined) : planned.imageUrls || ((input.userContext?.imageUrls as string[]) || undefined),
+            videoUrls: planned.suppressed ? ((input.userContext?.videoUrls as string[]) || undefined) : planned.videoUrls || ((input.userContext?.videoUrls as string[]) || undefined),
             audioUrls: (input.userContext?.audioUrls as string[]) || undefined,
             webContext: contextPacket.webContext,
             modelOverride: input.userContext?.modelOverride, // Pass model override if provided
@@ -254,8 +275,9 @@ export class Orchestrator {
             isYouTubeAnalysis: hasYouTube && hasTimeSpec,
             // Include template context for better first-scene generation
             templateContext: contextPacket.templateContext,
-            imageAction: toolSelection.imageAction,
-            imageDirectives: toolSelection.imageDirectives
+            // Only pass a valid imageAction enum; drop 'mixed' or unknown
+            imageAction: planned.imageAction || (toolSelection.imageAction === 'embed' || toolSelection.imageAction === 'recreate' ? toolSelection.imageAction : undefined),
+            imageDirectives: planned.imageDirectives && planned.imageDirectives.length ? planned.imageDirectives : undefined
           },
           workflow: toolSelection.workflow,
         }
@@ -271,10 +293,13 @@ export class Orchestrator {
         templateNames: contextPacket.templateContext?.examples?.map(t => t.name) || [],
       }); 
       
-      // Log actual image URLs being passed to tools
-      if ((input.userContext?.imageUrls as string[])?.length) {
-        console.log('📸 [NEW ORCHESTRATOR] Image URLs being passed to tool:', input.userContext?.imageUrls);
-      }
+      // Log actual image URLs being passed to tools (from toolContext)
+      try {
+        const imgUrlsForLog = (result.result.toolContext)?.imageUrls as string[] | undefined;
+        if (imgUrlsForLog?.length) {
+          console.log('📸 [NEW ORCHESTRATOR] Image URLs being passed to tool:', imgUrlsForLog);
+        }
+      } catch {}
       
       console.log('🧠 [NEW ORCHESTRATOR] === ORCHESTRATION COMPLETE ===\n');
       return result;
