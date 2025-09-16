@@ -23,18 +23,21 @@ class AudioContextManager {
   }
 
   private setupUserGestureDetection() {
+    if (typeof document === 'undefined') {
+      return;
+    }
     const enableAudio = () => {
       this.hasUserGesture = true;
       // Remove listeners once we have gesture
-      document.removeEventListener('click', enableAudio);
-      document.removeEventListener('touchstart', enableAudio);
-      document.removeEventListener('keydown', enableAudio);
+      document.removeEventListener('click', enableAudio, true);
+      document.removeEventListener('touchstart', enableAudio, true);
+      document.removeEventListener('keydown', enableAudio, true);
     };
 
     // Listen for any user interaction
-    document.addEventListener('click', enableAudio, { once: true });
-    document.addEventListener('touchstart', enableAudio, { once: true });
-    document.addEventListener('keydown', enableAudio, { once: true });
+    document.addEventListener('click', enableAudio, { once: true, capture: true });
+    document.addEventListener('touchstart', enableAudio, { once: true, capture: true });
+    document.addEventListener('keydown', enableAudio, { once: true, capture: true });
   }
 
   /**

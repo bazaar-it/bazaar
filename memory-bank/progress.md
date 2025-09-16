@@ -1100,3 +1100,4 @@ The core video generation pipeline is **production-ready** with:
 - 2025-09-16: Preview audio parity with exports.
   - Updated `src/lib/video/buildComposite.ts` to hydrate Remotion compositions from `props.audio` before falling back to `window.projectAudio`.
   - Resolves muted preview playback when browsers isolate globals despite correct export audio.
+  - Follow-up: `RemotionPreview.tsx` now unlocks audio synchronously on pointer interaction with a document-level gesture hook, preventing Chrome's autoplay rejection.
