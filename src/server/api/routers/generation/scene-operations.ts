@@ -415,6 +415,14 @@ export const generateScene = protectedProcedure
         if ((!ctx.referencedSceneIds || ctx.referencedSceneIds.length === 0) && inheritedSceneUrls.length > 0) {
           ctx.referencedSceneIds = inheritedSceneUrls;
         }
+        // Force-embed policy for SVGs: If any image URL is SVG, enforce embed mode and record a note
+        try {
+          const svgPresent = Array.isArray(ctx.imageUrls) && ctx.imageUrls.some((u: string) => /\.svg(\?|$)/i.test(u));
+          if (svgPresent) {
+            ctx.imageAction = 'embed';
+            ctx.__svgEmbedNote = true; // internal flag to notify user later
+          }
+        } catch {}
       }
 
       const decision: BrainDecision = {
@@ -469,6 +477,19 @@ export const generateScene = protectedProcedure
           console.log(`[${response.getRequestId()}] ✅ IMMEDIATE: Created new assistant message delivered to chat: ${assistantMessageId}`);
         }
       }
+
+      // 6.1 Optional: Inform about SVG embed policy once per request
+      try {
+        const ctx: any = orchestratorResponse.result?.toolContext;
+        if (ctx?.__svgEmbedNote && !input.metadata?.suppressAssistantMessage) {
+          await messageService.createMessage({
+            projectId,
+            content: 'Note: SVG images are embedded as-is. For AI-based recreation or vision analysis, please upload PNG/JPEG/WebP.',
+            role: 'assistant',
+            status: 'success',
+          });
+        }
+      } catch {}
 
       // 7. Execute the tool
       console.log(`[${response.getRequestId()}] Executing tool: ${decision.toolName}`);
