@@ -93,3 +93,13 @@ This affects all 5 chunks in the video export, happening in VideoComposition com
   - Keeps existing static replacements and direct path rewrites
   - Placeholder: transparent 1x1 PNG data URL for unknown names
 - Expected result: Avatar-heavy scenes export correctly; no dependency on `window.BazaarAvatars` in Lambda
+## 2025-09-16 — Share Page playback fix
+
+- Bug: All scenes on `/share/[id]` failed with "Scene Error: Illegal return statement".
+- Root cause: Share route used `dbScene.jsCode` (Lambda-targeted) which embeds a top-level `return Component;` and strips `window.Remotion` destructuring. This is valid for `new Function(...)` execution in Lambda/preview, but illegal in ES module dynamic `import()` used by the share player.
+- Fix: In `ShareVideoPlayerClient(Optimized)`, detect precompiled code and adapt it to ESM at runtime:
+  - Prepend bindings: `const React = window.React;` and `const { ... } = (window.Remotion || {});`
+  - Replace trailing `return Component;` with `export default Component;`
+  - Ensure `window.React` and `window.Remotion` are populated from app imports (`import * as Remotion from 'remotion'`).
+- Result: Share page correctly loads both TSX scenes (client-compiled) and precompiled JS scenes (Lambda-style) without server/DB changes.
+- Next: Consider emitting a dual artifact in DB (Lambda `jsCode_function` + ESM `jsCode_esm`) to avoid client-side adaptation, and add an evaluation in `/src/lib/evals/` to assert share playback across artifact types.
