@@ -67,6 +67,13 @@ export function NewProjectButton({
   // Add effect to listen for external close events and cleanup
   useEffect(() => {
     const handleCloseFormatOptions = () => {
+      try {
+        // Immediately disable pointer events on the overlay to avoid intercepting clicks
+        const el = document.getElementById('new-project-format-overlay');
+        if (el) {
+          (el as HTMLElement).style.pointerEvents = 'none';
+        }
+      } catch {}
       setShowFormatOptions(false);
     };
 
@@ -314,6 +321,7 @@ export function NewProjectButton({
       {/* Format Options Dropdown */}
       {enableQuickCreate && !disableFormatDropdown && showFormatOptions && (
         <div 
+          id="new-project-format-overlay"
           className="fixed bg-white border border-gray-200 rounded-lg shadow-lg z-50 w-[180px]"
           style={{
             left: 'calc(4rem + 20px)', // Same as workspace left positioning (4rem sidebar + 10px margin + 10px gap)
