@@ -122,6 +122,18 @@ export const projectRouter = createTRPCRouter({
       return userProjects;
     }),
 
+  // Return only the most recently updated project ID for the current user
+  getLatestId: protectedProcedure
+    .query(async ({ ctx }) => {
+      const [row] = await ctx.db
+        .select({ id: projects.id })
+        .from(projects)
+        .where(eq(projects.userId, ctx.session.user.id))
+        .orderBy(desc(projects.updatedAt))
+        .limit(1);
+      return row?.id ?? null;
+    }),
+
   // Delete all empty projects (zero scenes) for current user
   pruneEmpty: protectedProcedure
     .mutation(async ({ ctx }) => {

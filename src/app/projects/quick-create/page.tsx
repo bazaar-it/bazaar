@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { api } from "~/trpc/react";
@@ -11,7 +11,7 @@ export default function QuickCreatePage() {
   const { data: session, status } = useSession();
   const { lastFormat } = useLastUsedFormat();
   const hasRedirectedRef = useRef(false);
-  const [storedLastId, setStoredLastId] = useState<string | null>(null);
+  const createTimerRef = useRef<number | null>(null);
   
   // Create project mutation
   const createProjectMutation = api.project.create.useMutation({
@@ -26,19 +26,13 @@ export default function QuickCreatePage() {
     }
   });
   const pruneMutation = api.project.pruneEmpty.useMutation();
-  const listQuery = api.project.list.useQuery(undefined, { enabled: status === 'authenticated' });
-  const lastProjectQuery = api.project.getById.useQuery(
-    { id: storedLastId || '' },
-    { enabled: status === 'authenticated' && !!storedLastId, retry: false }
-  );
+  const latestIdQuery = api.project.getLatestId.useQuery(undefined, {
+    enabled: status === 'authenticated',
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+  });
 
-  // Load lastProjectId from localStorage once
-  useEffect(() => {
-    try {
-      const id = localStorage.getItem('lastProjectId');
-      if (id) setStoredLastId(id);
-    } catch {}
-  }, []);
+  // (Optional) We no longer rely on lastProjectId for speed — prefer latestId fast path.
 
   useEffect(() => {
     // Simple, direct logic - no complex dependencies
@@ -62,49 +56,35 @@ export default function QuickCreatePage() {
       return;
     }
 
-    // 4. Try fast path: validate last opened project before redirecting
-    if (storedLastId && !hasRedirectedRef.current) {
-      if (lastProjectQuery.isLoading || lastProjectQuery.isFetching) {
-        console.log('[QuickCreate] Validating lastProjectId...');
-        return; // wait until validated
-      }
-      if (lastProjectQuery.data?.id) {
-        hasRedirectedRef.current = true;
-        router.replace(`/projects/${lastProjectQuery.data.id}/generate`);
-        return;
-      }
-      // Not found or error: clear the key and continue to latest/new flow
-      try { localStorage.removeItem('lastProjectId'); } catch {}
-    }
-
-    // 5. First, prune empty projects in background (non-blocking)
+    // 4. First, prune empty projects in background (non-blocking)
     if (!pruneMutation.isPending && !pruneMutation.isSuccess) {
       pruneMutation.mutate();
     }
 
-    // 6. Wait for projects to load
-    if (listQuery.isLoading || listQuery.isFetching) {
-      console.log('[QuickCreate] Waiting for projects list...');
+    // 5. Prefer redirect to latest if available quickly
+    if (latestIdQuery.data && !hasRedirectedRef.current) {
+      hasRedirectedRef.current = true;
+      if (createTimerRef.current) { clearTimeout(createTimerRef.current); createTimerRef.current = null; }
+      console.log('[QuickCreate] Redirecting to latest project:', latestIdQuery.data);
+      router.replace(`/projects/${latestIdQuery.data}/generate`);
       return;
     }
 
-    // 7. If we have projects already, redirect to most recent (list is ordered by updatedAt desc server-side)
-    const projects = listQuery.data;
-    if (projects && projects.length > 0) {
-      const latest = projects[0];
-      if (latest?.id && !hasRedirectedRef.current) {
-        hasRedirectedRef.current = true;
-        router.replace(`/projects/${latest.id}/generate`);
-        return;
-      }
+    // 6. Schedule creation fallback after a short window (prevents stalls on large accounts)
+    if (!hasRedirectedRef.current && !createProjectMutation.isPending && !createProjectMutation.isSuccess && createTimerRef.current == null) {
+      createTimerRef.current = window.setTimeout(() => {
+        if (!hasRedirectedRef.current && !createProjectMutation.isPending && !createProjectMutation.isSuccess) {
+          hasRedirectedRef.current = true;
+          console.log('[QuickCreate] Creating new project (fallback) with format:', lastFormat);
+          createProjectMutation.mutate({ format: lastFormat });
+        }
+      }, 600); // 600ms window for latestId fast path
     }
 
-    // 8. Otherwise, create a new project
-    if (!createProjectMutation.isPending && !createProjectMutation.isSuccess) {
-      console.log('[QuickCreate] No existing projects found, creating new with format:', lastFormat);
-      createProjectMutation.mutate({ format: lastFormat });
-    }
-  }, [status, session, createProjectMutation.isPending, createProjectMutation.isSuccess, lastFormat, router, listQuery.isLoading, listQuery.isFetching, listQuery.data, pruneMutation.isPending, pruneMutation.isSuccess]);
+    return () => {
+      if (createTimerRef.current) { clearTimeout(createTimerRef.current); createTimerRef.current = null; }
+    };
+  }, [status, session, latestIdQuery.data, latestIdQuery.isLoading, createProjectMutation.isPending, createProjectMutation.isSuccess, lastFormat, router, pruneMutation.isPending, pruneMutation.isSuccess]);
 
   // Loading state
   return (
