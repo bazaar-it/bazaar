@@ -366,8 +366,8 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
               />
             </div>
             
-            {/* Timeline panel - fixed height based on content - ADMIN ONLY */}
-            {isTimelineMounted && user?.isAdmin && (
+            {/* Timeline panel - fixed height based on content */}
+            {isTimelineMounted && (
               <div
                 className="mt-2"
                 style={{
