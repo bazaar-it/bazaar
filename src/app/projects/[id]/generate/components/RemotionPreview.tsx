@@ -112,41 +112,49 @@ export default function RemotionPreview({
     } catch {}
   }, []);
   
-  // Update frame from player and infer play/pause state for external listeners
+  // Keep a lightweight detector to infer play/pause and call callbacks fast,
+  // but do not use it to update the visible frame counter.
   useEffect(() => {
     if (!playerRef?.current) return;
     let lastFrame = -1;
     let stillTicks = 0;
-    const tick = () => {
+    const interval = setInterval(() => {
       try {
-        const frame = (playerRef.current as any)?.getCurrentFrame?.() ?? 0;
-        if (typeof frame === 'number') {
-          setCurrentFrame(frame);
-          if (lastFrame === -1) lastFrame = frame;
-          if (frame !== lastFrame) {
-            stillTicks = 0;
-            // Went from paused -> playing
-            if (!(window as any).__previewPlaying) {
-              (window as any).__previewPlaying = true;
-              try { window.dispatchEvent(new CustomEvent('preview-play-state-change', { detail: { playing: true } })); } catch {}
-              try { onPlay?.(); } catch {}
-            }
-          } else {
-            stillTicks += 1;
-            // Consider paused if no frame advance for a few ticks
-            if ((window as any).__previewPlaying && stillTicks >= 3) {
-              (window as any).__previewPlaying = false;
-              try { window.dispatchEvent(new CustomEvent('preview-play-state-change', { detail: { playing: false } })); } catch {}
-              try { onPause?.(); } catch {}
-            }
-          }
+        const frame = (playerRef.current as any)?.getCurrentFrame?.();
+        if (typeof frame !== 'number') return;
+        if (lastFrame === -1) {
           lastFrame = frame;
+          return;
         }
+        if (frame !== lastFrame) {
+          stillTicks = 0;
+          if (!(window as any).__previewPlaying) {
+            (window as any).__previewPlaying = true;
+            try { onPlay?.(); } catch {}
+          }
+        } else {
+          stillTicks += 1;
+          if ((window as any).__previewPlaying && stillTicks >= 3) {
+            (window as any).__previewPlaying = false;
+            try { onPause?.(); } catch {}
+          }
+        }
+        lastFrame = frame;
       } catch {}
-    };
-    const interval = setInterval(tick, 150);
+    }, 100);
     return () => clearInterval(interval);
   }, [playerRef, onPlay, onPause]);
+
+  // Subscribe to PreviewPanelG 30fps frame events for a perfect in-player counter
+  useEffect(() => {
+    const onFrame = (ev: Event) => {
+      const e = ev as CustomEvent<any>;
+      const frame = e?.detail?.frame;
+      if (typeof frame === 'number') setCurrentFrame(frame);
+    };
+    window.addEventListener('preview-frame-update' as any, onFrame);
+    return () => window.removeEventListener('preview-frame-update' as any, onFrame);
+  }, []);
 
   // Find the player element for portal injection
   useEffect(() => {

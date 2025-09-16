@@ -191,8 +191,8 @@ export function NewProjectButton({
       return;
     }
     
-    // Simple redirect to quick-create page - let it handle everything
-    router.push('/projects/quick-create');
+    // Server-side instant creation + redirect (faster and more reliable)
+    router.push(`/projects/new?format=${lastFormat}`);
   }, [onStart, session?.user, router]);
 
   // Detect if we're on mobile
