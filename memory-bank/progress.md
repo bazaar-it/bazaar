@@ -1,6 +1,9 @@
 # 🏆 Bazaar-Vid Progress Summary
 
 ## 📝 Latest Update (Sep 15, 2025)
+## 📝 Latest Update (Sep 16, 2025)
+- Sprint 108/Share: Fixed "Illegal return statement" on Share page for all scenes. Root cause: Share page was importing Lambda-targeted `jsCode` which contains a top-level `return Component;` (valid for `new Function` execution), invalid in ES modules. Share player now adapts Lambda JS to ESM on-the-fly (replaces terminal return with `export default`, injects `React`/`Remotion` globals) and remains backward compatible with TSX scenes. Ensures robust playback across both artifact types without altering DB.
+- Sprint 107/Preview: Audio now rides through Remotion Player props. `buildComposite.ts` no longer depends on `window.projectAudio`; compositions read `props.audio` with a window fallback. Fixes silent previews in browsers that sandbox globals while export audio stayed intact.
 - Marketing: Added Product Hunt featured badge to homepage (under hero CTA) ahead of launch. Link opens in new tab with noopener for safety; uses official PH SVG widget.
 - Sprint 107/UX: Fixed portrait preview sizing in workspace. Reworked RemotionPreview to compute fit via ResizeObserver (min(container/comp)) and removed brittle aspect-ratio wrapper. Prevents preview from overflowing under Timeline and ensures live resize when adding side panels.
 - UX: Enabled default autoplay for preview player (new and existing projects). Player now starts automatically; audio remains gesture-unlocked per existing logic.
@@ -1087,7 +1090,14 @@ The core video generation pipeline is **production-ready** with:
  - 2025-08-30: Drafted Deep Research–powered “Make Better” design.
    - Added `memory-bank/sprints/sprint98_autofix_analysis/DEEP-RESEARCH-MAKE-BETTER-DESIGN.md`.
    - Defined plan-only Phase 1 with SSE progress and safety rails (compile → auto-fix → eval) before rollout.
- - 2025-08-30: Transition Tool design + scaffold.
-   - Added `src/tools/transition/transition.ts` and types in `src/tools/helpers/types.ts`.
-   - Documented in `memory-bank/sprints/sprint98_autofix_analysis/TRANSITION-TOOL-DESIGN.md`.
-   - Next: add Remotion overlap renderer and executor glue to apply snippets via Edit Tool.
+- 2025-08-30: Transition Tool design + scaffold.
+  - Added `src/tools/transition/transition.ts` and types in `src/tools/helpers/types.ts`.
+  - Documented in `memory-bank/sprints/sprint98_autofix_analysis/TRANSITION-TOOL-DESIGN.md`.
+  - Next: add Remotion overlap renderer and executor glue to apply snippets via Edit Tool.
+- 2025-09-16: Share link UX hardening on project page.
+  - Stopped auto-opening share URLs after copy in `src/components/AppHeader.tsx`.
+  - Keeps creators focused in the editor; copy workflows unchanged across browsers.
+- 2025-09-16: Preview audio parity with exports.
+  - Updated `src/lib/video/buildComposite.ts` to hydrate Remotion compositions from `props.audio` before falling back to `window.projectAudio`.
+  - Resolves muted preview playback when browsers isolate globals despite correct export audio.
+  - Follow-up: `RemotionPreview.tsx` now unlocks audio synchronously on pointer interaction with a document-level gesture hook, preventing Chrome's autoplay rejection.
