@@ -6,6 +6,25 @@ import { assetContext, AssetContextService } from '~/server/services/context/ass
 import type { Asset } from '~/lib/types/asset-context';
 import crypto from 'crypto';
 
+// Ensure custom object metadata values are ASCII-safe for R2/S3 headers.
+// - Strips diacritics, control chars, and non-ASCII
+// - Collapses whitespace and trims
+// - Truncates to a reasonable length
+function sanitizeHttpHeaderValue(input: string, fallback = 'file'): string {
+  try {
+    // Normalize and strip diacritics
+    const noDiacritics = input.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+    // Keep only printable ASCII 0x20-0x7E
+    const printableAscii = noDiacritics.replace(/[^\x20-\x7E]/g, '');
+    // Collapse whitespace and trim
+    const collapsed = printableAscii.replace(/\s+/g, ' ').trim();
+    const sanitized = collapsed.substring(0, 120);
+    return sanitized.length > 0 ? sanitized : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 // Configure the route to accept larger uploads (100MB)
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -76,6 +95,7 @@ export async function POST(request: NextRequest) {
     const buffer = new Uint8Array(arrayBuffer);
 
     // Upload file directly to R2
+    const originalNameSanitized = sanitizeHttpHeaderValue(file.name);
     const command = new PutObjectCommand({
       Bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME!,
       Key: uniqueKey,
@@ -84,8 +104,11 @@ export async function POST(request: NextRequest) {
       Metadata: {
         'uploaded-by': session.user.id,
         'project-id': projectId,
-        'original-name': file.name,
+        // Header values must be ASCII; sanitize to avoid ERR_INVALID_CHAR
+        'original-name': originalNameSanitized,
       },
+      // Offer browsers a friendly name as well (ASCII-only)
+      ContentDisposition: `inline; filename="${originalNameSanitized}"`,
     });
 
     await s3Client.send(command);
@@ -95,6 +118,7 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Upload] ✅ ${isVideo ? 'Video' : isAudio ? 'Audio' : 'Image'} uploaded successfully:`, {
       originalName: file.name,
+      originalNameSanitized,
       uniqueKey,
       publicUrl: publicUrl.substring(0, 100) + '...',
       fileSize: file.size
