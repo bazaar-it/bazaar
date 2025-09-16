@@ -245,21 +245,7 @@ export class Orchestrator {
         console.log('🛑 [NEW ORCHESTRATOR][MediaPlan] Suppressing planned media', { reason: planned.reason });
       }
 
-      // Heuristic: if editing and plan includes UI-like assets, prefer recreate mode for edits
-      try {
-        if (toolSelection.toolName === 'editScene') {
-          const lib = (contextPacket as any).mediaLibrary as { images?: Array<{id: string; tags: string[]}> } | undefined;
-          const plan = (toolSelection as any).mediaPlan as { imagesOrdered?: string[] } | undefined;
-          if (lib && plan && Array.isArray(plan.imagesOrdered)) {
-            const tagsOfPlanned = plan.imagesOrdered
-              .map(id => (lib.images || []).find(a => a.id === id)?.tags || [])
-              .flat()
-              .map(t => String(t));
-            const hasUiLike = tagsOfPlanned.some(t => t.startsWith('kind:ui') || t.startsWith('layout:')) || false;
-            if (hasUiLike) computedImageAction = 'recreate';
-          }
-        }
-      } catch {}
+      // Heuristics for imageAction are handled inside mediaPlanService
 
       const result = {
         success: true,

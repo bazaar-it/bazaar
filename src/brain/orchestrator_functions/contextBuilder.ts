@@ -85,8 +85,6 @@ export class ContextBuilder {
         console.warn('📚 [CONTEXT BUILDER] Failed to construct MediaLibrary (non-fatal):', e);
       }
       
-      // 6. NEW: Build template context when appropriate
-      const templateContext = await this.buildTemplateContext(input, scenesWithCode);
       if (templateContext) {
         console.log(`📚 [CONTEXT BUILDER] Added ${templateContext.examples.length} template examples for better generation`);
       }
