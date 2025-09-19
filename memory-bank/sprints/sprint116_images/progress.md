@@ -42,3 +42,26 @@ Date: 2025-09-10 (Timeline undo/redo)
   - New TimelineAction types: `split`, `trimLeft`, `duplicate` with appropriate undo paths.
   - Drag-resize end now records `updateDuration` to allow undo of trims.
   - Duplicate action records snapshot to allow redo.
+- 2025-09-16: Regression sweep logged in `2025-09-16-image-workflow-status.md`.
+  - Confirmed upload→asset→context pipeline still intact; media-plan guard prevents crashes.
+  - Removed helper override that forced `addAudio`, unblocking scene creation with existing project audio.
+  - Outlined instrumentation work to capture Brain media plans and attachment mapping on dev.
+- 2025-09-16: Prompt vs context weighting analysis in `2025-09-16-prompt-context-analysis.md`.
+  - Documented how attachments, media library, and prompts compete inside the orchestrator.
+  - Proposed deterministic pre-rules, logging, and temp adjustments to put user prompt + newest attachments first.
+- 2025-09-16: Released `image-prompt-eval-guide.md` with 30 canonical image workflows.
+  - Covers embed vs recreate, multi-image directives, attachment priority, and clarification triggers.
+  - Designed for eval scenarios and regression testing; each case lists tool, `imageAction`, and expected directives.
+- 2025-09-16: Added `2025-09-16-optimal-vs-current.md` comparing present pipeline with desired state.
+  - Highlights deterministic intent layer, structured logging, instrumentation, evaluation harness, and UX hooks needed for reliability.
+- 2025-09-16: Implemented dev-only structured logging for media-plan decisions.
+  - Orchestrator + MediaPlanService now emit `[MEDIA_PLAN_SUMMARY]` / `[MEDIA_PLAN_RESOLVE]` logs with prompt preview, attachments, plan status, and resolved `imageAction` (non-production).
+  - Logs include requestId (when available) so QA/engineers can trace decisions end-to-end.
+- 2025-09-16: Added CLI dry-run tool `npm run debug:media-plan`.
+  - Script accepts `--project`, `--user`, `--prompt`, `--image/--video/--audio/--scene`, and optional `--execute`.
+  - Calls orchestrator directly (no UI) and prints decision summary; optional tool execution for deeper debugging.
+- 2025-09-16: Added batch runner `npm run debug:media-plan-suite`.
+  - `--mode cases` replays 30 canonical prompts from `scripts/data/media-plan-use-cases.json` against a supplied test project/user.
+  - `--mode prod --limit N` replays recent real prompts with image uploads directly from the production DB (read-only) for audit.
+- 2025-09-16: CLI outputs now include `latencyMs` and optional `--output path` for NDJSON logs.
+- 2025-09-16: Added `scripts/data/media-plan-curated.json` with vetted prod prompts (real R2 URLs + user/project IDs).

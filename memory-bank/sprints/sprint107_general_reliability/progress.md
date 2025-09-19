@@ -277,3 +277,13 @@ The most important fix was the simplest: **Stop breaking working code.**
 - Rewired `buildComposite.ts` single- and multi-scene wrappers to read audio from Remotion Player props with a window fallback.
 - Fixes silent in-browser previews when `window.projectAudio` is stripped, while exports already carried sound.
 - Ensured `RemotionPreview.tsx` unlocks audio synchronously on pointer gestures with a document-level listener, so Chrome accepts the gesture and plays audio immediately.
+
+## 2025-09-16: Media Plan Null Safety
+
+- Added guard in `MediaPlanService.resolvePlan` to tolerate tool decisions without a `mediaPlan`.
+- Prevents staging crash (`Cannot read properties of undefined (reading 'imagesOrdered')`) when Brain selects `addAudio` or other tools that skip media planning.
+
+## 2025-09-16: Honor Brain Tool Selection
+
+- Removed the helper override that auto-swapped `addScene` to `addAudio` whenever `audioUrls` were present.
+- Restores ability to add scenes after uploading audio; Brain stays in control of tool choice.

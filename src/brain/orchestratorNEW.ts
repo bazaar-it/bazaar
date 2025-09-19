@@ -16,7 +16,7 @@ export class Orchestrator {
   private contextBuilder = new ContextBuilder();
   private intentAnalyzer = new IntentAnalyzer();
 
-  async processUserInput(input: OrchestrationInput): Promise<OrchestrationOutput> {
+  async processUserInput(input: OrchestrationInput, options?: { requestId?: string }): Promise<OrchestrationOutput> {
     console.log('\n🧠 [NEW ORCHESTRATOR] === PROCESSING USER INPUT ===');
     console.log('🧠 [NEW ORCHESTRATOR] Input:', {
       prompt: input.prompt,
@@ -26,6 +26,9 @@ export class Orchestrator {
       hasAudio: !!(input.userContext?.audioUrls as string[])?.length,
       sceneCount: input.storyboardSoFar?.length || 0
     });
+
+    const requestId = options?.requestId;
+    const shouldLogStructured = process.env.NODE_ENV !== 'production';
     
     // Define enhancedPrompt at the beginning of the function
     let enhancedPrompt = input.prompt;
@@ -233,7 +236,8 @@ export class Orchestrator {
         toolSelection,
         contextPacket,
         input.prompt,
-        { imageUrls: input.userContext?.imageUrls as string[] | undefined, videoUrls: input.userContext?.videoUrls as string[] | undefined }
+        { imageUrls: input.userContext?.imageUrls as string[] | undefined, videoUrls: input.userContext?.videoUrls as string[] | undefined },
+        { requestId }
       );
       if (!planned.suppressed && ((planned.imageUrls?.length || 0) > 0 || (planned.videoUrls?.length || 0) > 0)) {
         console.log('🧠 [NEW ORCHESTRATOR][MediaPlan] Using planned media', {
@@ -243,6 +247,43 @@ export class Orchestrator {
         });
       } else if (planned.suppressed) {
         console.log('🛑 [NEW ORCHESTRATOR][MediaPlan] Suppressing planned media', { reason: planned.reason });
+      }
+
+      if (shouldLogStructured) {
+        try {
+          const attachments = {
+            images: (input.userContext?.imageUrls as string[] | undefined)?.length || 0,
+            videos: (input.userContext?.videoUrls as string[] | undefined)?.length || 0,
+            audio: (input.userContext?.audioUrls as string[] | undefined)?.length || 0,
+          };
+          const summary = {
+            type: 'orchestrator.mediaPlan.summary',
+            requestId,
+            projectId: input.projectId,
+            promptPreview: input.prompt.slice(0, 160),
+            tool: toolSelection.toolName,
+            mediaPlan: toolSelection.mediaPlan ? {
+              hasPlan: true,
+              imagesOrdered: toolSelection.mediaPlan.imagesOrdered?.length || 0,
+              videosOrdered: toolSelection.mediaPlan.videosOrdered?.length || 0,
+              directives: Array.isArray((toolSelection as any).mediaPlan?.imageDirectives)
+                ? (toolSelection as any).mediaPlan.imageDirectives.length
+                : 0,
+            } : { hasPlan: false },
+            attachments,
+            resolved: {
+              suppressed: planned.suppressed,
+              reason: planned.reason,
+              imageUrls: planned.imageUrls?.length || 0,
+              videoUrls: planned.videoUrls?.length || 0,
+              imageAction: planned.imageAction || (toolSelection.imageAction ?? null),
+              directives: planned.imageDirectives?.length || 0,
+            },
+          };
+          console.log('[MEDIA_PLAN_SUMMARY]', JSON.stringify(summary));
+        } catch (err) {
+          console.warn('🧠 [NEW ORCHESTRATOR] Failed to log media plan summary:', err);
+        }
       }
 
       // Heuristics for imageAction are handled inside mediaPlanService

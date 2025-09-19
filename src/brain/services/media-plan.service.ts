@@ -23,7 +23,8 @@ export class MediaPlanService {
     toolSelection: ToolSelectionResult,
     context: ContextPacket,
     prompt: string,
-    userCtx?: { imageUrls?: string[]; videoUrls?: string[] }
+    userCtx?: { imageUrls?: string[]; videoUrls?: string[] },
+    opts?: { requestId?: string }
   ): {
     imageUrls?: string[];
     videoUrls?: string[];
@@ -43,7 +44,26 @@ export class MediaPlanService {
 
     // Quick exits
     if (!toolSelection) return { suppressed: false, reason: 'No toolSelection' };
+    const requestId = opts?.requestId;
+    const shouldLog = process.env.NODE_ENV !== 'production';
+
     const plan = toolSelection.mediaPlan;
+    if (!plan) {
+      if (shouldLog) {
+        console.log('[MEDIA_PLAN_RESOLVE]', JSON.stringify({
+          type: 'mediaPlan.resolve',
+          requestId,
+          status: 'no-plan',
+          promptPreview: prompt.slice(0, 160),
+          tool: toolSelection.toolName,
+          attachments: {
+            images: userCtx?.imageUrls?.length || 0,
+            videos: userCtx?.videoUrls?.length || 0,
+          },
+        }));
+      }
+      return { suppressed: false, reason: 'No mediaPlan' };
+    }
     if (!hasMediaLibrary(context)) return { suppressed: false, reason: 'No mediaLibrary in context' };
 
     // Build ID → URL map
@@ -109,6 +129,42 @@ export class MediaPlanService {
     result.imageUrls = mergedImages.length ? mergedImages : undefined;
     result.videoUrls = mergedVideos.length ? mergedVideos : undefined;
     result.imageDirectives = mappedDirectives && mappedDirectives.length ? mappedDirectives : undefined;
+    if (shouldLog) {
+      try {
+        const summary = {
+          type: 'mediaPlan.resolve',
+          requestId,
+          status: 'resolved',
+          tool: toolSelection.toolName,
+          plan: {
+            imagesOrdered: plan.imagesOrdered?.length || 0,
+            videosOrdered: plan.videosOrdered?.length || 0,
+            directives: Array.isArray((plan as any).imageDirectives)
+              ? (plan as any).imageDirectives.length
+              : 0,
+            rationale: (plan as any).rationale || null,
+          },
+          mapped: {
+            images: plannedImages.length,
+            videos: plannedVideos.length,
+            directives: mappedDirectives?.length || 0,
+            imageAction: result.imageAction || (toolSelection as any).imageAction || null,
+          },
+          attachments: {
+            images: userCtx?.imageUrls?.length || 0,
+            videos: userCtx?.videoUrls?.length || 0,
+            mergedImages: result.imageUrls?.length || 0,
+            mergedVideos: result.videoUrls?.length || 0,
+          },
+          suppressed: result.suppressed,
+          reason: result.reason || null,
+        };
+        console.log('[MEDIA_PLAN_RESOLVE]', JSON.stringify(summary));
+      } catch (err) {
+        console.warn('[MediaPlanService] Failed to log media plan resolution:', err);
+      }
+    }
+
     return result;
   }
 }

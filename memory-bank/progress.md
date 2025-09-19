@@ -1101,3 +1101,26 @@ The core video generation pipeline is **production-ready** with:
   - Updated `src/lib/video/buildComposite.ts` to hydrate Remotion compositions from `props.audio` before falling back to `window.projectAudio`.
   - Resolves muted preview playback when browsers isolate globals despite correct export audio.
   - Follow-up: `RemotionPreview.tsx` now unlocks audio synchronously on pointer interaction with a document-level gesture hook, preventing Chrome's autoplay rejection.
+- 2025-09-16: Media-plan guards in orchestration.
+  - `MediaPlanService.resolvePlan` now bails when the Brain omits a plan instead of throwing on `imagesOrdered`.
+  - Fixes staging crash when tools like `addAudio` skip media planning (error `Cannot read properties of undefined`).
+- 2025-09-16: Respect Brain tool choice after audio uploads.
+  - Removed helper override that forced `addAudio` whenever `audioUrls` existed.
+  - Fixes regression where users with project audio couldn’t add new scenes (0 scenes generated).
+- 2025-09-16: Image workflow regression notes captured in `sprint116_images/2025-09-16-image-workflow-status.md`.
+  - Verified upload → asset-context → media-plan mapping path; added follow-up instrumentation checklist.
+- 2025-09-16: Deep dive on prompt vs. context weighting (`sprint116_images/2025-09-16-prompt-context-analysis.md`).
+  - Highlighted how attachments compete with historical assets in Brain intent decisions.
+  - Proposed deterministic keyword pre-rules, orchestration logging, and temperature tweaks to keep current user intent dominant.
+- 2025-09-16: Added `sprint116_images/image-prompt-eval-guide.md` with 30 evaluation scenarios.
+  - Canonical prompts covering embed vs. recreate, multi-attachment directives, historical asset recall, and clarification cases.
+  - Designed for regression tests and manual QA to ensure tool selection and `imageAction` stay deterministic.
+- 2025-09-16: Documented current vs. optimal image orchestration (`sprint116_images/2025-09-16-optimal-vs-current.md`).
+  - Identified gaps in deterministic intent handling, instrumentation, and UX.
+  - Outlined roadmap: keyword pre-rules, structured logging, eval harness, prompt refinements, and potential user toggles.
+- 2025-09-16: Added dev-only media-plan instrumentation (orchestrator + service emit structured logs).
+  - Logs include prompt preview, attachment counts, plan status, resolved `imageAction`, and requestId (skip in production).
+- 2025-09-16: Added CLI dry-run tool `npm run debug:media-plan` for orchestration tests without UI.
+- 2025-09-16: Added batch suite `npm run debug:media-plan-suite` (cases + prod sampling).
+- 2025-09-16: CLI harness outputs `latencyMs` and supports `--output` to persist NDJSON summaries.
+- 2025-09-16: Curated prod-based eval dataset in `scripts/data/media-plan-curated.json` (real R2 URLs + project/user IDs).

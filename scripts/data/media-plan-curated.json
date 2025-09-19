@@ -1,0 +1,58 @@
+[
+  {
+    "id": "prod-embed-1",
+    "title": "Chrome demo embed",
+    "projectId": "20a27e00-3270-4c54-ba3a-8c2cd34467ac",
+    "userId": "2e05de05-20b2-44e1-aa0a-daeac7d41153",
+    "prompt": "I want to create a demo video on how to use chrome. Here I want to show how to open a new tab, go to a website and add it as a bookmark.",
+    "imageUrls": [
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/20a27e00-3270-4c54-ba3a-8c2cd34467ac/images/1758207524433-2e70e605-31ea-4b90-a945-dbf19932cf51.png"
+    ],
+    "expectedTool": "addScene",
+    "expectedImageAction": "embed",
+    "notes": "Single screenshot, embed expected"
+  },
+  {
+    "id": "prod-recreate-multi",
+    "title": "E-commerce multi-image recreate",
+    "projectId": "63a7815e-119e-49f6-abc1-f4d07cd2e51d",
+    "userId": "c1f30a73-5ec8-4106-a3a9-9276aa6c239a",
+    "prompt": "This is my e-commerce software. Make a good video from this.",
+    "imageUrls": [
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/63a7815e-119e-49f6-abc1-f4d07cd2e51d/images/1758205554513-23a1ae5a-fefa-44ac-82da-6953257eef73.png",
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/63a7815e-119e-49f6-abc1-f4d07cd2e51d/images/1758205556394-80ff250d-d01e-47d3-ac6d-eb84b38a0aa8.png",
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/63a7815e-119e-49f6-abc1-f4d07cd2e51d/images/1758205557951-4a6cbaf2-08cb-415d-ae72-080faba73c11.png",
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/63a7815e-119e-49f6-abc1-f4d07cd2e51d/images/1758205559972-4f178157-da38-449e-a8ce-93e224c242ab.png",
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/63a7815e-119e-49f6-abc1-f4d07cd2e51d/images/1758205561490-4f2b5cc3-de5b-4feb-8aaa-dd5a370f5178.png",
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/63a7815e-119e-49f6-abc1-f4d07cd2e51d/images/1758205563544-1fd46f29-f540-4cb9-81bc-d3fac2a418f8.png",
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/63a7815e-119e-49f6-abc1-f4d07cd2e51d/images/1758205566020-59ed234b-d679-462b-b8fb-b5eddc4c5883.png"
+    ],
+    "expectedTool": "addScene",
+    "expectedImageAction": "recreate",
+    "notes": "Multiple UI screenshots, expect recreate"
+  },
+  {
+    "id": "prod-mixed-embed-recreate",
+    "title": "ProductHunt promo (mixed images)",
+    "projectId": "aaaf87ad-864b-449b-b151-0f77b1d4fb5a",
+    "userId": "1acc5fd5-276c-48ac-8d28-18b45bd51b6c",
+    "prompt": "I would like to create a ProductHunt promotion video for ResumeCustomizer (resumecustomizer.com)...",
+    "imageUrls": [
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/aaaf87ad-864b-449b-b151-0f77b1d4fb5a/images/1758204278253-dbe509e6-5c86-4c86-a46d-64235ad80435.png",
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/aaaf87ad-864b-449b-b151-0f77b1d4fb5a/images/1758204279733-42a918d9-3248-469a-83da-709762d27124.png",
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/aaaf87ad-864b-449b-b151-0f77b1d4fb5a/images/1758204465465-6aa7dc89-bc9a-44d1-bde3-fafa932ec721.png"
+    ],
+    "expectedTool": "addScene",
+    "expectedImageAction": "mixed",
+    "notes": "Mix of character photo and UI; expect directives"
+  },
+  {
+    "id": "prod-assets-only",
+    "title": "Project assets, no new upload",
+    "projectId": "20a27e00-3270-4c54-ba3a-8c2cd34467ac",
+    "userId": "2e05de05-20b2-44e1-aa0a-daeac7d41153",
+    "prompt": "Updated \"0.3 && bookmarkPhase\"",
+    "imageUrls": [],
+    "notes": "No attachment, but project has stored assets"
+  }
+]

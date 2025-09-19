@@ -1,0 +1,274 @@
+[
+  {
+    "id": 1,
+    "title": "Single image, explicit embed request",
+    "prompt": "Add this product photo as the hero background and fade in the headline",
+    "imageUrls": ["https://dummyimage.com/1920x1080/111/fff.png&text=Hero+Photo"],
+    "expectedTool": "addScene",
+    "expectedImageAction": "embed"
+  },
+  {
+    "id": 2,
+    "title": "Single image, explicit recreate request",
+    "prompt": "Recreate this dashboard screenshot as a clean animated scene",
+    "imageUrls": ["https://dummyimage.com/1600x900/222/fff.png&text=Dashboard"],
+    "expectedTool": "addScene",
+    "expectedImageAction": "recreate"
+  },
+  {
+    "id": 3,
+    "title": "Single image referencing existing scene",
+    "prompt": "Update scene 2 to match this screenshot",
+    "imageUrls": ["https://dummyimage.com/1600x900/333/fff.png&text=Scene+2"],
+    "sceneIds": ["scene-2-id"],
+    "expectedTool": "editScene",
+    "expectedImageAction": "recreate"
+  },
+  {
+    "id": 4,
+    "title": "Multiple images with per-image instructions",
+    "prompt": "Create a split-screen: left is the UI screenshot, right is the product photo",
+    "imageUrls": [
+      "https://dummyimage.com/1080x1920/444/fff.png&text=UI",
+      "https://dummyimage.com/1080x1920/555/fff.png&text=Photo"
+    ],
+    "expectedTool": "addScene",
+    "expectedImageAction": "mixed"
+  },
+  {
+    "id": 5,
+    "title": "Multiple images forming a collage",
+    "prompt": "Make a grid with these three photos and add a title",
+    "imageUrls": [
+      "https://dummyimage.com/800x800/666/fff.png&text=Photo+1",
+      "https://dummyimage.com/800x800/777/fff.png&text=Photo+2",
+      "https://dummyimage.com/800x800/888/fff.png&text=Photo+3"
+    ],
+    "expectedTool": "addScene",
+    "expectedImageAction": "embed"
+  },
+  {
+    "id": 6,
+    "title": "Latest upload overrides earlier ones",
+    "prompt": "Use this new screenshot instead of the previous one",
+    "imageUrls": ["https://dummyimage.com/1600x900/999/fff.png&text=New"],
+    "sceneIds": ["scene-3-id"],
+    "expectedTool": "editScene",
+    "expectedImageAction": "recreate"
+  },
+  {
+    "id": 7,
+    "title": "Historical asset referenced by name",
+    "prompt": "Bring back the 'Pricing Table' screenshot and highlight the totals",
+    "assetTags": ["pricing", "table"],
+    "expectedTool": "editScene",
+    "expectedImageAction": "embed"
+  },
+  {
+    "id": 8,
+    "title": "Voice prompt referencing recent upload",
+    "prompt": "Animate this chart to slide up",
+    "imageUrls": ["https://dummyimage.com/1400x800/0af/fff.png&text=Chart"],
+    "expectedTool": "addScene",
+    "expectedImageAction": "recreate"
+  },
+  {
+    "id": 9,
+    "title": "Ambiguous multi-image request",
+    "prompt": "Make a new scene with these",
+    "imageUrls": [
+      "https://dummyimage.com/1200x800/f0a/fff.png&text=A",
+      "https://dummyimage.com/1200x800/a0f/fff.png&text=B"
+    ],
+    "expectedTool": "needsClarification"
+  },
+  {
+    "id": 10,
+    "title": "Embed image with overlay text",
+    "prompt": "Show this product photo and overlay animated labels",
+    "imageUrls": ["https://dummyimage.com/1920x1080/08f/fff.png&text=Product"],
+    "expectedTool": "addScene",
+    "expectedImageAction": "embed"
+  },
+  {
+    "id": 11,
+    "title": "Recreate with modified color palette",
+    "prompt": "Rebuild this UI but convert it to dark mode",
+    "imageUrls": ["https://dummyimage.com/1600x900/111/0ff.png&text=Dashboard+Light"],
+    "expectedTool": "addScene",
+    "expectedImageAction": "recreate"
+  },
+  {
+    "id": 12,
+    "title": "Replace embedded image in existing scene",
+    "prompt": "In scene 1, swap the hero background with this updated shot",
+    "imageUrls": ["https://dummyimage.com/1920x1080/f80/fff.png&text=Hero+Update"],
+    "sceneIds": ["scene-1-id"],
+    "expectedTool": "editScene",
+    "expectedImageAction": "embed"
+  },
+  {
+    "id": 13,
+    "title": "Edit scene to match new screenshot",
+    "prompt": "Update the analytics scene to match this screenshot",
+    "imageUrls": ["https://dummyimage.com/1600x900/4af/fff.png&text=Analytics"],
+    "sceneIds": ["scene-analytics"],
+    "expectedTool": "editScene",
+    "expectedImageAction": "recreate"
+  },
+  {
+    "id": 14,
+    "title": "Sequential screens",
+    "prompt": "Create a carousel: first this onboarding screen, then this dashboard",
+    "imageUrls": [
+      "https://dummyimage.com/1600x900/f4a/fff.png&text=Onboarding",
+      "https://dummyimage.com/1600x900/4fa/fff.png&text=Dashboard"
+    ],
+    "expectedTool": "addScene",
+    "expectedImageAction": "recreate"
+  },
+  {
+    "id": 15,
+    "title": "Background embed with strong text",
+    "prompt": "Create an energetic text scene using this background image",
+    "imageUrls": ["https://dummyimage.com/1920x1080/ffa/333.png&text=Energy"],
+    "expectedTool": "addScene",
+    "expectedImageAction": "embed"
+  },
+  {
+    "id": 16,
+    "title": "Reference prior-day upload",
+    "prompt": "Still use the screenshot I uploaded yesterday and animate the cards",
+    "assetTags": ["yesterday", "screenshot"],
+    "expectedTool": "addScene",
+    "expectedImageAction": "recreate"
+  },
+  {
+    "id": 17,
+    "title": "Mixed intent: recreate layout, embed photo",
+    "prompt": "Use this UI screenshot as the layout but overlay the original photo",
+    "imageUrls": [
+      "https://dummyimage.com/1600x900/ccd/111.png&text=UI",
+      "https://dummyimage.com/1600x900/ddc/111.png&text=Photo"
+    ],
+    "expectedTool": "addScene",
+    "expectedImageAction": "mixed"
+  },
+  {
+    "id": 18,
+    "title": "Embed with gradient readability",
+    "prompt": "Place this photo and make the headline pop",
+    "imageUrls": ["https://dummyimage.com/1920x1080/222/fff.png&text=Photo"],
+    "expectedTool": "addScene",
+    "expectedImageAction": "embed"
+  },
+  {
+    "id": 19,
+    "title": "Ambiguous reference to 'it'",
+    "prompt": "Make it match this",
+    "imageUrls": ["https://dummyimage.com/1600x900/aaa/fff.png&text=Unknown"],
+    "expectedTool": "needsClarification"
+  },
+  {
+    "id": 20,
+    "title": "Audio already added, now image",
+    "prompt": "Add this screenshot as a new slide",
+    "imageUrls": ["https://dummyimage.com/1600x900/00f/fff.png&text=Slide"],
+    "expectedTool": "addScene",
+    "expectedImageAction": "recreate"
+  },
+  {
+    "id": 21,
+    "title": "Transparent logo over background",
+    "prompt": "Put the transparent logo over this gradient",
+    "imageUrls": [
+      "https://dummyimage.com/1920x1080/f0f/fff.png&text=Gradient",
+      "https://dummyimage.com/400x400/fff/000.png&text=Logo"
+    ],
+    "expectedTool": "addScene",
+    "expectedImageAction": "mixed"
+  },
+  {
+    "id": 22,
+    "title": "Recreate with animation direction",
+    "prompt": "Recreate this dashboard and slide cards in sequentially",
+    "imageUrls": ["https://dummyimage.com/1600x900/0ff/000.png&text=Dashboard"],
+    "expectedTool": "addScene",
+    "expectedImageAction": "recreate"
+  },
+  {
+    "id": 23,
+    "title": "Scene edit replacing background image",
+    "prompt": "In scene 4, replace the background with this gradient image",
+    "imageUrls": ["https://dummyimage.com/1920x1080/fcc/000.png&text=Gradient"],
+    "sceneIds": ["scene-4-id"],
+    "expectedTool": "editScene",
+    "expectedImageAction": "embed"
+  },
+  {
+    "id": 24,
+    "title": "Blend colors from one image with layout from another",
+    "prompt": "Blend the color scheme of this gradient with the layout of this dashboard",
+    "imageUrls": [
+      "https://dummyimage.com/1600x900/ffe/333.png&text=Gradient",
+      "https://dummyimage.com/1600x900/333/ffe.png&text=Layout"
+    ],
+    "expectedTool": "addScene",
+    "expectedImageAction": "recreate"
+  },
+  {
+    "id": 25,
+    "title": "Scene attachment with new image",
+    "prompt": "Here’s scene 2 and a new screenshot—update it to match",
+    "imageUrls": ["https://dummyimage.com/1600x900/fef/111.png&text=Update"],
+    "sceneIds": ["scene-2-id"],
+    "expectedTool": "editScene",
+    "expectedImageAction": "recreate"
+  },
+  {
+    "id": 26,
+    "title": "Follow-up referencing prior embed",
+    "prompt": "I liked the layout—use this photo inside the second card",
+    "imageUrls": ["https://dummyimage.com/800x600/ffc/111.png&text=Card"],
+    "sceneIds": ["scene-layout"],
+    "expectedTool": "editScene",
+    "expectedImageAction": "embed"
+  },
+  {
+    "id": 27,
+    "title": "Image plus explicit duration",
+    "prompt": "Use this screenshot to create a quick intro scene, 3 seconds long",
+    "imageUrls": ["https://dummyimage.com/1920x1080/cff/111.png&text=Intro"],
+    "expectedTool": "addScene",
+    "expectedImageAction": "recreate",
+    "requestedDurationFrames": 90
+  },
+  {
+    "id": 28,
+    "title": "Follow-up animation on earlier embed",
+    "prompt": "Now animate the text we added over that photo",
+    "sceneIds": ["scene-photo"],
+    "expectedTool": "editScene",
+    "expectedImageAction": "embed"
+  },
+  {
+    "id": 29,
+    "title": "Multiple attachments, user corrects choice",
+    "prompt": "Use the second screenshot; the first one was wrong",
+    "imageUrls": [
+      "https://dummyimage.com/1600x900/ccc/000.png&text=Wrong",
+      "https://dummyimage.com/1600x900/0c0/fff.png&text=Right"
+    ],
+    "expectedTool": "addScene",
+    "expectedImageAction": "recreate",
+    "useLatestOnly": true
+  },
+  {
+    "id": 30,
+    "title": "Asset metadata reference",
+    "prompt": "Use the asset tagged 'kind:logo' as a floating element",
+    "assetTags": ["kind:logo"],
+    "expectedTool": "addScene",
+    "expectedImageAction": "embed"
+  }
+]
