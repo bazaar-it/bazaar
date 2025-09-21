@@ -2,13 +2,23 @@ import '~/env';
 
 import { randomUUID } from 'crypto';
 import { exit } from 'process';
-import { asc, desc, eq, sql } from 'drizzle-orm';
+import { asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import fs from 'fs';
 import path from 'path';
 
 import { orchestrator } from '~/brain/orchestratorNEW';
 import { db } from '~/server/db';
 import { messages, projects, scenes } from '~/server/db/schema';
+
+if (typeof fetch === 'undefined') {
+  const polyfill = await import('node-fetch');
+  (globalThis as any).fetch = polyfill.default as typeof fetch;
+  (globalThis as any).Headers = polyfill.Headers;
+  (globalThis as any).Request = polyfill.Request;
+  (globalThis as any).Response = polyfill.Response;
+}
+
+type SkipPlanPolicy = 'fail' | 'warn' | 'ignore';
 
 interface CLIOptions {
   mode: 'cases' | 'prod';
@@ -18,6 +28,9 @@ interface CLIOptions {
   limit: number;
   execute: boolean;
   output?: string;
+  focusFile?: string;
+  focusIds?: string[];
+  skipPlanPolicy: SkipPlanPolicy;
 }
 
 interface CaseDefinition {
@@ -46,6 +59,7 @@ interface StructuredLogSummary {
   imageAction?: string | null;
   expectedTool?: string | null;
   expectedImageAction?: string | null;
+  expectedImageDirectives?: any;
   toolMatch?: boolean;
   imageActionMatch?: boolean;
   attachments?: {
@@ -58,9 +72,43 @@ interface StructuredLogSummary {
     videos: number;
     imageAction?: string | null;
     suppressed?: boolean;
+    imageDirectives?: any;
+    sourceMap?: Array<{ url: string; sources: string[]; details?: string[] }>;
+    skippedPlan?: number;
+  };
+  mediaPlanDebug?: {
+    plan?: any;
+    sourceMap?: Array<{ url: string; sources: string[]; details?: string[] }>;
+    plannedImages?: string[];
+    plannedVideos?: string[];
+    attachments?: { images: string[]; videos: string[] };
+    mappedDirectives?: any;
+    skippedPlanUrls?: string[];
   };
   latencyMs?: number;
 }
+
+interface SuiteRunReport {
+  total: number;
+  processed: number;
+  skippedRequestCount: number;
+  skippedPlanHits: number;
+  skippedRequests: Array<{
+    requestId: string;
+    skipCount: number;
+    foreignProjects: string[];
+  }>;
+  skippedProjectBreakdown: Record<string, number>;
+}
+
+const EMPTY_REPORT: SuiteRunReport = {
+  total: 0,
+  processed: 0,
+  skippedRequestCount: 0,
+  skippedPlanHits: 0,
+  skippedRequests: [],
+  skippedProjectBreakdown: {},
+};
 
 function parseArgs(): CLIOptions {
   const args = process.argv.slice(2);
@@ -91,6 +139,18 @@ function parseArgs(): CLIOptions {
 
   const mode = (take('mode') as 'cases' | 'prod' | undefined) ?? 'cases';
 
+  let skipPlanPolicy: SkipPlanPolicy = 'fail';
+  const policyRaw = take('skip-plan-policy')?.toLowerCase();
+  if (policyRaw === 'warn' || policyRaw === 'ignore' || policyRaw === 'fail') {
+    skipPlanPolicy = policyRaw;
+  }
+  if (takeBool('allow-skipped-plan') || takeBool('allowSkippedPlan')) {
+    skipPlanPolicy = 'warn';
+  }
+  if (takeBool('ignore-skipped-plan') || takeBool('ignoreSkippedPlan')) {
+    skipPlanPolicy = 'ignore';
+  }
+
   return {
     mode,
     projectId: take('project'),
@@ -99,7 +159,15 @@ function parseArgs(): CLIOptions {
     limit: takeNumber('limit', 10),
     execute: takeBool('execute'),
     output: take('output'),
+    focusFile: take('focus'),
+    skipPlanPolicy,
   };
+}
+
+function extractProjectIdFromUrl(url?: string | null) {
+  if (!url) return null;
+  const match = url.match(/projects\/([0-9a-fA-F-]+)/);
+  return match?.[1] ?? null;
 }
 
 async function fetchProjectScenes(projectId: string) {
@@ -138,6 +206,7 @@ function printSummary(tag: string, summary: StructuredLogSummary) {
     imageActionMatch: summary.imageActionMatch,
     attachments: summary.attachments,
     resolvedMedia: summary.resolvedMedia,
+    mediaPlanDebug: summary.mediaPlanDebug,
     latencyMs: summary.latencyMs,
   };
   console.log(JSON.stringify(payload, null, 2));
@@ -152,7 +221,7 @@ function persistSummary(outputPath: string | undefined, summary: StructuredLogSu
   fs.appendFileSync(outputPath, JSON.stringify(summary) + '\n');
 }
 
-async function runCaseSuite(opts: CLIOptions) {
+async function runCaseSuite(opts: CLIOptions): Promise<SuiteRunReport> {
   if (!opts.projectId || !opts.userId) {
     console.warn('⚠️  cases mode: default --project/--user not supplied; ensure each case provides projectId/userId.');
   }
@@ -182,6 +251,7 @@ async function runCaseSuite(opts: CLIOptions) {
   let imageActionMismatches = 0;
 
   let index = 0;
+  let processed = 0;
   for (const testCase of cases) {
     index += 1;
     const requestId = `CASE-${testCase.id}-${randomUUID()}`;
@@ -240,6 +310,7 @@ async function runCaseSuite(opts: CLIOptions) {
       userContext.requestedDurationFrames = testCase.requestedDurationFrames;
     }
 
+    processed += 1;
     console.log(`➡️  Case ${index}/${cases.length}: ${testCase.title}`);
     console.log(`    Prompt: ${testCase.prompt}`);
 
@@ -268,12 +339,21 @@ async function runCaseSuite(opts: CLIOptions) {
       imageAction: response.result?.toolContext?.imageAction ?? null,
       expectedTool: testCase.expectedTool ?? null,
       expectedImageAction: testCase.expectedImageAction ?? null,
+      expectedImageDirectives: (testCase as any).expectedImageDirectives,
       attachments: {
         images: imageUrls.length,
         videos: videoUrls.length,
         audio: audioUrls.length,
       },
       latencyMs,
+    };
+
+    summary.resolvedMedia = {
+      images: response.result?.toolContext?.imageUrls?.length || 0,
+      videos: response.result?.toolContext?.videoUrls?.length || 0,
+      imageAction: response.result?.toolContext?.imageAction ?? null,
+      suppressed: false,
+      imageDirectives: response.result?.toolContext?.imageDirectives,
     };
 
     if (testCase.expectedTool) {
@@ -289,21 +369,24 @@ async function runCaseSuite(opts: CLIOptions) {
 
     if (testCase.expectedImageAction) {
       imageActionComparisons += 1;
-      summary.imageActionMatch = summary.imageAction === testCase.expectedImageAction;
+      if (testCase.expectedImageAction === 'mixed') {
+        const directives = summary.resolvedMedia?.imageDirectives;
+        const hasEmbed = Array.isArray(directives) && directives.some((d: any) => d?.action === 'embed');
+        const hasRecreate = Array.isArray(directives) && directives.some((d: any) => d?.action === 'recreate');
+        summary.imageActionMatch = hasEmbed && hasRecreate;
+      } else {
+        summary.imageActionMatch = summary.imageAction === testCase.expectedImageAction;
+      }
       if (!summary.imageActionMatch) {
         imageActionMismatches += 1;
         console.warn(
           `    ⚠️  imageAction mismatch – expected ${testCase.expectedImageAction}, got ${summary.imageAction ?? 'null'}`
         );
+        if (summary.resolvedMedia?.imageDirectives) {
+          console.warn('       ↳ resolved imageDirectives:', summary.resolvedMedia.imageDirectives);
+        }
       }
     }
-
-    summary.resolvedMedia = {
-      images: response.result?.toolContext?.imageUrls?.length || 0,
-      videos: response.result?.toolContext?.videoUrls?.length || 0,
-      imageAction: response.result?.toolContext?.imageAction ?? null,
-      suppressed: false,
-    };
 
     printSummary('case', summary);
     persistSummary(opts.output, summary);
@@ -340,12 +423,23 @@ async function runCaseSuite(opts: CLIOptions) {
     }
     console.log('');
   }
+
+  return {
+    ...EMPTY_REPORT,
+    total: cases.length,
+    processed,
+  };
 }
 
-async function runProdSample(opts: CLIOptions) {
-  console.log(`\n🧪 Sampling ${opts.limit} real prompts from production DB (image uploads)`);
+async function runProdSample(opts: CLIOptions): Promise<SuiteRunReport> {
+  const focusIds = opts.focusIds?.map((id) => id.replace(/^PROD-/, ''));
+  if (focusIds?.length) {
+    console.log(`\n🧪 Replaying ${focusIds.length} targeted prod prompts (focus mode)`);
+  } else {
+    console.log(`\n🧪 Sampling ${opts.limit} real prompts from production DB (image uploads)`);
+  }
 
-  const rows = await db
+  let query = db
     .select({
       id: messages.id,
       projectId: messages.projectId,
@@ -357,18 +451,49 @@ async function runProdSample(opts: CLIOptions) {
       createdAt: messages.createdAt,
     })
     .from(messages)
-    .innerJoin(projects, eq(projects.id, messages.projectId))
-    .where(sql`${messages.imageUrls} IS NOT NULL`)
-    .orderBy(desc(messages.createdAt))
-    .limit(opts.limit);
+    .innerJoin(projects, eq(projects.id, messages.projectId));
+
+  if (focusIds?.length) {
+    query = query.where(inArray(messages.id, focusIds));
+  } else {
+    query = query.where(sql`${messages.imageUrls} IS NOT NULL`);
+  }
+
+  query = query.orderBy(desc(messages.createdAt));
+
+  if (!focusIds?.length) {
+    query = query.limit(opts.limit);
+  }
+
+  const rows = await query;
+
+  if (focusIds?.length) {
+    const foundIds = new Set(rows.map((row) => row.id));
+    const missing = focusIds.filter((id) => !foundIds.has(id));
+    if (missing.length) {
+      console.warn(`    ⚠️  ${missing.length} focus IDs missing from latest DB snapshot`, missing);
+    }
+    rows.sort((a, b) => {
+      const aIndex = focusIds.indexOf(a.id);
+      const bIndex = focusIds.indexOf(b.id);
+      return aIndex - bIndex;
+    });
+  }
 
   let index = 0;
+  let processed = 0;
+  let skippedRequestCount = 0;
+  let skippedPlanHits = 0;
+  const skippedRequests: SuiteRunReport['skippedRequests'] = [];
+  const skippedProjectCounts = new Map<string, number>();
+
   for (const row of rows) {
     index += 1;
     if (!row.userId) {
       console.warn(`    ⚠️  Skipping message ${row.id} because project has no userId`);
       continue;
     }
+    processed += 1;
     const requestId = `PROD-${row.id}`;
     const projectScenes = await fetchProjectScenes(row.projectId);
     const chatHistory = await fetchProjectMessages(row.projectId);
@@ -424,19 +549,126 @@ async function runProdSample(opts: CLIOptions) {
       latencyMs,
     };
 
+    if (response.mediaPlanDebug) {
+      summary.mediaPlanDebug = {
+        plan: response.mediaPlanDebug.plan,
+        sourceMap: response.mediaPlanDebug.sourceMap,
+        plannedImages: response.mediaPlanDebug.plannedImages,
+        plannedVideos: response.mediaPlanDebug.plannedVideos,
+        attachments: response.mediaPlanDebug.attachments,
+        mappedDirectives: response.mediaPlanDebug.mappedDirectives,
+        skippedPlanUrls: response.mediaPlanDebug.skippedPlanUrls,
+      };
+      if (summary.resolvedMedia) {
+        summary.resolvedMedia.sourceMap = response.mediaPlanDebug.sourceMap;
+        summary.resolvedMedia.imageDirectives = response.result?.toolContext?.imageDirectives ?? response.mediaPlanDebug.mappedDirectives;
+        summary.resolvedMedia.skippedPlan = response.mediaPlanDebug.skippedPlanUrls?.length || 0;
+      }
+    }
+
+    const skipCount = summary.resolvedMedia?.skippedPlan ?? 0;
+    if (skipCount > 0) {
+      skippedRequestCount += 1;
+      skippedPlanHits += skipCount;
+      const foreignProjects = new Set<string>();
+      const sourceEntries = summary.resolvedMedia?.sourceMap ?? [];
+      for (const entry of sourceEntries) {
+        const isCrossProject = entry.sources?.includes('plan-skipped');
+        const isUnlinked = entry.sources?.includes('plan-unlinked');
+        if (!isCrossProject && !isUnlinked) continue;
+
+        const detailProject = entry.details?.find((d) =>
+          d.startsWith('skipped-project:') || d.startsWith('unlinked-project:')
+        )?.split(':')[1];
+        const inferredProject = detailProject ?? extractProjectIdFromUrl(entry.url);
+        const key = inferredProject ?? (isUnlinked ? 'requires-linking' : 'unknown');
+
+        foreignProjects.add(key);
+        skippedProjectCounts.set(
+          key,
+          (skippedProjectCounts.get(key) ?? 0) + 1
+        );
+      }
+      const projectsArray = Array.from(foreignProjects);
+      skippedRequests.push({ requestId, skipCount, foreignProjects: projectsArray });
+    }
+
     printSummary('prod', summary);
     persistSummary(opts.output, summary);
     console.log('');
   }
+
+  const breakdown = Object.fromEntries(skippedProjectCounts.entries());
+
+  if (processed > 0) {
+    if (skippedRequestCount > 0) {
+      console.log(
+        `🚫  Cross-project media skipped in ${skippedRequestCount}/${processed} requests (total hits: ${skippedPlanHits}).`
+      );
+      console.log('     Projects:', Object.keys(breakdown).length ? breakdown : 'unknown');
+    } else {
+      console.log('✅  No cross-project media reuse detected.');
+    }
+    console.log('');
+  }
+
+  return {
+    total: rows.length,
+    processed,
+    skippedRequestCount,
+    skippedPlanHits,
+    skippedRequests,
+    skippedProjectBreakdown: breakdown,
+  };
 }
 
 async function main() {
   const opts = parseArgs();
 
-  if (opts.mode === 'cases') {
-    await runCaseSuite(opts);
-  } else {
-    await runProdSample(opts);
+  if (opts.focusFile) {
+    try {
+      const focusArg = opts.focusFile;
+      let idList: string[] = [];
+      if (fs.existsSync(focusArg)) {
+        const raw = fs.readFileSync(focusArg, 'utf8');
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          idList = parsed.map((id) => String(id));
+        } else {
+          console.warn('⚠️  Focus file did not contain an array; ignoring.');
+        }
+      } else {
+        idList = focusArg
+          .split(',')
+          .map((id) => id.trim())
+          .filter(Boolean);
+      }
+
+      if (idList.length) {
+        opts.focusIds = idList.map((id) => id.replace(/^PROD-/, ''));
+      }
+    } catch (err) {
+      console.warn('⚠️  Failed to parse focus IDs:', err);
+    }
+  }
+
+  const report = opts.mode === 'cases' ? await runCaseSuite(opts) : await runProdSample(opts);
+
+  if (opts.mode === 'prod' && report.skippedRequestCount > 0) {
+    const message = `Detected ${report.skippedPlanHits} plan-skipped media hits across ${report.skippedRequestCount} requests.`;
+    if (opts.skipPlanPolicy === 'fail') {
+      console.error(`❌  ${message}`);
+      if (report.skippedRequests.length) {
+        console.error('    Sample requests:', report.skippedRequests.slice(0, 5));
+      }
+      exit(1);
+    }
+    if (opts.skipPlanPolicy === 'warn') {
+      console.warn(`⚠️  ${message}`);
+      if (report.skippedRequests.length) {
+        console.warn('    Sample requests:', report.skippedRequests.slice(0, 5));
+      }
+    }
   }
 
   console.log('✅ Done.');

@@ -131,9 +131,19 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
     e.dataTransfer.setData('media/name', asset.customName || asset.originalName || '');
   }, []);
 
-  const handleClick = useCallback((url: string, asset: any) => {
+  const linkAssetMutation = api.project.linkAssetToProject.useMutation();
+
+  const handleClick = useCallback(async (url: string, asset: any) => {
+    try {
+      if (asset?.id && projectId) {
+        await linkAssetMutation.mutateAsync({ projectId, assetId: asset.id });
+      }
+    } catch (error) {
+      console.warn('[MediaPanel] Failed to link asset to project (continuing anyway):', error);
+    }
+
     onInsertToChat?.(url, asset.customName || asset.originalName || '');
-  }, [onInsertToChat]);
+  }, [onInsertToChat, linkAssetMutation, projectId]);
 
 
 

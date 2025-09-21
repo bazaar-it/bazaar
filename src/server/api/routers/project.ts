@@ -681,6 +681,55 @@ export const projectRouter = createTRPCRouter({
       return res;
     }),
 
+  linkAssetToProject: protectedProcedure
+    .input(z.object({
+      projectId: z.string().uuid(),
+      assetId: z.string().uuid(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const project = await ctx.db.query.projects.findFirst({
+        columns: { id: true, userId: true },
+        where: eq(projects.id, input.projectId),
+      });
+
+      if (!project) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Project not found",
+        });
+      }
+
+      if (project.userId !== ctx.session.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You don't have access to this project",
+        });
+      }
+
+      const asset = await ctx.db.query.assets.findFirst({
+        columns: { id: true, userId: true },
+        where: eq(assets.id, input.assetId),
+      });
+
+      if (!asset) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Asset not found",
+        });
+      }
+
+      if (asset.userId !== ctx.session.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You don't own this asset",
+        });
+      }
+
+      await assetContext.linkAssetToProject(input.projectId, input.assetId);
+
+      return { success: true };
+    }),
+
   // Rename an asset
   renameAsset: protectedProcedure
     .input(z.object({

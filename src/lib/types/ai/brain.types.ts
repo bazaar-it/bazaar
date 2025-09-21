@@ -133,6 +133,23 @@ export interface OrchestrationOutput {
   chatResponse?: string;
   needsClarification?: boolean;
   toolUsed?: ToolName;
+  mediaPlanDebug?: {
+    plan?: NonNullable<ToolSelectionResult['mediaPlan']>;
+    sourceMap?: Array<{ url: string; sources: string[]; details?: string[] }>;
+    plannedImages?: string[];
+    plannedVideos?: string[];
+    attachments?: { images: string[]; videos: string[] };
+    mappedDirectives?: ToolSelectionResult['imageDirectives'];
+    skippedPlanUrls?: Array<
+      | string
+      | {
+          url: string;
+          projectId?: string;
+          scope?: 'project' | 'user';
+          reason?: string;
+        }
+    >;
+  };
 }
 
 // ============================================================================
@@ -234,6 +251,9 @@ export interface ContextPacket {
       tags: string[];
       nameTokens: string[];
       ordinal: number; // 1 = newest
+      scope?: 'project' | 'user';
+      requiresLink?: boolean;
+      sourceProjectId?: string | null;
     }>;
     videos: Array<{
       id: string;
@@ -245,7 +265,16 @@ export interface ContextPacket {
       tags: string[];
       nameTokens: string[];
       ordinal: number; // 1 = newest
+      scope?: 'project' | 'user';
+      requiresLink?: boolean;
+      sourceProjectId?: string | null;
     }>;
+    meta?: {
+      projectImageCount: number;
+      userImageCount: number;
+      projectVideoCount: number;
+      userVideoCount: number;
+    };
   };
 }
 

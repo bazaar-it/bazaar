@@ -237,7 +237,7 @@ export class Orchestrator {
         contextPacket,
         input.prompt,
         { imageUrls: input.userContext?.imageUrls as string[] | undefined, videoUrls: input.userContext?.videoUrls as string[] | undefined },
-        { requestId }
+        { requestId, projectId: input.projectId }
       );
       if (!planned.suppressed && ((planned.imageUrls?.length || 0) > 0 || (planned.videoUrls?.length || 0) > 0)) {
         console.log('🧠 [NEW ORCHESTRATOR][MediaPlan] Using planned media', {
@@ -248,6 +248,8 @@ export class Orchestrator {
       } else if (planned.suppressed) {
         console.log('🛑 [NEW ORCHESTRATOR][MediaPlan] Suppressing planned media', { reason: planned.reason });
       }
+
+      const mediaPlanDebug = planned.debug;
 
       if (shouldLogStructured) {
         try {
@@ -278,7 +280,20 @@ export class Orchestrator {
               videoUrls: planned.videoUrls?.length || 0,
               imageAction: planned.imageAction || (toolSelection.imageAction ?? null),
               directives: planned.imageDirectives?.length || 0,
+              sourceMap: mediaPlanDebug?.sourceMap?.length || 0,
+              skippedPlan: planned.skippedPlanUrls?.length || 0,
             },
+            debug: mediaPlanDebug ? {
+              planImagesOrdered: mediaPlanDebug.plan?.imagesOrdered || [],
+              planVideosOrdered: mediaPlanDebug.plan?.videosOrdered || [],
+              planMapping: mediaPlanDebug.plan?.mapping,
+              sourceMap: mediaPlanDebug.sourceMap,
+              plannedImages: mediaPlanDebug.plannedImages,
+              plannedVideos: mediaPlanDebug.plannedVideos,
+              attachments: mediaPlanDebug.attachments,
+              mappedDirectives: mediaPlanDebug.mappedDirectives,
+              skippedPlanUrls: mediaPlanDebug.skippedPlanUrls,
+            } : undefined,
           };
           console.log('[MEDIA_PLAN_SUMMARY]', JSON.stringify(summary));
         } catch (err) {
@@ -321,8 +336,20 @@ export class Orchestrator {
             imageDirectives: planned.imageDirectives && planned.imageDirectives.length ? planned.imageDirectives : undefined
           },
           workflow: toolSelection.workflow,
-        }
+        },
       };
+
+      if (mediaPlanDebug) {
+        result.mediaPlanDebug = {
+          plan: mediaPlanDebug.plan,
+          sourceMap: mediaPlanDebug.sourceMap,
+          plannedImages: mediaPlanDebug.plannedImages,
+          plannedVideos: mediaPlanDebug.plannedVideos,
+          attachments: mediaPlanDebug.attachments,
+          mappedDirectives: mediaPlanDebug.mappedDirectives,
+          skippedPlanUrls: mediaPlanDebug.skippedPlanUrls,
+        };
+      }
       
       // Debug logging for video URLs and template context
       console.log('🧠 [NEW ORCHESTRATOR] Tool context being passed:', {

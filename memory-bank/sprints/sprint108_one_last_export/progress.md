@@ -103,3 +103,7 @@ This affects all 5 chunks in the video export, happening in VideoComposition com
   - Ensure `window.React` and `window.Remotion` are populated from app imports (`import * as Remotion from 'remotion'`).
 - Result: Share page correctly loads both TSX scenes (client-compiled) and precompiled JS scenes (Lambda-style) without server/DB changes.
 - Next: Consider emitting a dual artifact in DB (Lambda `jsCode_function` + ESM `jsCode_esm`) to avoid client-side adaptation, and add an evaluation in `/src/lib/evals/` to assert share playback across artifact types.
+
+## 2025-09-21 – Export QA automation plan
+- Added `n8n-export-gemini-analysis.md` outlining a poll-based n8n workflow that watches `export_analytics` completions, uploads MP4s to Gemini for qualitative review, and emails the findings plus playback link.
+- Confirmed Neon schema (exports + users) provides everything needed to hydrate analysis context without extra app changes; documented fallback paths if Gemini upload or email fails.

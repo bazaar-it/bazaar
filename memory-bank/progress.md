@@ -1103,7 +1103,9 @@ The core video generation pipeline is **production-ready** with:
   - Follow-up: `RemotionPreview.tsx` now unlocks audio synchronously on pointer interaction with a document-level gesture hook, preventing Chrome's autoplay rejection.
 - 2025-09-16: Media-plan guards in orchestration.
   - `MediaPlanService.resolvePlan` now bails when the Brain omits a plan instead of throwing on `imagesOrdered`.
-  - Fixes staging crash when tools like `addAudio` skip media planning (error `Cannot read properties of undefined`).
+- Fixes staging crash when tools like `addAudio` skip media planning (error `Cannot read properties of undefined`).
+- Media plan suite now enforces the cross-project guardrail: pipeline aggregates `skippedPlan` hits and fails prod replays unless the new `--skip-plan-policy` flag downgrades behaviour. Added follow-up doc `sprint116_images/2025-09-22-media-plan-skip-assertion.md`.
+- Context builder now splits project assets vs. user library; orchestrator only auto-resolves `scope=project` items and logs user-library references as `plan-unlinked` (`sprint116_images/2025-09-22-asset-context-scope.md`).
 - 2025-09-16: Respect Brain tool choice after audio uploads.
   - Removed helper override that forced `addAudio` whenever `audioUrls` existed.
   - Fixes regression where users with project audio couldn’t add new scenes (0 scenes generated).
@@ -1124,3 +1126,27 @@ The core video generation pipeline is **production-ready** with:
 - 2025-09-16: Added batch suite `npm run debug:media-plan-suite` (cases + prod sampling).
 - 2025-09-16: CLI harness outputs `latencyMs` and supports `--output` to persist NDJSON summaries.
 - 2025-09-16: Curated prod-based eval dataset in `scripts/data/media-plan-curated.json` (real R2 URLs + project/user IDs).
+
+2025-09-20 – Media plan prod sweep
+- Analyzed 50 prod orchestrator summaries; editScene 32 / addScene 18, recreate dominating (31/50).
+- Highlighted 21 cases where `resolvedMedia.images` > attachment count plus one null `imageAction`; noted probable `resolvePlan()` merge issue.
+- Captured findings/next steps in `memory-bank/sprints/sprint116_images/2025-09-20-prod-media-plan-analysis.md`.
+
+2025-09-20 – Media plan instrumentation follow-up
+- `mediaPlanService.resolvePlan()` now tracks URL provenance and enforces non-null `imageAction`; mp4 attachments are reclassified into `videoUrls`.
+- Orchestrator surfaces `mediaPlanDebug`; suite script supports `--focus` replay and writes debug payloads. Drift IDs stored at `logs/media-plan-drift-requests.json`.
+- Focused re-run prepared (`node --loader tsx scripts/run-media-plan-suite.ts --mode prod --focus logs/media-plan-drift-requests.json ...`), but Neon access is blocked in sandbox (ENOTFOUND).
+
+2025-09-20 – Media panel linking
+- Added backend `linkAssetToProject` mutation + MediaPanel hook so clicking an asset re-associates it with the active project before insertion.
+- Ensures reused uploads appear in project media context and future media-plan decisions show same-project provenance.
+- Logged details in `sprint116_images/2025-09-20-media-panel-linking.md`; drag-and-drop path remains a follow-up.
+
+2025-09-21 – Media plan guardrail
+- Added cross-project filter inside `mediaPlanService.resolvePlan()`; plan URLs whose bucket doesn’t match the active project are dropped and logged as `plan-skipped`.
+- Orchestrator + CLI summaries now include `skippedPlan` metrics; added notes in `sprint116_images/2025-09-21-media-plan-guardrail.md`.
+- Focused media-plan suite couldn’t rerun here (Neon DNS blocked); rerun pending in a network-enabled environment.
+
+2025-09-21 – Export QA automation workflow
+- Drafted `sprint108_one_last_export/n8n-export-gemini-analysis.md` describing n8n pipeline that watches completed exports, uploads MP4s to Gemini, and emails QA findings.
+- Verified Neon tables (`bazaar-vid_export_analytics`, `bazaar-vid_exports`, `bazaar-vid_user`) and sample payloads to ensure the workflow can hydrate user/email context.
