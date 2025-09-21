@@ -97,3 +97,8 @@ Date: 2025-09-22 (asset scope split)
 - `ContextBuilder` keeps project-linked assets separate from the user library; passed assets now carry `scope`/`requiresLink` metadata so the Brain only auto-plans with linked media.
 - `mediaPlanService.resolvePlan()` records user-library references as `plan-unlinked` and refuses to map them until linked, preventing guardrail conflicts.
 - Intent prompt warns that scope=user entries require confirmation; suite script aggregates the new `requires-linking` bucket. Details captured in `2025-09-22-asset-context-scope.md`.
+
+Date: 2025-09-22 (auto-link drag & paste)
+- Upload/media panels stamp drag payloads with asset IDs and link on click before inserting into chat.
+- ChatPanel now links assets when users drop or paste R2 URLs by resolving IDs from `getUserUploads`; fallback handles normalized URLs.
+- Added textarea paste hook + attachment effect so reused assets auto-link without manual intervention (`2025-09-22-auto-linking-drag-paste.md`).

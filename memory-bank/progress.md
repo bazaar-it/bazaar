@@ -1106,6 +1106,7 @@ The core video generation pipeline is **production-ready** with:
 - Fixes staging crash when tools like `addAudio` skip media planning (error `Cannot read properties of undefined`).
 - Media plan suite now enforces the cross-project guardrail: pipeline aggregates `skippedPlan` hits and fails prod replays unless the new `--skip-plan-policy` flag downgrades behaviour. Added follow-up doc `sprint116_images/2025-09-22-media-plan-skip-assertion.md`.
 - Context builder now splits project assets vs. user library; orchestrator only auto-resolves `scope=project` items and logs user-library references as `plan-unlinked` (`sprint116_images/2025-09-22-asset-context-scope.md`).
+- Chat drag/paste auto-link flow: panels embed asset IDs in drag payloads and ChatPanel links user-library items on drop/paste via `linkAssetToProject` (`sprint116_images/2025-09-22-auto-linking-drag-paste.md`).
 - 2025-09-16: Respect Brain tool choice after audio uploads.
   - Removed helper override that forced `addAudio` whenever `audioUrls` existed.
   - Fixes regression where users with project audio couldn’t add new scenes (0 scenes generated).
@@ -1150,3 +1151,18 @@ The core video generation pipeline is **production-ready** with:
 2025-09-21 – Export QA automation workflow
 - Drafted `sprint108_one_last_export/n8n-export-gemini-analysis.md` describing n8n pipeline that watches completed exports, uploads MP4s to Gemini, and emails QA findings.
 - Verified Neon tables (`bazaar-vid_export_analytics`, `bazaar-vid_exports`, `bazaar-vid_user`) and sample payloads to ensure the workflow can hydrate user/email context.
+
+2025-09-21 – Bulk brand customization design
+ - Drafted `sprint108_one_last_export/bulk-brand-customization-workflow.md` describing n8n loop that extracts brand profiles for ~200 company sites, re-themes master Remotion scenes, and queues renders.
+ - Identified required services (BulkBrandRenderer, API endpoints, render queue integration) and scaling considerations for mass-personalized exports.
+
+2025-09-21 – Auto-title UI sync
+- Investigated why previews stayed on "Untitled Video" after SSE logged a generated name; issue traced to client caches not hydrating with the streamed title update.
+- Updated `src/hooks/use-sse-generation.ts` to optimistically rewrite the `project.getById` and `project.list` caches on `title_updated` events before invalidating.
+- Lint pass (`npx eslint src/hooks/use-sse-generation.ts`) still blocked in sandbox because the config expects `structuredClone`; noted for follow-up when running in an unrestricted environment.
+
+2025-09-21 – Token-driven variants deep dive
+- Documented `token-driven-brand-variants.md` covering scene refactors, render-prop pipeline, storage model, orchestration options, and QA for mass B2B personalization.
+
+2025-09-21 – Sprint 130 kickoff
+- Created `sprint130_mass_brand_personalization` scaffold with scope (theme token refactor, bulk renderer, orchestration UX) and seeded TODO/progress logs.

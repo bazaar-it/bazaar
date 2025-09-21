@@ -107,3 +107,10 @@ This affects all 5 chunks in the video export, happening in VideoComposition com
 ## 2025-09-21 – Export QA automation plan
 - Added `n8n-export-gemini-analysis.md` outlining a poll-based n8n workflow that watches `export_analytics` completions, uploads MP4s to Gemini for qualitative review, and emails the findings plus playback link.
 - Confirmed Neon schema (exports + users) provides everything needed to hydrate analysis context without extra app changes; documented fallback paths if Gemini upload or email fails.
+
+## 2025-09-21 – Bulk brand customization workflow
+- Authored `bulk-brand-customization-workflow.md` outlining how n8n orchestrates brand scraping, project cloning, and render queueing for 200 personalized exports.
+- Catalogued service gaps: service-token access for brand extraction, new `BulkBrandRenderer` helper, and render job throttling.
+
+## 2025-09-21 – Token-driven brand variants
+- Authored deep dive (`token-driven-brand-variants.md`) detailing how to shift from per-scene LLM rewrites to brand JSON driven renders, plus trade-offs across storage, orchestration, and testing.

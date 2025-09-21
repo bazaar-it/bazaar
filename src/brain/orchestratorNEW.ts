@@ -303,7 +303,9 @@ export class Orchestrator {
 
       // Heuristics for imageAction are handled inside mediaPlanService
 
-      const result = {
+      const result: OrchestrationOutput & {
+        result: OrchestrationOutput['result'] & { workflow?: any };
+      } = {
         success: true,
         toolUsed: toolSelection.toolName,
         reasoning: toolSelection.reasoning,

@@ -67,6 +67,15 @@ export class MediaPlanService {
       suppressed: boolean;
       reason?: string;
       skippedPlanUrls?: string[];
+      debug?: {
+        sourceMap: DebugSourceEntry[];
+        plannedImages: string[];
+        plannedVideos: string[];
+        attachments: { images: string[]; videos: string[] };
+        plan?: NonNullable<ToolSelectionResult['mediaPlan']>;
+        mappedDirectives?: ImageDirective[];
+        skippedPlanUrls?: string[];
+      };
     } = { suppressed: false };
 
     // Quick exits
@@ -160,8 +169,8 @@ export class MediaPlanService {
 
     const skippedPlanUrls: Array<{ url: string; projectId?: string; scope?: 'project' | 'user'; reason?: string }> = [];
     const skippedUrlSet = new Set<string>();
-    const recordSkipped = (url: string, detail?: { projectId?: string; scope?: 'project' | 'user'; reason?: string }) => {
-      if (skippedUrlSet.has(url)) return;
+    const recordSkipped = (url: string | undefined, detail?: { projectId?: string; scope?: 'project' | 'user'; reason?: string }) => {
+      if (!url || skippedUrlSet.has(url)) return;
       skippedUrlSet.add(url);
       skippedPlanUrls.push({ url, ...detail });
     };

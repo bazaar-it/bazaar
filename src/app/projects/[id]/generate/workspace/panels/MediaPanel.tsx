@@ -129,6 +129,11 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
   const handleDragStart = useCallback((e: React.DragEvent, url: string, asset: any) => {
     e.dataTransfer.setData('text/plain', url);
     e.dataTransfer.setData('media/name', asset.customName || asset.originalName || '');
+    if (asset?.id) {
+      const payload = JSON.stringify({ id: asset.id, url, type: asset.type });
+      e.dataTransfer.setData('application/bazaar-asset', payload);
+      e.dataTransfer.setData('asset/id', asset.id);
+    }
   }, []);
 
   const linkAssetMutation = api.project.linkAssetToProject.useMutation();
@@ -336,7 +341,7 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
                       className="cursor-grab active:cursor-grabbing"
                       draggable
                       onDragStart={(e) => handleDragStart(e, a.url, a)}
-                      onClick={() => handleClick(a.url, a)}
+                      onClick={() => { void handleClick(a.url, a); }}
                     >
                       {loadingAssetId === a.id ? (
                         <div className="w-full h-28 flex items-center justify-center bg-gray-50">

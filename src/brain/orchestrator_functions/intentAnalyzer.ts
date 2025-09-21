@@ -391,7 +391,7 @@ Respond with JSON only.`;
               ? 'Updating the attached scene using your assets.'
               : 'Creating a new scene using your uploaded assets.'),
           needsClarification: false,
-          clarificationQuestion: null,
+          clarificationQuestion: undefined,
         };
       }
 

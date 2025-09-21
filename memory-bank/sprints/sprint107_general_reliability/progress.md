@@ -287,3 +287,10 @@ The most important fix was the simplest: **Stop breaking working code.**
 
 - Removed the helper override that auto-swapped `addScene` to `addAudio` whenever `audioUrls` were present.
 - Restores ability to add scenes after uploading audio; Brain stays in control of tool choice.
+
+## 2025-09-21: Auto-generated title propagation
+
+- Debugged reports where SSE logs confirmed a generated title but the workspace header stayed on the fallback numbering.
+- Found the client `title_updated` handler only invalidated queries, so React Query kept serving the cached "Untitled" title to `GenerateWorkspaceRoot` until a manual refetch.
+- Added optimistic cache updates for both `project.getById` and `project.list` before invalidation so the header updates instantly while still syncing with the server.
+- ESLint run (`npx eslint src/hooks/use-sse-generation.ts`) is still blocked in this sandbox by the `structuredClone` requirement; needs rerun once tooling allows it.
