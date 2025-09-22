@@ -2,10 +2,24 @@
 import { notFound, redirect } from "next/navigation";
 import { auth } from "~/server/auth";
 import { api } from "~/trpc/server";
-import { SAMPLE_PERSONALIZATION_TARGETS } from "~/data/sample-personalization-targets";
 import { PersonalizePageClient } from "./personalize-page-client";
 import { createBrandThemeFromProfile } from "~/lib/theme/brandTheme";
 import type { BrandProfileLike } from "~/lib/theme/brandTheme";
+import type { BrandTheme } from "~/lib/theme/brandTheme";
+
+type PersonalizationTargetDTO = {
+  id: string;
+  companyName: string | null;
+  websiteUrl: string;
+  contactEmail: string | null;
+  sector: string | null;
+  status: "pending" | "extracting" | "ready" | "failed";
+  notes: string | null;
+  errorMessage: string | null;
+  createdAt: string;
+  extractedAt: string | null;
+  brandTheme: BrandTheme | null;
+};
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -31,9 +45,10 @@ export default async function PersonalizePage({
   }
 
   try {
-    const [fullProject, brandProfile] = await Promise.all([
+    const [fullProject, brandProfile, targetRows] = await Promise.all([
       api.project.getFullProject({ id: projectId, include: ["scenes"] }),
       api.brandProfile.getByProject({ projectId }),
+      api.personalizationTargets.list({ projectId }),
     ]);
 
     const project = fullProject.project;
@@ -55,6 +70,20 @@ export default async function PersonalizePage({
       },
     );
 
+    const targets: PersonalizationTargetDTO[] = targetRows.map((target) => ({
+      id: target.id,
+      companyName: target.companyName ?? null,
+      websiteUrl: target.websiteUrl,
+      contactEmail: target.contactEmail ?? null,
+      sector: target.sector ?? null,
+      status: target.status,
+      notes: target.notes ?? null,
+      errorMessage: target.errorMessage ?? null,
+      createdAt: target.createdAt?.toISOString?.() ?? new Date().toISOString(),
+      extractedAt: target.extractedAt?.toISOString?.() ?? null,
+      brandTheme: (target.brandTheme as BrandTheme | null) ?? null,
+    }));
+
     return (
       <PersonalizePageClient
         project={{
@@ -67,7 +96,7 @@ export default async function PersonalizePage({
           isTokenized,
         }}
         brandTheme={brandTheme}
-        targets={SAMPLE_PERSONALIZATION_TARGETS}
+        targets={targets}
       />
     );
   } catch (error) {

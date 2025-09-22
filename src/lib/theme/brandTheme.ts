@@ -1,4 +1,5 @@
 import type { StaticImageData } from "next/image";
+import type { SimplifiedBrandData } from "~/tools/webAnalysis/brandDataAdapter";
 
 export interface FontSpec {
   family: string;
@@ -239,4 +240,80 @@ export function createBrandThemeFromProfile(
       ...(overrides?.copy ?? {}),
     },
   };
+}
+
+export function createBrandThemeFromExtraction(
+  extraction?: SimplifiedBrandData | null,
+  overrides?: Partial<BrandTheme>,
+): BrandTheme {
+  if (!extraction) {
+    return createBrandThemeFromProfile(undefined, overrides);
+  }
+
+  const colors = extraction.brand?.colors ?? {};
+  const typography = extraction.brand?.typography ?? {};
+  const fonts = typography.fonts ?? [];
+
+  const accentCandidates: string[] = [];
+  if (Array.isArray(colors.accents)) {
+    accentCandidates.push(...colors.accents);
+  }
+  if (Array.isArray(colors.palette)) {
+    colors.palette.forEach((entry: any) => {
+      if (entry) {
+        const hex = typeof entry === "string" ? entry : entry.hex;
+        if (hex) accentCandidates.push(hex);
+      }
+    });
+  }
+
+  const sanitizedAccents = accentCandidates
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .map((value) => value.trim())
+    .filter((value, index, array) => array.indexOf(value) === index)
+    .slice(0, 4);
+
+  const profileLike: BrandProfileLike = {
+    colors: {
+      primary: colors.primary,
+      secondary: colors.secondary,
+      accents: sanitizedAccents,
+      neutrals: colors.neutrals,
+      background: colors.secondary ?? colors.primary,
+      text: {
+        default:
+          colors.neutrals?.[colors.neutrals.length - 1 ?? 0] ??
+          (colors.secondary && colors.secondary !== colors.primary ? colors.secondary : DEFAULT_BRAND_THEME.colors.textDefault),
+      },
+    },
+    typography: {
+      fonts: fonts.map((font, index) => ({
+        family: font.family,
+        weights: font.weights ?? [400, 600],
+        role: index === 0 ? "heading" : index === 1 ? "body" : undefined,
+      })),
+    },
+    logo: extraction.brand?.logo,
+    iconography: extraction.brand?.iconography,
+    backgroundEffects: extraction.brand?.backgroundEffects,
+    copyVoice: extraction.brand?.voice
+      ? {
+          ctas: Array.isArray(extraction.ctas)
+            ? extraction.ctas.reduce<Record<string, string>>((acc, cta, idx) => {
+                const label = typeof cta?.label === "string" ? cta.label : `CTA ${idx + 1}`;
+                acc[`cta_${idx + 1}`] = label;
+                return acc;
+              }, {})
+            : {},
+          taglines: Array.isArray(extraction.brand.voice?.taglines)
+            ? extraction.brand.voice.taglines
+            : [],
+        }
+      : undefined,
+  };
+
+  return createBrandThemeFromProfile(profileLike, {
+    name: extraction.page?.title ?? extraction.page?.url,
+    ...overrides,
+  });
 }

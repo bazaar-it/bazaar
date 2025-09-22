@@ -6,6 +6,7 @@ import { index, pgTableCreator, primaryKey } from "drizzle-orm/pg-core";
 import { type AdapterAccount } from "@auth/core/adapters";
 import { type InputProps } from "~/lib/types/video/input-props";
 import { type JsonPatch } from "~/lib/types/shared/json-patch";
+import { type BrandTheme } from "~/lib/theme/brandTheme";
 import { type InferSelectModel } from "drizzle-orm";
 
 // Import the InputProps type for the projects table
@@ -118,13 +119,6 @@ export const projects = createTable(
     uniqueIndex("project_unique_name").on(t.userId, t.title), // Added unique index on projects.title per user
   ],
 );
-
-export const projectsRelations = relations(projects, ({ many }) => ({ // Added projectsRelations
-  patches: many(patches),
-  messages: many(messages), // Add relation to messages
-  scenes: many(scenes), // Add relation to scenes
-  sharedVideos: many(sharedVideos), // Add relation to sharedVideos
-}));
 
 // --- Patches table ---
 // Stores JSON patches for projects, referencing the project by ID.
@@ -1770,6 +1764,48 @@ export const brandProfileVersionsRelations = relations(brandProfileVersions, ({ 
     references: [users.id],
   }),
 }))
+
+// Personalization targets table (per-company brand themes for bulk personalization)
+export const personalizationTargets = createTable("personalization_target", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  projectId: d
+    .uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  companyName: d.text("company_name"),
+  websiteUrl: d.text("website_url").notNull(),
+  contactEmail: d.text("contact_email"),
+  sector: d.text("sector"),
+  status: d
+    .text("status", { enum: ["pending", "extracting", "ready", "failed"] })
+    .default("pending")
+    .notNull(),
+  notes: d.text("notes"),
+  brandProfile: d.jsonb("brand_profile").$type<Record<string, unknown> | null>().default(null),
+  brandTheme: d.jsonb("brand_theme").$type<BrandTheme | null>().default(null),
+  errorMessage: d.text("error_message"),
+  extractedAt: d.timestamp("extracted_at", { withTimezone: true }),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: d.timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("personalization_target_project_idx").on(t.projectId),
+  uniqueIndex("personalization_target_project_url_idx").on(t.projectId, t.websiteUrl),
+]);
+
+export const personalizationTargetsRelations = relations(personalizationTargets, ({ one }) => ({
+  project: one(projects, {
+    fields: [personalizationTargets.projectId],
+    references: [projects.id],
+  }),
+}));
+
+export const projectsRelations = relations(projects, ({ many }) => ({
+  patches: many(patches),
+  messages: many(messages),
+  scenes: many(scenes),
+  sharedVideos: many(sharedVideos),
+  personalizationTargets: many(personalizationTargets),
+}));
 
 // Auto-fix metrics table for tracking error corrections
 export const autofixMetrics = createTable("autofix_metrics", (d) => ({

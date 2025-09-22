@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Separator } from "~/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "~/components/ui/table";
@@ -18,7 +19,6 @@ import {
   DialogTrigger,
 } from "~/components/ui/dialog";
 import type { BrandTheme } from "~/lib/theme/brandTheme";
-import type { PersonalizationTarget } from "~/data/sample-personalization-targets";
 import { api } from "~/trpc/react";
 import { toast } from "sonner";
 
@@ -33,14 +33,28 @@ interface PersonalizePageClientProps {
     isTokenized: boolean;
   };
   brandTheme: BrandTheme;
-  targets: PersonalizationTarget[];
+  targets: PersonalizationTargetEntry[];
 }
 
-const statusVariant: Record<PersonalizationTarget["status"], "default" | "secondary" | "destructive" | "outline"> = {
-  pending: "secondary",
-  scraped: "default",
+type PersonalizationTargetEntry = {
+  id: string;
+  companyName: string | null;
+  websiteUrl: string;
+  contactEmail: string | null;
+  sector: string | null;
+  status: "pending" | "extracting" | "ready" | "failed";
+  notes: string | null;
+  errorMessage: string | null;
+  createdAt: string;
+  extractedAt: string | null;
+  brandTheme: BrandTheme | null;
+};
+
+const statusVariant: Record<PersonalizationTargetEntry["status"], "default" | "secondary" | "destructive" | "outline"> = {
+  pending: "outline",
+  extracting: "secondary",
+  ready: "default",
   failed: "destructive",
-  manual: "outline",
 };
 
 const sectorEmoji: Record<string, string> = {
@@ -53,7 +67,15 @@ const sectorEmoji: Record<string, string> = {
   education: "🎓",
   analytics: "📊",
   venture: "🚀",
+  unknown: "🏷️",
+  other: "🏷️",
 };
+
+function normalizeSector(raw?: string | null) {
+  if (!raw) return "unknown";
+  const normalized = raw.toLowerCase();
+  return sectorEmoji[normalized] ? normalized : normalized || "unknown";
+}
 
 function formatUpdatedAt(updatedAt?: string) {
   if (!updatedAt) return "Unknown";
@@ -71,12 +93,16 @@ export function PersonalizePageClient({ project, brandTheme, targets }: Personal
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<string>("upload");
   const [tokenizationSummary, setTokenizationSummary] = useState<string | null>(null);
+  const [newUrl, setNewUrl] = useState("");
+  const [newCompanyName, setNewCompanyName] = useState("");
+  const [newContactEmail, setNewContactEmail] = useState("");
   const resolvedAccents = brandTheme.colors.accents?.slice(0, 4) ?? [];
 
   const sectors = useMemo(() => {
     const map = new Map<string, number>();
     targets.forEach((target) => {
-      map.set(target.sector, (map.get(target.sector) ?? 0) + 1);
+      const key = normalizeSector(target.sector);
+      map.set(key, (map.get(key) ?? 0) + 1);
     });
     return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
   }, [targets]);
@@ -98,6 +124,31 @@ export function PersonalizePageClient({ project, brandTheme, targets }: Personal
   const handleTokenizeScenes = () => {
     setTokenizationSummary(null);
     tokenizeScenesMutation.mutate({ projectId: project.id });
+  };
+
+  const createTargetMutation = api.personalizationTargets.createFromUrl.useMutation({
+    onSuccess: () => {
+      toast.success("Started brand extraction");
+      setNewUrl("");
+      setNewCompanyName("");
+      setNewContactEmail("");
+      router.refresh();
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to extract branding");
+    },
+  });
+
+  const handleAddUrl = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!newUrl.trim()) return;
+
+    createTargetMutation.mutate({
+      projectId: project.id,
+      websiteUrl: newUrl.trim(),
+      companyName: newCompanyName.trim() || undefined,
+      contactEmail: newContactEmail.trim() || undefined,
+    });
   };
 
   return (
@@ -135,9 +186,9 @@ export function PersonalizePageClient({ project, brandTheme, targets }: Personal
                 variant={project.isTokenized ? "secondary" : "default"}
                 size="sm"
                 onClick={handleTokenizeScenes}
-                disabled={tokenizeScenesMutation.isLoading}
+                disabled={tokenizeScenesMutation.isPending}
               >
-                {tokenizeScenesMutation.isLoading
+                {tokenizeScenesMutation.isPending
                   ? "Converting scenes..."
                   : project.isTokenized
                     ? "Re-run tokenization"
@@ -213,21 +264,25 @@ export function PersonalizePageClient({ project, brandTheme, targets }: Personal
           <div className="grid gap-2 text-sm">
             <p className="text-sm font-medium">Target sectors</p>
             <div className="grid gap-1">
-              {sectors.map(([sector, count]) => (
-                <div key={sector} className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2">
-                  <span className="flex items-center gap-2">
-                    <span>{sectorEmoji[sector] ?? '🏷️'}</span>
-                    <span className="capitalize">{sector}</span>
-                  </span>
-                  <Badge variant="outline">{count}</Badge>
-                </div>
-              ))}
+              {sectors.map(([sector, count]) => {
+                const label = sector === 'unknown' ? 'Unknown' : sector === 'other' ? 'Other' : sector;
+                const symbol = sectorEmoji[sector] ?? '🏷️';
+                return (
+                  <div key={sector} className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2">
+                    <span className="flex items-center gap-2">
+                      <span>{symbol}</span>
+                      <span className="capitalize">{label}</span>
+                    </span>
+                    <Badge variant="outline">{count}</Badge>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </CardContent>
-        {(tokenizationSummary || tokenizeScenesMutation.isLoading) && (
+        {(tokenizationSummary || tokenizeScenesMutation.isPending) && (
           <div className="px-6 pb-4 text-xs text-muted-foreground">
-            {tokenizeScenesMutation.isLoading ? 'Converting scenes… This may take a minute.' : tokenizationSummary}
+            {tokenizeScenesMutation.isPending ? 'Converting scenes… This may take a minute.' : tokenizationSummary}
           </div>
         )}
       </Card>
@@ -247,10 +302,47 @@ export function PersonalizePageClient({ project, brandTheme, targets }: Personal
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
-              <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/40 px-6 py-10 text-center">
-                <p className="text-sm text-muted-foreground">Upload coming soon</p>
-                <p className="text-xs text-muted-foreground">For now, the sample targets drive the prototype.</p>
-              </div>
+              <form onSubmit={handleAddUrl} className="flex flex-col gap-3 rounded-lg border border-dashed border-muted-foreground/40 p-4">
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Website URL</label>
+                  <Input
+                    required
+                    placeholder="https://company.com"
+                    value={newUrl}
+                    onChange={(event) => setNewUrl(event.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:gap-4">
+                  <div className="flex-1 space-y-1">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Company (optional)</label>
+                    <Input
+                      placeholder="Company name"
+                      value={newCompanyName}
+                      onChange={(event) => setNewCompanyName(event.target.value)}
+                    />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Contact email (optional)</label>
+                    <Input
+                      type="email"
+                      placeholder="hello@company.com"
+                      value={newContactEmail}
+                      onChange={(event) => setNewContactEmail(event.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    type="submit"
+                    disabled={!newUrl.trim() || createTargetMutation.isPending}
+                  >
+                    {createTargetMutation.isPending ? "Extracting…" : "Add from website"}
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    We’ll fetch colors, fonts, and logo automatically. Targets appear in the table below.
+                  </p>
+                </div>
+              </form>
               <Button variant="outline" size="sm" asChild className="self-start">
                 <Link href="/sample-personalization-targets.json" target="_blank">
                   Download sample dataset
@@ -274,41 +366,56 @@ export function PersonalizePageClient({ project, brandTheme, targets }: Personal
                     <TableRow>
                       <TableHead>Company</TableHead>
                       <TableHead>Website</TableHead>
-                      <TableHead>Sector</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Extracted</TableHead>
                       <TableHead>Notes</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {targets.map((target) => (
                       <TableRow key={target.id} className="hover:bg-muted/40">
-                        <TableCell className="font-medium">{target.companyName}</TableCell>
+                        <TableCell className="font-medium">
+                          {target.companyName || '—'}
+                          {target.contactEmail && (
+                            <div className="text-xs text-muted-foreground">{target.contactEmail}</div>
+                          )}
+                        </TableCell>
                         <TableCell>
                           <a href={target.websiteUrl} target="_blank" rel="noreferrer" className="text-sm text-primary hover:underline">
                             {target.websiteUrl.replace(/^https?:\/\//, '')}
                           </a>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="capitalize">
-                            {sectorEmoji[target.sector] ? `${sectorEmoji[target.sector]} ${target.sector}` : target.sector}
-                          </Badge>
+                          <div className="flex flex-col gap-1">
+                            <Badge variant={statusVariant[target.status]} className="capitalize w-fit">
+                              {target.status}
+                            </Badge>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <span>{sectorEmoji[normalizeSector(target.sector)]}</span>
+                              <span className="capitalize">{normalizeSector(target.sector)}</span>
+                            </div>
+                            {target.errorMessage && (
+                              <div className="text-xs text-destructive">{target.errorMessage}</div>
+                            )}
+                          </div>
                         </TableCell>
-                        <TableCell>
-                          <Badge variant={statusVariant[target.status]} className="capitalize">
-                            {target.status}
-                          </Badge>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {target.extractedAt ? formatUpdatedAt(target.extractedAt) : '—'}
                         </TableCell>
                         <TableCell className="max-w-xs text-sm text-muted-foreground">
-                          {target.notes}
+                          {target.notes || '—'}
                         </TableCell>
                       </TableRow>
                     ))}
+                    {targets.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="py-6 text-center text-sm text-muted-foreground">
+                          No targets yet. Add a website to get started.
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <Badge variant="outline">Mock data</Badge>
-                <span>Row actions (edit / rescrape) coming once APIs are wired.</span>
               </div>
             </CardContent>
           </Card>

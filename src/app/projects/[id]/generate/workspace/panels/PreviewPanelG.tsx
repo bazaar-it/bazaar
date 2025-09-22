@@ -20,8 +20,7 @@ import { computeSceneRanges, findSceneAtFrame } from '~/lib/utils/scene-ranges';
 import { wrapSceneNamespace } from '~/lib/video/wrapSceneNamespace';
 import { buildCompositeHeader } from '~/lib/video/buildCompositeHeader';
 import { buildSingleSceneModule, buildMultiSceneModule } from '~/lib/video/buildComposite';
-import { SAMPLE_PERSONALIZATION_TARGETS } from '~/data/sample-personalization-targets';
-import { DEFAULT_BRAND_THEME } from '~/lib/theme/brandTheme';
+import { DEFAULT_BRAND_THEME, type BrandTheme } from '~/lib/theme/brandTheme';
 
 // Error fallback component
 function ErrorFallback({ error }: { error: Error }) {
@@ -100,6 +99,35 @@ export function PreviewPanelG({
       // This will be invalidated when scenes are created
     }
   );
+
+  const { data: personalizationTargetsData } = api.personalizationTargets.list.useQuery(
+    { projectId },
+    {
+      refetchInterval: 15000,
+    },
+  );
+
+const readyBrandTargets = useMemo(() => {
+  if (!personalizationTargetsData) {
+    return [] as Array<any>;
+  }
+  return personalizationTargetsData.filter((target: any) => target.status === 'ready' && target.brandTheme);
+}, [personalizationTargetsData]);
+
+useEffect(() => {
+  if (
+    selectedBrandTargetId !== 'default' &&
+    !readyBrandTargets.some((target: any) => target.id === selectedBrandTargetId)
+  ) {
+    setSelectedBrandTargetId('default');
+  }
+  if (
+    activeBrandTargetId !== 'default' &&
+    !readyBrandTargets.some((target: any) => target.id === activeBrandTargetId)
+  ) {
+    setActiveBrandTargetId('default');
+  }
+}, [readyBrandTargets, selectedBrandTargetId, activeBrandTargetId]);
   
   // Debug: Check if jsCode is coming from API and data updates
   React.useEffect(() => {
@@ -259,116 +287,48 @@ export function PreviewPanelG({
   const [componentError, setComponentError] = useState<Error | null>(null);
   const [refreshToken, setRefreshToken] = useState(`initial-${Date.now()}`);
 
-  const activeBrandTarget = useMemo(() => {
-    if (activeBrandTargetId === 'default') {
-      return null;
-    }
-    return SAMPLE_PERSONALIZATION_TARGETS.find((target) => target.id === activeBrandTargetId) ?? null;
-  }, [activeBrandTargetId]);
+const activeBrandTarget = useMemo(() => {
+  if (activeBrandTargetId === 'default') {
+    return null;
+  }
+  return readyBrandTargets.find((target: any) => target.id === activeBrandTargetId) ?? null;
+}, [activeBrandTargetId, readyBrandTargets]);
 
-  const applyBrandTheme = useCallback((targetId: string) => {
+const selectedBrandTarget = useMemo(() => {
+  if (selectedBrandTargetId === 'default') {
+    return null;
+  }
+  return readyBrandTargets.find((target: any) => target.id === selectedBrandTargetId) ?? null;
+}, [selectedBrandTargetId, readyBrandTargets]);
+
+  const applyBrandTheme = useCallback((theme: BrandTheme, key: string) => {
     if (typeof window === 'undefined') {
       return;
     }
 
-    const overrides = targetId === 'default'
-      ? null
-      : SAMPLE_PERSONALIZATION_TARGETS.find((target) => target.id === targetId)?.brandOverrides;
-
-    const mergedTheme = (() => {
-      const base = DEFAULT_BRAND_THEME;
-      if (!overrides) {
-        return {
-          ...base,
-          colors: { ...base.colors },
-          fonts: {
-            heading: { ...base.fonts.heading },
-            body: { ...base.fonts.body },
-            mono: base.fonts.mono ? { ...base.fonts.mono } : undefined,
-          },
-          assets: {
-            ...base.assets,
-            logo: base.assets.logo ? { ...base.assets.logo } : undefined,
-          },
-          iconography: base.iconography ? { ...base.iconography } : undefined,
-          backgroundEffects: base.backgroundEffects ? [...base.backgroundEffects] : undefined,
-          motion: base.motion ? { ...base.motion } : undefined,
-          copy: base.copy ? { ...base.copy } : undefined,
-        };
-      }
-
-      const fontOverrides = overrides.fonts ?? {};
-      const logoOverrides = overrides.logo ?? {};
-      return {
-        ...base,
-        name: (overrides as any)?.name ?? base.name,
-        colors: { ...base.colors, ...(overrides.colors ?? {}) },
-        fonts: {
-          heading: {
-            ...base.fonts.heading,
-            ...(fontOverrides.heading ?? {}),
-          },
-          body: {
-            ...base.fonts.body,
-            ...(fontOverrides.body ?? {}),
-          },
-          mono: fontOverrides.mono
-            ? {
-                ...(base.fonts.mono ?? {}),
-                ...fontOverrides.mono,
-              }
-            : base.fonts.mono,
-        },
-        assets: {
-          ...base.assets,
-          logo: Object.keys(logoOverrides).length
-            ? {
-                ...(base.assets.logo ?? {}),
-                ...logoOverrides,
-              }
-            : base.assets.logo,
-          productShots: base.assets.productShots,
-          heroImage: base.assets.heroImage,
-        },
-        iconography: overrides.iconography
-          ? {
-              ...(base.iconography ?? {}),
-              ...overrides.iconography,
-            }
-          : base.iconography,
-        backgroundEffects: overrides.backgroundEffects ?? base.backgroundEffects,
-        motion: overrides.motion
-          ? {
-              ...(base.motion ?? {}),
-              ...overrides.motion,
-            }
-          : base.motion,
-        copy: overrides.copy
-          ? {
-              ...(base.copy ?? {}),
-              ...overrides.copy,
-            }
-          : base.copy,
-      };
-    })();
-
-    window.BrandTheme = {
-      defaultTheme: mergedTheme,
-      useTheme: () => mergedTheme,
+    (window as any).BrandTheme = {
+      defaultTheme: theme,
+      useTheme: () => theme,
     };
 
-    setRefreshToken(`brand-${targetId}-${Date.now()}`);
+    setRefreshToken(`brand-${key}-${Date.now()}`);
   }, [setRefreshToken]);
 
   const handleApplyBrandTheme = useCallback((targetId: string) => {
     setIsApplyingBrandTheme(true);
     try {
-      applyBrandTheme(targetId);
+      if (targetId === 'default') {
+        applyBrandTheme(DEFAULT_BRAND_THEME, 'default');
+      } else {
+        const target = readyBrandTargets.find((entry: any) => entry.id === targetId);
+        const theme = (target?.brandTheme as BrandTheme | null) ?? DEFAULT_BRAND_THEME;
+        applyBrandTheme(theme, targetId);
+      }
       setActiveBrandTargetId(targetId);
     } finally {
       setIsApplyingBrandTheme(false);
     }
-  }, [applyBrandTheme]);
+  }, [applyBrandTheme, readyBrandTargets]);
   
   // Playback speed state
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
@@ -2753,7 +2713,7 @@ export default function FallbackComposition() {
         <div className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
           <span>Brand theme</span>
           <Badge variant="outline" className="text-xs">
-            {activeBrandTarget ? activeBrandTarget.companyName : 'Default'}
+            {activeBrandTarget ? (activeBrandTarget.companyName || activeBrandTarget.websiteUrl) : 'Default'}
           </Badge>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -2763,16 +2723,16 @@ export default function FallbackComposition() {
             className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-700 shadow-sm focus:border-slate-500 focus:outline-none"
           >
             <option value="default">Default (Bazaar)</option>
-            {SAMPLE_PERSONALIZATION_TARGETS.map((target) => (
+            {readyBrandTargets.map((target: any) => (
               <option key={target.id} value={target.id}>
-                {target.companyName}
+                {target.companyName || target.websiteUrl}
               </option>
             ))}
           </select>
           <Button
             size="sm"
             onClick={() => handleApplyBrandTheme(selectedBrandTargetId)}
-            disabled={isApplyingBrandTheme}
+            disabled={isApplyingBrandTheme || (selectedBrandTargetId !== 'default' && !selectedBrandTarget)}
           >
             {isApplyingBrandTheme ? 'Applying…' : 'Apply theme'}
           </Button>
