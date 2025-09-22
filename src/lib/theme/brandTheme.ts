@@ -254,36 +254,52 @@ export function createBrandThemeFromExtraction(
   const typography = extraction.brand?.typography ?? {};
   const fonts = typography.fonts ?? [];
 
+  const primaryColor = normalizeColorValue(colors.primary) ?? DEFAULT_BRAND_THEME.colors.primary;
+  const secondaryColor = normalizeColorValue(colors.secondary) ?? DEFAULT_BRAND_THEME.colors.secondary;
+  const backgroundColor = normalizeColorValue(colors.background)
+    ?? normalizeColorValue(colors.neutrals?.[0])
+    ?? secondaryColor
+    ?? DEFAULT_BRAND_THEME.colors.background;
+  const textDefault = normalizeColorValue(colors?.text?.default)
+    ?? normalizeColorValue(colors.neutrals?.[colors.neutrals.length - 1])
+    ?? DEFAULT_BRAND_THEME.colors.textDefault;
+
   const accentCandidates: string[] = [];
   if (Array.isArray(colors.accents)) {
     accentCandidates.push(...colors.accents);
   }
   if (Array.isArray(colors.palette)) {
     colors.palette.forEach((entry: any) => {
-      if (entry) {
-        const hex = typeof entry === "string" ? entry : entry.hex;
-        if (hex) accentCandidates.push(hex);
+      if (!entry) return;
+      if (typeof entry === "string") {
+        accentCandidates.push(entry);
+      } else if (typeof entry.hex === "string") {
+        accentCandidates.push(entry.hex);
       }
     });
   }
 
   const sanitizedAccents = accentCandidates
-    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-    .map((value) => value.trim())
+    .map((value) => normalizeColorValue(value))
+    .filter((value): value is string => Boolean(value))
     .filter((value, index, array) => array.indexOf(value) === index)
     .slice(0, 4);
 
+  const sanitizedNeutrals = Array.isArray(colors.neutrals)
+    ? colors.neutrals
+        .map((value) => normalizeColorValue(value))
+        .filter((value): value is string => Boolean(value))
+    : undefined;
+
   const profileLike: BrandProfileLike = {
     colors: {
-      primary: colors.primary,
-      secondary: colors.secondary,
+      primary: primaryColor,
+      secondary: secondaryColor,
       accents: sanitizedAccents,
-      neutrals: colors.neutrals,
-      background: colors.secondary ?? colors.primary,
+      neutrals: sanitizedNeutrals,
+      background: backgroundColor,
       text: {
-        default:
-          colors.neutrals?.[colors.neutrals.length - 1 ?? 0] ??
-          (colors.secondary && colors.secondary !== colors.primary ? colors.secondary : DEFAULT_BRAND_THEME.colors.textDefault),
+        default: textDefault,
       },
     },
     typography: {
@@ -316,4 +332,149 @@ export function createBrandThemeFromExtraction(
     name: extraction.page?.title ?? extraction.page?.url,
     ...overrides,
   });
+}
+
+function normalizeColorValue(input?: string | null): string | undefined {
+  if (!input) return undefined;
+  const value = input.trim();
+  if (!value || value.toLowerCase() === "transparent") {
+    return undefined;
+  }
+
+  if (value.startsWith("#")) {
+    const hex = value.replace(/[^0-9a-fA-F]/g, "");
+    if (hex.length === 3) {
+      return `#${hex[0]}${hex[0]}${hex[1]}${hex[1]}${hex[2]}${hex[2]}`.toUpperCase();
+    }
+    if (hex.length === 4) {
+      return `#${hex[0]}${hex[0]}${hex[1]}${hex[1]}${hex[2]}${hex[2]}`.toUpperCase();
+    }
+    if (hex.length === 6 || hex.length === 8) {
+      return `#${hex.slice(0, 6)}`.toUpperCase();
+    }
+    return undefined;
+  }
+
+  const rgbMatch = value.match(/^rgba?\((.*)\)$/i);
+  if (rgbMatch) {
+    const channels = rgbMatch[1]
+      .replace(/\//g, " ")
+      .split(/[,\s]+/)
+      .filter(Boolean)
+      .slice(0, 3)
+      .map((part) => parseFloat(part));
+    if (channels.length === 3 && channels.every((channel) => Number.isFinite(channel))) {
+      const [r, g, b] = channels.map((channel) => clamp(Math.round(channel), 0, 255));
+      return toHex(r, g, b);
+    }
+  }
+
+  const oklchMatch = value.match(/^oklch\((.*)\)$/i);
+  if (oklchMatch) {
+    const converted = oklchToHex(oklchMatch[1]);
+    if (converted) return converted;
+  }
+
+  const oklabMatch = value.match(/^oklab\((.*)\)$/i);
+  if (oklabMatch) {
+    const converted = oklabToHex(oklabMatch[1]);
+    if (converted) return converted;
+  }
+
+  return undefined;
+}
+
+function oklchToHex(componentString: string): string | undefined {
+  const parts = componentString.split("/");
+  const main = parts[0] ?? "";
+  const tokens = main.trim().split(/\s+/);
+  if (tokens.length < 3) return undefined;
+
+  const lToken = tokens[0];
+  const cToken = tokens[1];
+  const hToken = tokens[2];
+
+  const L = parseComponent(lToken, true);
+  const C = parseComponent(cToken, false);
+  const H = parseComponent(hToken, false);
+
+  if (L === undefined || C === undefined || H === undefined) {
+    return undefined;
+  }
+
+  const hRad = (H * Math.PI) / 180;
+  const a = C * Math.cos(hRad);
+  const b = C * Math.sin(hRad);
+
+  return oklabChannelsToHex(L, a, b);
+}
+
+function oklabToHex(componentString: string): string | undefined {
+  const parts = componentString.split("/");
+  const tokens = parts[0]?.trim().split(/\s+/) ?? [];
+  if (tokens.length < 3) return undefined;
+
+  const L = parseComponent(tokens[0], true);
+  const a = parseComponent(tokens[1], false);
+  const b = parseComponent(tokens[2], false);
+
+  if (L === undefined || a === undefined || b === undefined) {
+    return undefined;
+  }
+
+  return oklabChannelsToHex(L, a, b);
+}
+
+function oklabChannelsToHex(L: number, a: number, b: number): string | undefined {
+  const l_ = Math.pow(L + 0.3963377774 * a + 0.2158037573 * b, 3);
+  const m_ = Math.pow(L - 0.1055613458 * a - 0.0638541728 * b, 3);
+  const s_ = Math.pow(L - 0.0894841775 * a - 1.2914855480 * b, 3);
+
+  let r = +4.0767416621 * l_ - 3.3077115913 * m_ + 0.2309699292 * s_;
+  let g = -1.2684380046 * l_ + 2.6097574011 * m_ - 0.3413193965 * s_;
+  let bChannel = -0.0041960863 * l_ - 0.7034186147 * m_ + 1.7076147010 * s_;
+
+  r = linearToSrgb(r);
+  g = linearToSrgb(g);
+  bChannel = linearToSrgb(bChannel);
+
+  if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(bChannel)) {
+    return undefined;
+  }
+
+  return toHex(Math.round(clamp(r * 255, 0, 255)), Math.round(clamp(g * 255, 0, 255)), Math.round(clamp(bChannel * 255, 0, 255)));
+}
+
+function linearToSrgb(value: number): number {
+  if (value <= 0.0031308) {
+    return clamp(12.92 * value, 0, 1);
+  }
+  return clamp(1.055 * Math.pow(value, 1 / 2.4) - 0.055, 0, 1);
+}
+
+function toHex(r: number, g: number, b: number): string {
+  return `#${channelToHex(r)}${channelToHex(g)}${channelToHex(b)}`.toUpperCase();
+}
+
+function channelToHex(value: number): string {
+  return clamp(Math.round(value), 0, 255).toString(16).padStart(2, "0");
+}
+
+function parseComponent(token: string, allowPercentage: boolean): number | undefined {
+  const trimmed = token.trim();
+  if (!trimmed) return undefined;
+
+  if (allowPercentage && trimmed.endsWith("%")) {
+    const numeric = parseFloat(trimmed.slice(0, -1));
+    if (!Number.isFinite(numeric)) return undefined;
+    return clamp(numeric / 100, 0, 1);
+  }
+
+  const numeric = parseFloat(trimmed);
+  if (!Number.isFinite(numeric)) return undefined;
+  return numeric;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
 }

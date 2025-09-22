@@ -22,6 +22,52 @@ import { buildCompositeHeader } from '~/lib/video/buildCompositeHeader';
 import { buildSingleSceneModule, buildMultiSceneModule } from '~/lib/video/buildComposite';
 import { DEFAULT_BRAND_THEME, type BrandTheme } from '~/lib/theme/brandTheme';
 
+function sanitizeTheme(theme: BrandTheme | null | undefined): BrandTheme {
+  if (!theme) {
+    return DEFAULT_BRAND_THEME;
+  }
+
+  return {
+    ...DEFAULT_BRAND_THEME,
+    ...theme,
+    colors: {
+      ...DEFAULT_BRAND_THEME.colors,
+      ...theme.colors,
+      primary: theme.colors?.primary || DEFAULT_BRAND_THEME.colors.primary,
+      secondary: theme.colors?.secondary || DEFAULT_BRAND_THEME.colors.secondary,
+      background: theme.colors?.background || DEFAULT_BRAND_THEME.colors.background,
+      textDefault: theme.colors?.textDefault || DEFAULT_BRAND_THEME.colors.textDefault,
+      accents:
+        theme.colors?.accents && theme.colors.accents.length > 0
+          ? theme.colors.accents
+          : DEFAULT_BRAND_THEME.colors.accents,
+      neutrals: theme.colors?.neutrals || DEFAULT_BRAND_THEME.colors.neutrals,
+    },
+    fonts: {
+      heading: {
+        ...DEFAULT_BRAND_THEME.fonts.heading,
+        ...theme.fonts.heading,
+      },
+      body: {
+        ...DEFAULT_BRAND_THEME.fonts.body,
+        ...theme.fonts.body,
+      },
+      mono: theme.fonts.mono || DEFAULT_BRAND_THEME.fonts.mono,
+    },
+    assets: {
+      ...DEFAULT_BRAND_THEME.assets,
+      ...theme.assets,
+      logo: theme.assets?.logo || DEFAULT_BRAND_THEME.assets.logo,
+      productShots: theme.assets?.productShots || DEFAULT_BRAND_THEME.assets.productShots,
+      heroImage: theme.assets?.heroImage || DEFAULT_BRAND_THEME.assets.heroImage,
+    },
+    iconography: theme.iconography || DEFAULT_BRAND_THEME.iconography,
+    backgroundEffects: theme.backgroundEffects || DEFAULT_BRAND_THEME.backgroundEffects,
+    motion: theme.motion || DEFAULT_BRAND_THEME.motion,
+    copy: theme.copy || DEFAULT_BRAND_THEME.copy,
+  };
+}
+
 // Error fallback component
 function ErrorFallback({ error }: { error: Error }) {
   return (
@@ -75,10 +121,10 @@ export function PreviewPanelG({
   // Phase 1 metrics (lightweight, console-based)
   const metricsRef = useRef({ precompiled: 0, slowPath: 0, errors: 0, runs: 0 });
   // ✅ FIXED: Use separate selectors to prevent infinite loops
-  const currentProps = useVideoState((state) => {
-    const project = state.projects[projectId];
-    return project?.props || initial;
-  });
+const currentProps = useVideoState((state) => {
+  const project = state.projects[projectId];
+  return project?.props || initial;
+});
   const [selectedBrandTargetId, setSelectedBrandTargetId] = useState<string>('default');
   const [activeBrandTargetId, setActiveBrandTargetId] = useState<string>('default');
   const [isApplyingBrandTheme, setIsApplyingBrandTheme] = useState(false);
@@ -100,18 +146,23 @@ export function PreviewPanelG({
     }
   );
 
-  const { data: personalizationTargetsData } = api.personalizationTargets.list.useQuery(
-    { projectId },
-    {
-      refetchInterval: 15000,
-    },
-  );
+const { data: personalizationTargetsData } = api.personalizationTargets.list.useQuery(
+  { projectId },
+  {
+    refetchInterval: 15000,
+  },
+);
 
 const readyBrandTargets = useMemo(() => {
   if (!personalizationTargetsData) {
     return [] as Array<any>;
   }
-  return personalizationTargetsData.filter((target: any) => target.status === 'ready' && target.brandTheme);
+  return personalizationTargetsData
+    .filter((target: any) => target.status === 'ready' && target.brandTheme)
+    .map((target: any) => ({
+      ...target,
+      brandTheme: sanitizeTheme(target.brandTheme as BrandTheme),
+    }));
 }, [personalizationTargetsData]);
 
 useEffect(() => {

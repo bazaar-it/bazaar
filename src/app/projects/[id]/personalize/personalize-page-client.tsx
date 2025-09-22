@@ -74,7 +74,7 @@ const sectorEmoji: Record<string, string> = {
 function normalizeSector(raw?: string | null) {
   if (!raw) return "unknown";
   const normalized = raw.toLowerCase();
-  return sectorEmoji[normalized] ? normalized : normalized || "unknown";
+  return sectorEmoji[normalized] ? normalized : "other";
 }
 
 function formatUpdatedAt(updatedAt?: string) {
@@ -120,6 +120,8 @@ export function PersonalizePageClient({ project, brandTheme, targets }: Personal
       toast.error(message);
     },
   });
+
+  const isTokenizing = tokenizeScenesMutation.isPending;
 
   const handleTokenizeScenes = () => {
     setTokenizationSummary(null);
@@ -186,9 +188,9 @@ export function PersonalizePageClient({ project, brandTheme, targets }: Personal
                 variant={project.isTokenized ? "secondary" : "default"}
                 size="sm"
                 onClick={handleTokenizeScenes}
-                disabled={tokenizeScenesMutation.isPending}
+                disabled={isTokenizing}
               >
-                {tokenizeScenesMutation.isPending
+                {isTokenizing
                   ? "Converting scenes..."
                   : project.isTokenized
                     ? "Re-run tokenization"
@@ -280,9 +282,9 @@ export function PersonalizePageClient({ project, brandTheme, targets }: Personal
             </div>
           </div>
         </CardContent>
-        {(tokenizationSummary || tokenizeScenesMutation.isPending) && (
+        {(tokenizationSummary || isTokenizing) && (
           <div className="px-6 pb-4 text-xs text-muted-foreground">
-            {tokenizeScenesMutation.isPending ? 'Converting scenes… This may take a minute.' : tokenizationSummary}
+            {isTokenizing ? 'Converting scenes… This may take a minute.' : tokenizationSummary}
           </div>
         )}
       </Card>

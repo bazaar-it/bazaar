@@ -38,3 +38,8 @@
 ## 2025-09-22 – Personalize preview controls
 - Updated the personalize route badge detection to match optional chaining (`theme?.`) so projects flip to “token-ready” after conversion.
 - Added a brand preview toolbar in `PreviewPanelG` that lets admins apply any sample target theme (or reset to default) without devtools hacks, wiring it to the existing dataset and `BrandTheme` runtime.
+
+## 2025-09-22 – URL intake for personalization targets
+- Added `personalization_target` table plus tRPC router so users can paste a website URL and trigger brand extraction (Playwright → SimplifiedBrandData → `BrandTheme`).
+- Personalize page now lists real targets, shows extraction status, and offers an “Add from website” form; preview panel consumes the stored themes in its selector.
+- Converted OKLCH and other CSS color formats to hex when building `BrandTheme` so previews use each company’s actual palette.

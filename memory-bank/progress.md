@@ -1195,3 +1195,8 @@ The core video generation pipeline is **production-ready** with:
 2025-09-22 – Brand preview workflow
 - Personalize badge detection accepts `theme?.`/`brandThemeRuntime` scenes so the UI reflects token readiness after conversion.
 - Injected a brand-theme toolbar in the Generate preview that hooks into the sample dataset so QA can apply/reset target palettes with a button instead of console scripts.
+
+2025-09-22 – URL-based personalization targets
+- Added API + database support for saving company targets pulled from a pasted URL (Playwright brand extraction → stored `BrandTheme`).
+- Personalize page surfaces target statuses and allows quick adds; generate preview now reads those saved themes instead of hardcoded mocks.
+- Normalized OKLCH / RGB colors to hex when creating themes so previews render the scraped palette accurately.
