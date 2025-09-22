@@ -388,6 +388,8 @@ export default function ChatPanelG({
         duration: sceneDuration,
         data: {
           code: dbScene.tsxCode,
+          tsxCode: dbScene.tsxCode,
+          jsCode: (dbScene as any).jsCode,
           name: dbScene.name,
           componentId: dbScene.id,
           props: dbScene.props || {}

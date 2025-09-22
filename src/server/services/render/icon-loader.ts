@@ -6,28 +6,47 @@ import type { IconifyJSON } from '@iconify/types';
 import { getIconData, iconToSVG, replaceIDs } from '@iconify/utils';
 import { uploadFile, getPublicUrl, fileExists } from '../../../../packages/r2';
 
+function ensureIconifyJSON(candidate: unknown): IconifyJSON {
+  if (
+    !candidate ||
+    typeof candidate !== 'object' ||
+    typeof (candidate as IconifyJSON).prefix !== 'string' ||
+    !(candidate as IconifyJSON).icons ||
+    typeof (candidate as IconifyJSON).icons !== 'object'
+  ) {
+    throw new Error('[icon-loader] Invalid Iconify JSON payload received');
+  }
+  return candidate as IconifyJSON;
+}
+
+const loadIconSet = (loader: () => Promise<unknown>): Promise<IconifyJSON> =>
+  loader().then((module) => {
+    const maybeJson = (module as { default?: unknown }).default ?? module;
+    return ensureIconifyJSON(maybeJson);
+  });
+
 // Lazy load icon sets to avoid loading unused sets
 const iconSetLoaders: Record<string, () => Promise<IconifyJSON>> = {
   // Primary icon sets
-  mdi: () => import('@iconify-json/mdi/icons.json').then(m => m.default || m),
-  'material-symbols': () => import('@iconify-json/material-symbols/icons.json').then(m => m.default || m),
-  lucide: () => import('@iconify-json/lucide/icons.json').then(m => m.default || m),
-  carbon: () => import('@iconify-json/carbon/icons.json').then(m => m.default || m),
-  tabler: () => import('@iconify-json/tabler/icons.json').then(m => m.default || m),
+  mdi: () => loadIconSet(() => import('@iconify-json/mdi/icons.json')),
+  'material-symbols': () => loadIconSet(() => import('@iconify-json/material-symbols/icons.json')),
+  lucide: () => loadIconSet(() => import('@iconify-json/lucide/icons.json')),
+  carbon: () => loadIconSet(() => import('@iconify-json/carbon/icons.json')),
+  tabler: () => loadIconSet(() => import('@iconify-json/tabler/icons.json')),
   
   // Additional icon sets found in codebase
-  'simple-icons': () => import('@iconify-json/simple-icons/icons.json').then(m => m.default || m),
-  heroicons: () => import('@iconify-json/heroicons/icons.json').then(m => m.default || m),
-  healthicons: () => import('@iconify-json/healthicons/icons.json').then(m => m.default || m),
-  bi: () => import('@iconify-json/bi/icons.json').then(m => m.default || m),
-  codicon: () => import('@iconify-json/codicon/icons.json').then(m => m.default || m),
-  devicon: () => import('@iconify-json/devicon/icons.json').then(m => m.default || m),
-  'fa6-brands': () => import('@iconify-json/fa6-brands/icons.json').then(m => m.default || m),
-  'fa6-solid': () => import('@iconify-json/fa6-solid/icons.json').then(m => m.default || m),
-  logos: () => import('@iconify-json/logos/icons.json').then(m => m.default || m),
-  octicon: () => import('@iconify-json/octicon/icons.json').then(m => m.default || m),
-  'akar-icons': () => import('@iconify-json/akar-icons/icons.json').then(m => m.default || m),
-  ic: () => import('@iconify-json/ic/icons.json').then(m => m.default || m),
+  'simple-icons': () => loadIconSet(() => import('@iconify-json/simple-icons/icons.json')),
+  heroicons: () => loadIconSet(() => import('@iconify-json/heroicons/icons.json')),
+  healthicons: () => loadIconSet(() => import('@iconify-json/healthicons/icons.json')),
+  bi: () => loadIconSet(() => import('@iconify-json/bi/icons.json')),
+  codicon: () => loadIconSet(() => import('@iconify-json/codicon/icons.json')),
+  devicon: () => loadIconSet(() => import('@iconify-json/devicon/icons.json')),
+  'fa6-brands': () => loadIconSet(() => import('@iconify-json/fa6-brands/icons.json')),
+  'fa6-solid': () => loadIconSet(() => import('@iconify-json/fa6-solid/icons.json')),
+  logos: () => loadIconSet(() => import('@iconify-json/logos/icons.json')),
+  octicon: () => loadIconSet(() => import('@iconify-json/octicon/icons.json')),
+  'akar-icons': () => loadIconSet(() => import('@iconify-json/akar-icons/icons.json')),
+  ic: () => loadIconSet(() => import('@iconify-json/ic/icons.json')),
 };
 
 // Cache loaded icon sets to avoid reloading

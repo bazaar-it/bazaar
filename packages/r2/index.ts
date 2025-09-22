@@ -7,8 +7,8 @@ import {
   GetObjectCommand,
 } from '@aws-sdk/client-s3';
 import type { S3ClientConfig } from '@aws-sdk/client-s3';
-import { env } from "../../src/env.js";
-import logger from '../../src/lib/utils/logger';
+import { env } from '~/env';
+import logger from '~/lib/utils/logger';
 import { URL } from "url"; // For creating URL object for EndpointV2
 
 // R2 configuration from environment variables
