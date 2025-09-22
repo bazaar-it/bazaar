@@ -5,6 +5,7 @@ import React, { useEffect, useState, useCallback, useMemo, Suspense, useRef } fr
 import { useVideoState } from '~/stores/videoState';
 import type { InputProps } from '~/lib/types/video/input-props';
 import { Button } from "~/components/ui/button";
+import { Badge } from "~/components/ui/badge";
 import { RefreshCwIcon, CodeIcon, WrenchIcon } from "lucide-react";
 import { ErrorBoundary } from 'react-error-boundary';
 import { transform } from 'sucrase';
@@ -19,6 +20,53 @@ import { computeSceneRanges, findSceneAtFrame } from '~/lib/utils/scene-ranges';
 import { wrapSceneNamespace } from '~/lib/video/wrapSceneNamespace';
 import { buildCompositeHeader } from '~/lib/video/buildCompositeHeader';
 import { buildSingleSceneModule, buildMultiSceneModule } from '~/lib/video/buildComposite';
+import { DEFAULT_BRAND_THEME, type BrandTheme } from '~/lib/theme/brandTheme';
+
+function sanitizeTheme(theme: BrandTheme | null | undefined): BrandTheme {
+  if (!theme) {
+    return DEFAULT_BRAND_THEME;
+  }
+
+  return {
+    ...DEFAULT_BRAND_THEME,
+    ...theme,
+    colors: {
+      ...DEFAULT_BRAND_THEME.colors,
+      ...theme.colors,
+      primary: theme.colors?.primary || DEFAULT_BRAND_THEME.colors.primary,
+      secondary: theme.colors?.secondary || DEFAULT_BRAND_THEME.colors.secondary,
+      background: theme.colors?.background || DEFAULT_BRAND_THEME.colors.background,
+      textDefault: theme.colors?.textDefault || DEFAULT_BRAND_THEME.colors.textDefault,
+      accents:
+        theme.colors?.accents && theme.colors.accents.length > 0
+          ? theme.colors.accents
+          : DEFAULT_BRAND_THEME.colors.accents,
+      neutrals: theme.colors?.neutrals || DEFAULT_BRAND_THEME.colors.neutrals,
+    },
+    fonts: {
+      heading: {
+        ...DEFAULT_BRAND_THEME.fonts.heading,
+        ...theme.fonts.heading,
+      },
+      body: {
+        ...DEFAULT_BRAND_THEME.fonts.body,
+        ...theme.fonts.body,
+      },
+      mono: theme.fonts.mono || DEFAULT_BRAND_THEME.fonts.mono,
+    },
+    assets: {
+      ...DEFAULT_BRAND_THEME.assets,
+      ...theme.assets,
+      logo: theme.assets?.logo || DEFAULT_BRAND_THEME.assets.logo,
+      productShots: theme.assets?.productShots || DEFAULT_BRAND_THEME.assets.productShots,
+      heroImage: theme.assets?.heroImage || DEFAULT_BRAND_THEME.assets.heroImage,
+    },
+    iconography: theme.iconography || DEFAULT_BRAND_THEME.iconography,
+    backgroundEffects: theme.backgroundEffects || DEFAULT_BRAND_THEME.backgroundEffects,
+    motion: theme.motion || DEFAULT_BRAND_THEME.motion,
+    copy: theme.copy || DEFAULT_BRAND_THEME.copy,
+  };
+}
 
 // Error fallback component
 function ErrorFallback({ error }: { error: Error }) {
@@ -73,10 +121,13 @@ export function PreviewPanelG({
   // Phase 1 metrics (lightweight, console-based)
   const metricsRef = useRef({ precompiled: 0, slowPath: 0, errors: 0, runs: 0 });
   // ✅ FIXED: Use separate selectors to prevent infinite loops
-  const currentProps = useVideoState((state) => {
-    const project = state.projects[projectId];
-    return project?.props || initial;
-  });
+const currentProps = useVideoState((state) => {
+  const project = state.projects[projectId];
+  return project?.props || initial;
+});
+  const [selectedBrandTargetId, setSelectedBrandTargetId] = useState<string>('default');
+  const [activeBrandTargetId, setActiveBrandTargetId] = useState<string>('default');
+  const [isApplyingBrandTheme, setIsApplyingBrandTheme] = useState(false);
   
   // Get audio data from project state
   const projectAudio = useVideoState((state) => state.projects[projectId]?.audio);
@@ -94,6 +145,40 @@ export function PreviewPanelG({
       // This will be invalidated when scenes are created
     }
   );
+
+const { data: personalizationTargetsData } = api.personalizationTargets.list.useQuery(
+  { projectId },
+  {
+    refetchInterval: 15000,
+  },
+);
+
+const readyBrandTargets = useMemo(() => {
+  if (!personalizationTargetsData) {
+    return [] as Array<any>;
+  }
+  return personalizationTargetsData
+    .filter((target: any) => target.status === 'ready' && target.brandTheme)
+    .map((target: any) => ({
+      ...target,
+      brandTheme: sanitizeTheme(target.brandTheme as BrandTheme),
+    }));
+}, [personalizationTargetsData]);
+
+useEffect(() => {
+  if (
+    selectedBrandTargetId !== 'default' &&
+    !readyBrandTargets.some((target: any) => target.id === selectedBrandTargetId)
+  ) {
+    setSelectedBrandTargetId('default');
+  }
+  if (
+    activeBrandTargetId !== 'default' &&
+    !readyBrandTargets.some((target: any) => target.id === activeBrandTargetId)
+  ) {
+    setActiveBrandTargetId('default');
+  }
+}, [readyBrandTargets, selectedBrandTargetId, activeBrandTargetId]);
   
   // Debug: Check if jsCode is coming from API and data updates
   React.useEffect(() => {
@@ -180,10 +265,10 @@ export function PreviewPanelG({
           order: dbScene.order ?? 0,
           name: localName || dbScene.name,
           data: {
-            // Prefer pre-compiled JS if available; fallback to TSX
-            code: (dbScene as any).jsCode || dbScene.tsxCode,
-            jsCode: (dbScene as any).jsCode,
+            // Keep TSX as canonical editing source; expose compiled JS separately
+            code: dbScene.tsxCode,
             tsxCode: dbScene.tsxCode,
+            jsCode: (dbScene as any).jsCode,
             name: localName || dbScene.name,
             componentId: dbScene.id,
             props: dbScene.props || {}
@@ -198,8 +283,10 @@ export function PreviewPanelG({
         const order = s.order ?? 0;
         const duration = s.duration || 150;
         // Prefer compiled JS when present; otherwise use TSX
-        const code = (s?.data?.code || (s as any).jsCode || (s as any).tsxCode || '') as string;
-        const h = (typeof hashString === 'function') ? hashString(code) : String(code.length);
+        const tsx = (s?.data?.tsxCode || s?.data?.code || (s as any).tsxCode || '') as string;
+        const js = ((s?.data as any)?.jsCode || (s as any).jsCode || '') as string;
+        const combined = `${tsx}::${js}`;
+        const h = (typeof hashString === 'function') ? hashString(combined) : String(combined.length);
         return `${s.id}:${order}:${duration}:${h}`;
       }).join('|');
       const serverSig = sigFrom(convertedScenes);
@@ -250,6 +337,49 @@ export function PreviewPanelG({
   const [isCompiling, setIsCompiling] = useState(false);
   const [componentError, setComponentError] = useState<Error | null>(null);
   const [refreshToken, setRefreshToken] = useState(`initial-${Date.now()}`);
+
+const activeBrandTarget = useMemo(() => {
+  if (activeBrandTargetId === 'default') {
+    return null;
+  }
+  return readyBrandTargets.find((target: any) => target.id === activeBrandTargetId) ?? null;
+}, [activeBrandTargetId, readyBrandTargets]);
+
+const selectedBrandTarget = useMemo(() => {
+  if (selectedBrandTargetId === 'default') {
+    return null;
+  }
+  return readyBrandTargets.find((target: any) => target.id === selectedBrandTargetId) ?? null;
+}, [selectedBrandTargetId, readyBrandTargets]);
+
+  const applyBrandTheme = useCallback((theme: BrandTheme, key: string) => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    (window as any).BrandTheme = {
+      defaultTheme: theme,
+      useTheme: () => theme,
+    };
+
+    setRefreshToken(`brand-${key}-${Date.now()}`);
+  }, [setRefreshToken]);
+
+  const handleApplyBrandTheme = useCallback((targetId: string) => {
+    setIsApplyingBrandTheme(true);
+    try {
+      if (targetId === 'default') {
+        applyBrandTheme(DEFAULT_BRAND_THEME, 'default');
+      } else {
+        const target = readyBrandTargets.find((entry: any) => entry.id === targetId);
+        const theme = (target?.brandTheme as BrandTheme | null) ?? DEFAULT_BRAND_THEME;
+        applyBrandTheme(theme, targetId);
+      }
+      setActiveBrandTargetId(targetId);
+    } finally {
+      setIsApplyingBrandTheme(false);
+    }
+  }, [applyBrandTheme, readyBrandTargets]);
   
   // Playback speed state
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
@@ -2629,6 +2759,47 @@ export default function FallbackComposition() {
         style={{ display: 'none' }}
         aria-hidden="true"
       />
+
+      <div className="border-b border-slate-200 bg-white px-4 py-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+          <span>Brand theme</span>
+          <Badge variant="outline" className="text-xs">
+            {activeBrandTarget ? (activeBrandTarget.companyName || activeBrandTarget.websiteUrl) : 'Default'}
+          </Badge>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={selectedBrandTargetId}
+            onChange={(event) => setSelectedBrandTargetId(event.target.value)}
+            className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-700 shadow-sm focus:border-slate-500 focus:outline-none"
+          >
+            <option value="default">Default (Bazaar)</option>
+            {readyBrandTargets.map((target: any) => (
+              <option key={target.id} value={target.id}>
+                {target.companyName || target.websiteUrl}
+              </option>
+            ))}
+          </select>
+          <Button
+            size="sm"
+            onClick={() => handleApplyBrandTheme(selectedBrandTargetId)}
+            disabled={isApplyingBrandTheme || (selectedBrandTargetId !== 'default' && !selectedBrandTarget)}
+          >
+            {isApplyingBrandTheme ? 'Applying…' : 'Apply theme'}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setSelectedBrandTargetId('default');
+              handleApplyBrandTheme('default');
+            }}
+            disabled={selectedBrandTargetId === 'default'}
+          >
+            Reset
+          </Button>
+        </div>
+      </div>
       
       <div className="relative flex-grow min-h-0 min-w-0 flex items-center justify-center">
         {/* Preview source indicator removed in this branch */}

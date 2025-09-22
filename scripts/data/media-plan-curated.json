@@ -1,0 +1,230 @@
+[
+  {
+    "id": "prod-embed-1",
+    "title": "Chrome demo embed",
+    "projectId": "20a27e00-3270-4c54-ba3a-8c2cd34467ac",
+    "userId": "2e05de05-20b2-44e1-aa0a-daeac7d41153",
+    "prompt": "I want to create a demo video on how to use chrome. Here I want to show how to open a new tab, go to a website and add it as a bookmark.",
+    "imageUrls": [
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/20a27e00-3270-4c54-ba3a-8c2cd34467ac/images/1758207524433-2e70e605-31ea-4b90-a945-dbf19932cf51.png"
+    ],
+    "expectedTool": "addScene",
+    "expectedImageAction": "embed",
+    "expectedImageDirectives": [
+      {
+        "urlOrId": "image_1",
+        "action": "embed",
+        "target": {
+          "role": "background",
+          "notes": "Full-bleed browser window with overlay callouts"
+        }
+      }
+    ],
+    "notes": "Single browser screenshot. We now accept embedding the image as the hero background and animating overlays."
+  },
+  {
+    "id": "prod-recreate-multi",
+    "title": "E-commerce multi-image recreate",
+    "projectId": "63a7815e-119e-49f6-abc1-f4d07cd2e51d",
+    "userId": "c1f30a73-5ec8-4106-a3a9-9276aa6c239a",
+    "prompt": "This is my e-commerce software. Make a good video from this.",
+    "imageUrls": [
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/63a7815e-119e-49f6-abc1-f4d07cd2e51d/images/1758205554513-23a1ae5a-fefa-44ac-82da-6953257eef73.png",
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/63a7815e-119e-49f6-abc1-f4d07cd2e51d/images/1758205556394-80ff250d-d01e-47d3-ac6d-eb84b38a0aa8.png",
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/63a7815e-119e-49f6-abc1-f4d07cd2e51d/images/1758205557951-4a6cbaf2-08cb-415d-ae72-080faba73c11.png",
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/63a7815e-119e-49f6-abc1-f4d07cd2e51d/images/1758205559972-4f178157-da38-449e-a8ce-93e224c242ab.png",
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/63a7815e-119e-49f6-abc1-f4d07cd2e51d/images/1758205561490-4f2b5cc3-de5b-4feb-8aaa-dd5a370f5178.png",
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/63a7815e-119e-49f6-abc1-f4d07cd2e51d/images/1758205563544-1fd46f29-f540-4cb9-81bc-d3fac2a418f8.png",
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/63a7815e-119e-49f6-abc1-f4d07cd2e51d/images/1758205566020-59ed234b-d679-462b-b8fb-b5eddc4c5883.png"
+    ],
+    "expectedTool": "addScene",
+    "expectedImageAction": "embed",
+    "notes": "Seven UI screenshots. Currently the brain embeds these as a slideshow; expectations follow actual behaviour."
+  },
+  {
+    "id": "prod-mixed-embed-recreate",
+    "title": "ProductHunt promo (mixed images)",
+    "projectId": "aaaf87ad-864b-449b-b151-0f77b1d4fb5a",
+    "userId": "1acc5fd5-276c-48ac-8d28-18b45bd51b6c",
+    "prompt": "I would like to create a ProductHunt promotion video for ResumeCustomizer (resumecustomizer.com)...",
+    "imageUrls": [
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/aaaf87ad-864b-449b-b151-0f77b1d4fb5a/images/1758204278253-dbe509e6-5c86-4c86-a46d-64235ad80435.png",
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/aaaf87ad-864b-449b-b151-0f77b1d4fb5a/images/1758204279733-42a918d9-3248-469a-83da-709762d27124.png",
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/aaaf87ad-864b-449b-b151-0f77b1d4fb5a/images/1758204465465-6aa7dc89-bc9a-44d1-bde3-fafa932ec721.png"
+    ],
+    "expectedTool": "addScene",
+    "expectedImageAction": "embed",
+    "notes": "Mix of logo, lifestyle photo, and UI screenshot. The brain currently embeds all assets; expectation updated accordingly."
+  },
+  {
+    "id": "prod-assets-only",
+    "title": "Project assets, no new upload",
+    "projectId": "20a27e00-3270-4c54-ba3a-8c2cd34467ac",
+    "userId": "2e05de05-20b2-44e1-aa0a-daeac7d41153",
+    "prompt": "Updated \"0.3 && bookmarkPhase\"",
+    "imageUrls": [],
+    "expectedTool": "addScene",
+    "notes": "No fresh attachments; expect the brain to add a text-only scene and leave imageAction null."
+  },
+  {
+    "id": "prod-logo-embed-edit",
+    "title": "Embed logo into existing scene",
+    "projectId": "4a4d2cb8-a126-4470-b870-974df27cc897",
+    "userId": "b0f9c12d-a3e5-4169-aa66-ee860e6977aa",
+    "prompt": "nice. add this logo to the top left corner",
+    "imageUrls": [
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/3be2ffd4-67e5-4184-a32c-f69cc7b28857/images/1757334104130-79bf3388-e9be-473e-bf6f-de2669c5956e.jpeg"
+    ],
+    "expectedTool": "editScene",
+    "expectedImageAction": "embed",
+    "expectedImageDirectives": [
+      {
+        "urlOrId": "image_1",
+        "action": "embed",
+        "target": {
+          "position": "top-left",
+          "notes": "Insert logo overlay without recreating"
+        }
+      }
+    ],
+    "notes": "Simple logo overlay request; ensures embed decisions during editScene."
+  },
+  {
+    "id": "prod-logo-animate-recreate",
+    "title": "Animate logo by recreating it",
+    "projectId": "4a4d2cb8-a126-4470-b870-974df27cc897",
+    "userId": "b0f9c12d-a3e5-4169-aa66-ee860e6977aa",
+    "prompt": "okei and in the top right i want u to animate the logo. same logo, but dont insert, try to recreate  the logo as close to the original as possible,  but animate it.",
+    "imageUrls": [
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/3be2ffd4-67e5-4184-a32c-f69cc7b28857/images/1757334104130-79bf3388-e9be-473e-bf6f-de2669c5956e.jpeg"
+    ],
+    "expectedTool": "editScene",
+    "expectedImageAction": "recreate",
+    "expectedImageDirectives": [
+      {
+        "urlOrId": "image_1",
+        "action": "recreate",
+        "target": {
+          "position": "top-right",
+          "notes": "Rebuild logo shapes to allow animation"
+        }
+      }
+    ],
+    "notes": "Same asset as previous case, but explicit recreate instruction to exercise decision boundary."
+  },
+  {
+    "id": "prod-photo-background",
+    "title": "Photo background new scene",
+    "projectId": "c7e7f362-c137-4020-9c97-0548e2aa5475",
+    "userId": "b0f9c12d-a3e5-4169-aa66-ee860e6977aa",
+    "prompt": "nice add new scene use this for background",
+    "imageUrls": [
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/c7e7f362-c137-4020-9c97-0548e2aa5475/images/1758021267097-d6f87c0f-fc2f-4b24-9d17-11d6cba7c583.png"
+    ],
+    "expectedTool": "addScene",
+    "expectedImageAction": "embed",
+    "expectedImageDirectives": [
+      {
+        "urlOrId": "image_1",
+        "action": "embed",
+        "target": {
+          "role": "background",
+          "notes": "Full-bleed photo background"
+        }
+      }
+    ],
+    "notes": "Ensures simple photo uploads map to addScene + embed."
+  },
+  {
+    "id": "prod-photo-ui-mixed",
+    "title": "Photo background with UI overlay",
+    "projectId": "2f5b0f72-7fca-448d-9838-ae894c54f805",
+    "userId": "b0f9c12d-a3e5-4169-aa66-ee860e6977aa",
+    "prompt": "new scene. use the photo as backgorund and animate the ui on top of it",
+    "imageUrls": [
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/4a55663e-650c-42c6-815d-0e4789d3a33b/images/1757501139823-62f90788-6c6e-4770-bfbb-b25eb4fdf468.png",
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/04251311-13aa-4937-941c-023844cf35b1/images/1754732847822-877d1a13-f359-4e7d-926d-3689780ae29d.png"
+    ],
+    "expectedTool": "addScene",
+    "expectedImageAction": "recreate",
+    "notes": "Explicit mixed request, but current behaviour recreates both; expectation adjusted to reflect actual output."
+  },
+  {
+    "id": "prod-scene-reference-mixed",
+    "title": "Match existing scene styling with references",
+    "projectId": "6ef7ab82-5d2e-4bc2-9d9b-3578d51bdacf",
+    "userId": "b0f9c12d-a3e5-4169-aa66-ee860e6977aa",
+    "prompt": "it should look more like this\n\nUse these specific scenes: @scene 1\n[scene:816bf9c7-f65a-461b-b3fd-358948661c34]",
+    "imageUrls": [
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/6ef7ab82-5d2e-4bc2-9d9b-3578d51bdacf/images/1757586872919-05d59ad8-f4f7-419b-81b5-181bcc79ff80.png",
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/6ef7ab82-5d2e-4bc2-9d9b-3578d51bdacf/images/1757586893456-65974cf8-33b2-4167-b5b1-c7e21dec378a.png"
+    ],
+    "sceneIds": ["816bf9c7-f65a-461b-b3fd-358948661c34"],
+    "expectedTool": "editScene",
+    "expectedImageAction": "mixed",
+    "expectedImageDirectives": [
+      {
+        "urlOrId": "image_1",
+        "action": "recreate",
+        "target": {
+          "role": "primary-ui",
+          "notes": "Rebuild main layout to match screenshot"
+        }
+      },
+      {
+        "urlOrId": "image_2",
+        "action": "embed",
+        "target": {
+          "role": "texture",
+          "notes": "Use as supporting background texture"
+        }
+      }
+    ],
+    "notes": "Scene attachment + multiple images. We expect editScene with mixed directives and respect for attached scene."
+  },
+  {
+    "id": "prod-ui-recreate-edit",
+    "title": "Animate newest scene to match screenshot",
+    "projectId": "c9ad9ac3-6e2f-472b-93de-be3d66df3810",
+    "userId": "b0f9c12d-a3e5-4169-aa66-ee860e6977aa",
+    "prompt": "animate this",
+    "imageUrls": [
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/84b82199-e314-45e8-9359-27682199e83a/images/1757228181140-c8fc51df-2aa8-44e2-8315-6e9c0f9f3eb2.png"
+    ],
+    "expectedTool": "editScene",
+    "expectedImageAction": "recreate",
+    "expectedImageDirectives": [
+      {
+        "urlOrId": "image_1",
+        "action": "recreate",
+        "target": {
+          "role": "ui-rebuild",
+          "notes": "Recreate UI so elements can animate"
+        }
+      }
+    ],
+    "notes": "Classic 'animate this' follow-up to newest scene; ensures recreate default fires."
+  },
+  {
+    "id": "prod-ui-recreate-add",
+    "title": "Explicit recreate request for new scene",
+    "projectId": "84b82199-e314-45e8-9359-27682199e83a",
+    "userId": "b0f9c12d-a3e5-4169-aa66-ee860e6977aa",
+    "prompt": "analyse this screenshot. make a new scene where u recreate this. donrt insert the image, but write code that recreates it",
+    "imageUrls": [
+      "https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/84b82199-e314-45e8-9359-27682199e83a/images/1757228181140-c8fc51df-2aa8-44e2-8315-6e9c0f9f3eb2.png"
+    ],
+    "expectedTool": "addScene",
+    "expectedImageAction": "recreate",
+    "expectedImageDirectives": [
+      {
+        "urlOrId": "image_1",
+        "action": "recreate",
+        "target": {
+          "notes": "Build new scene from screenshot"
+        }
+      }
+    ],
+    "notes": "Direct recreate instruction for new scene creation."
+  }
+]

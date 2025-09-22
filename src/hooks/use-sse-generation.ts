@@ -145,9 +145,23 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
           // ✅ NEW: Handle title updates
           case 'title_updated':
             console.log(`[SSE] Title updated to: "${data.title}"`);
-            // Invalidate project queries to refresh the UI
-            utils.project.getById.invalidate({ id: projectId });
-            utils.project.list.invalidate();
+            // Optimistically update caches so UI reflects the new title immediately
+            utils.project.getById.setData({ id: projectId }, (old) =>
+              old ? { ...old, title: data.title } : old
+            );
+            utils.project.list.setData(undefined, (old) =>
+              Array.isArray(old)
+                ? old.map((project) =>
+                    project.id === projectId
+                      ? { ...project, title: data.title }
+                      : project
+                  )
+                : old
+            );
+
+            // Invalidate project queries to refresh the UI with server state
+            void utils.project.getById.invalidate({ id: projectId });
+            void utils.project.list.invalidate();
             break;
             
           case 'error':

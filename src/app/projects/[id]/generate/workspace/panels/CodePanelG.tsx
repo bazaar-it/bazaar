@@ -102,7 +102,8 @@ export function CodePanelG({
   // Auto-select first scene if none is selected but scenes exist
   React.useEffect(() => {
     if (scenes.length > 0 && (!selectedSceneId || !scenes.some(s => s.id === selectedSceneId))) {
-      if (onSceneSelect) onSceneSelect(scenes[0].id);
+      const firstScene = scenes[0];
+      if (firstScene && onSceneSelect) onSceneSelect(firstScene.id);
     }
     // Only react to changes in scene list or selectedSceneId
   }, [scenes.length, scenes[0]?.id, selectedSceneId, onSceneSelect]);

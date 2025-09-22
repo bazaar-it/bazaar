@@ -304,6 +304,8 @@ export const generateScene = protectedProcedure
         `${userMessage}\n\n[FIGMA COMPONENT DATA]\nType: ${figmaComponentData.type}\nColors: ${JSON.stringify(figmaComponentData.colors)}\nTexts: ${JSON.stringify(figmaComponentData.texts)}\nLayout: ${JSON.stringify(figmaComponentData.layout)}\nBounds: ${JSON.stringify(figmaComponentData.bounds)}\nChildren: ${figmaComponentData.children?.length || 0} elements` : 
         userMessage;
         
+      const requestId = typeof response.getRequestId === 'function' ? response.getRequestId() : undefined;
+
       const orchestratorResponse = await orchestrator.processUserInput({
         prompt: finalPrompt,
         projectId,
@@ -330,7 +332,7 @@ export const generateScene = protectedProcedure
           userId,
           figmaComponentData, // Pass the Figma component data
         },
-      });
+      }, { requestId });
 
       // Handle clarification responses FIRST (before checking for result)
       if (orchestratorResponse.needsClarification) {

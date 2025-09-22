@@ -1,0 +1,310 @@
+# Brand Personalization Dataset (Sprint 130)
+
+## Purpose
+Seed a repeatable test set for bulk personalization flows. Each entry represents a target company for whom we will personalize the master software demo. The dataset is synthetic but mirrors real B2B outreach patterns: SaaS tools, agencies, and e-commerce platforms with distinct brand palettes and typography.
+
+## Schema
+| Field | Type | Notes |
+| --- | --- | --- |
+| `id` | string | Stable slug (`company-name`) used as `variantId` seed |
+| `companyName` | string | Display name for UI/export metadata |
+| `websiteUrl` | string | Primary URL for brand extraction (can be placeholder) |
+| `contactEmail` | string | Optional – used for eventual outreach automation |
+| `sector` | string | Helps choose copy overrides; values like `fintech`, `health`, `creative` |
+| `brandOverrides` | object | Manual tokens when scraping is skipped (colors, fonts, logo URLs, copy tweaks) |
+| `status` | string | Tracking field (`pending`, `scraped`, `failed`, `manual`) |
+| `notes` | string | Observations about the brand or extraction requirements |
+
+### `brandOverrides` Structure
+```json
+{
+  "colors": {
+    "primary": "#0F62FE",
+    "secondary": "#001141",
+    "accents": ["#A6C8FF", "#FF832B"],
+    "background": "#F4F4F4",
+    "textDefault": "#121619"
+  },
+  "fonts": {
+    "heading": { "family": "IBM Plex Sans", "weights": [500, 600] },
+    "body": { "family": "IBM Plex Sans", "weights": [400] }
+  },
+  "logo": {
+    "light": "https://cdn.example.com/ibm-consulting/logo-light.svg",
+    "dark": "https://cdn.example.com/ibm-consulting/logo-dark.svg"
+  },
+  "copy": {
+    "cta": "Schedule a tailored walkthrough",
+    "tagline": "Accelerate enterprise automation"
+  }
+}
+```
+
+## Sample Entries
+```json
+[
+  {
+    "id": "acme-finance",
+    "companyName": "Acme Finance Cloud",
+    "websiteUrl": "https://demo.acmefinancecloud.com",
+    "contactEmail": "deals@acmefinancecloud.com",
+    "sector": "fintech",
+    "brandOverrides": {
+      "colors": {
+        "primary": "#0052FF",
+        "secondary": "#0F172A",
+        "accents": ["#22D3EE", "#FACC15"],
+        "background": "#F8FAFC",
+        "textDefault": "#0F172A"
+      },
+      "fonts": {
+        "heading": { "family": "Space Grotesk", "weights": [500, 700] },
+        "body": { "family": "Inter", "weights": [400, 500] }
+      },
+      "logo": {
+        "light": "https://assets.demo.bazaar.it/acme-finance/logo-light.svg",
+        "dark": "https://assets.demo.bazaar.it/acme-finance/logo-dark.svg"
+      }
+    },
+    "status": "pending",
+    "notes": "Synthetic fintech brand with neon accent colors; good for chart-heavy scenes."
+  },
+  {
+    "id": "orbit-health",
+    "companyName": "Orbit Health Platform",
+    "websiteUrl": "https://www.orbithealth.io",
+    "contactEmail": "introductions@orbithealth.io",
+    "sector": "health",
+    "brandOverrides": {
+      "colors": {
+        "primary": "#0BBF9A",
+        "secondary": "#024452",
+        "accents": ["#F7B500", "#F2F6F7"],
+        "background": "#F2F6F7",
+        "textDefault": "#022C35"
+      },
+      "fonts": {
+        "heading": { "family": "Nunito", "weights": [600] },
+        "body": { "family": "Nunito", "weights": [400] }
+      },
+      "logo": {
+        "light": "https://assets.demo.bazaar.it/orbit-health/logo.svg"
+      },
+      "copy": {
+        "cta": "Book a compliance-ready demo",
+        "tagline": "Streamline patient engagement with automation"
+      }
+    },
+    "status": "pending",
+    "notes": "Healthcare palette with soft pastels; ensure accessibility contrast."
+  },
+  {
+    "id": "pixelwave-studio",
+    "companyName": "Pixelwave Studio",
+    "websiteUrl": "https://pixelwave.studio",
+    "contactEmail": "hello@pixelwave.studio",
+    "sector": "creative",
+    "brandOverrides": {
+      "colors": {
+        "primary": "#FF5F8F",
+        "secondary": "#18181B",
+        "accents": ["#F97316", "#7C3AED"],
+        "background": "#0F0F10",
+        "textDefault": "#F5F5F5"
+      },
+      "fonts": {
+        "heading": { "family": "General Sans", "weights": [600] },
+        "body": { "family": "Satoshi", "weights": [400] }
+      },
+      "logo": {
+        "light": "https://assets.demo.bazaar.it/pixelwave/logo.svg"
+      }
+    },
+    "status": "pending",
+    "notes": "Dark-mode creative agency; test neon gradients + typography switching."
+  },
+  {
+    "id": "zenledger-analytics",
+    "companyName": "ZenLedger Analytics",
+    "websiteUrl": "https://www.zenledgeranalytics.com",
+    "contactEmail": "partnerships@zenledgeranalytics.com",
+    "sector": "fintech",
+    "brandOverrides": {
+      "colors": {
+        "primary": "#1D4ED8",
+        "secondary": "#0B1220",
+        "accents": ["#60A5FA", "#F59E0B"],
+        "background": "#0B1220",
+        "textDefault": "#F8FAFC"
+      },
+      "fonts": {
+        "heading": { "family": "Manrope", "weights": [600, 700] },
+        
+"EOF
+        "body": { "family": "Manrope", "weights": [400, 500] }
+      },
+      "logo": {
+        "light": "https://assets.demo.bazaar.it/zenledger/logo.svg"
+      }
+    },
+    "status": "pending",
+    "notes": "Dark fintech dashboard; test reversed text colors and data viz contrast."
+  },
+  {
+    "id": "nectar-ecommerce",
+    "companyName": "Nectar Commerce Suite",
+    "websiteUrl": "https://nectarcommerce.com",
+    "contactEmail": "sales@nectarcommerce.com",
+    "sector": "ecommerce",
+    "brandOverrides": {
+      "colors": {
+        "primary": "#FF6B35",
+        "secondary": "#14213D",
+        "accents": ["#FCA311", "#E5E5E5"],
+        "background": "#FFFFFF",
+        "textDefault": "#14213D"
+      },
+      "fonts": {
+        "heading": { "family": "Poppins", "weights": [600] },
+        "body": { "family": "Poppins", "weights": [400] }
+      },
+      "logo": {
+        "light": "https://assets.demo.bazaar.it/nectar-commerce/logo.svg"
+      }
+    },
+    "status": "pending",
+    "notes": "Retail palette with bold CTA accent; watch for button styling."
+  },
+  {
+    "id": "sentinel-cyber",
+    "companyName": "Sentinel Cyber",
+    "websiteUrl": "https://sentinelcyber.ai",
+    "contactEmail": "demos@sentinelcyber.ai",
+    "sector": "cybersecurity",
+    "brandOverrides": {
+      "colors": {
+        "primary": "#12B76A",
+        "secondary": "#101828",
+        "accents": ["#175CD3", "#6941C6"],
+        "background": "#0B0F1A",
+        "textDefault": "#E4E7EC"
+      },
+      "fonts": {
+        "heading": { "family": "Suisse Intl", "weights": [600] },
+        "body": { "family": "Suisse Intl", "weights": [400] }
+      },
+      "logo": {
+        "light": "https://assets.demo.bazaar.it/sentinel-cyber/logo.svg"
+      }
+    },
+    "status": "pending",
+    "notes": "Glowing accent for security visuals; dark gradients."
+  },
+  {
+    "id": "freightflow-logistics",
+    "companyName": "FreightFlow Logistics",
+    "websiteUrl": "https://freightflow.io",
+    "contactEmail": "ops@freightflow.io",
+    "sector": "logistics",
+    "brandOverrides": {
+      "colors": {
+        "primary": "#2563EB",
+        "secondary": "#1F2937",
+        "accents": ["#10B981", "#FBBF24"],
+        "background": "#F9FAFB",
+        "textDefault": "#111827"
+      },
+      "fonts": {
+        "heading": { "family": "Work Sans", "weights": [600] },
+        "body": { "family": "Work Sans", "weights": [400] }
+      },
+      "logo": {
+        "light": "https://assets.demo.bazaar.it/freightflow/logo.svg"
+      }
+    },
+    "status": "pending",
+    "notes": "Mix of blue + green; ensure charts adapt to accent changes."
+  },
+  {
+    "id": "lumen-education",
+    "companyName": "Lumen Education Cloud",
+    "websiteUrl": "https://lumen.education",
+    "contactEmail": "hello@lumen.education",
+    "sector": "education",
+    "brandOverrides": {
+      "colors": {
+        "primary": "#7C3AED",
+        "secondary": "#312E81",
+        "accents": ["#F472B6", "#FDE68A"],
+        "background": "#F5F3FF",
+        "textDefault": "#1E1B4B"
+      },
+      "fonts": {
+        "heading": { "family": "Cabinet Grotesk", "weights": [600] },
+        "body": { "family": "Mulish", "weights": [400, 500] }
+      },
+      "logo": {
+        "light": "https://assets.demo.bazaar.it/lumen-education/logo.svg"
+      }
+    },
+    "status": "pending",
+    "notes": "Education colors with soft backdrop; check readability on light backgrounds."
+  },
+  {
+    "id": "pulse-insights",
+    "companyName": "Pulse Insights",
+    "websiteUrl": "https://pulseinsights.ai",
+    "contactEmail": "growth@pulseinsights.ai",
+    "sector": "analytics",
+    "brandOverrides": {
+      "colors": {
+        "primary": "#EF4444",
+        "secondary": "#111827",
+        "accents": ["#F97316", "#3B82F6"],
+        "background": "#111827",
+        "textDefault": "#F9FAFB"
+      },
+      "fonts": {
+        "heading": { "family": "Clash Display", "weights": [600] },
+        "body": { "family": "Inter", "weights": [400] }
+      },
+      "logo": {
+        "light": "https://assets.demo.bazaar.it/pulse-insights/logo.svg"
+      }
+    },
+    "status": "pending",
+    "notes": "High-contrast analytics brand; useful for motion speed tweaks testing."
+  },
+  {
+    "id": "northwind-ventures",
+    "companyName": "Northwind Ventures",
+    "websiteUrl": "https://northwind.ventures",
+    "contactEmail": "invest@northwind.ventures",
+    "sector": "venture",
+    "brandOverrides": {
+      "colors": {
+        "primary": "#0E7490",
+        "secondary": "#164E63",
+        "accents": ["#38BDF8", "#F97316"],
+        "background": "#F1F5F9",
+        "textDefault": "#0F172A"
+      },
+      "fonts": {
+        "heading": { "family": "GT Walsheim", "weights": [600] },
+        "body": { "family": "GT Walsheim", "weights": [400] }
+      },
+      "logo": {
+        "light": "https://assets.demo.bazaar.it/northwind/logo.svg"
+      }
+    },
+    "status": "pending",
+    "notes": "SaaS investor styling; test iconography token swaps."
+  }
+]
+```
+
+## Next Steps
+1. Expand dataset to 12+ entries covering additional verticals (cybersecurity done; consider govtech, hospitality).
+2. Mirror this file as `brand-personalization-dataset.json` for automated tests. ✅
+3. Build helper script to import dataset into `project_variants` table once schema lands.
+4. Hook dataset into snapshot render harness (generate frame for each entry).

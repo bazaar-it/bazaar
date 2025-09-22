@@ -1,0 +1,441 @@
+{
+  "name": "Export QA – Gemini analysis + email",
+  "nodes": [
+    {
+      "id": "1",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        -380,
+        -20
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "unit": "minutes",
+              "value": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "2",
+      "name": "Fetch Completed Events",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        -160,
+        -20
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT ea.id,\n       ea.export_id,\n       ea.created_at AS analytics_created_at\nFROM public.\"bazaar-vid_export_analytics\" ea\nWHERE ea.event = 'completed'\n  AND ea.created_at > NOW() - INTERVAL '2 days'\nORDER BY ea.created_at ASC;"
+      },
+      "credentials": {
+        "postgres": {
+          "name": "Bazaar Readonly"
+        }
+      }
+    },
+    {
+      "id": "3",
+      "name": "Filter Processed Completions",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        60,
+        -20
+      ],
+      "parameters": {
+        "functionCode": "const staticData = this.getWorkflowStaticData('global');\nconst processedIds = new Set(staticData.processedAnalyticsIds || []);\nconst fresh = [];\nfor (const item of items) {\n  const id = item.json.id;\n  if (!id) {\n    continue;\n  }\n  if (!processedIds.has(id)) {\n    fresh.push(item);\n  }\n}\nreturn fresh;"
+      }
+    },
+    {
+      "id": "4",
+      "name": "Hydrate Export Context",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [
+        300,
+        -20
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  '{{ $json[\"id\"] }}'::uuid AS analytics_id,\n  '{{ $json[\"analytics_created_at\"] }}'::timestamptz AS analytics_created_at,\n  e.id AS export_id,\n  e.render_id,\n  e.output_url,\n  e.format,\n  e.quality,\n  e.duration,\n  e.file_size,\n  e.metadata,\n  e.created_at,\n  e.completed_at,\n  p.slug AS project_slug,\n  u.email AS user_email,\n  COALESCE(u.name, 'Bazaar Creator') AS user_name\nFROM public.\"bazaar-vid_exports\" e\nJOIN public.\"bazaar-vid_project\" p ON p.id = e.project_id\nJOIN public.\"bazaar-vid_user\" u ON u.id = e.user_id\nWHERE e.id = '{{ $json[\"export_id\"] }}';"
+      },
+      "credentials": {
+        "postgres": {
+          "name": "Bazaar Readonly"
+        }
+      }
+    },
+    {
+      "id": "5",
+      "name": "Gemini Analysis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        540,
+        -20
+      ],
+      "parameters": {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent",
+        "method": "POST",
+        "sendBody": true,
+        "jsonParameters": true,
+        "bodyParametersJson": "={{ { contents: [ { parts: [ { file_data: { file_uri: $json[\"output_url\"] } }, { text: \"You are the QA system for Bazaar motion graphics. Review the video and provide: 1) a three-sentence overview, 2) any visual quality issues or glitches, 3) motion/tempo feedback, and 4) two actionable suggestions.\" } ] } ] } }}",
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "queryParametersUi": {
+          "parameter": [
+            {
+              "name": "key",
+              "value": "YOUR_GEMINI_API_KEY"
+            }
+          ]
+        },
+        "options": {
+          "responseFormat": "json"
+        }
+      }
+    },
+    {
+      "id": "6",
+      "name": "Merge Export + Analysis",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 1,
+      "position": [
+        780,
+        -20
+      ],
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "index"
+      }
+    },
+    {
+      "id": "7",
+      "name": "Prepare Analysis Fields",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        -20
+      ],
+      "parameters": {
+        "functionCode": "return items.map(item => {\n  const data = item.json;\n  const candidates = data.candidates?.[0]?.content?.parts ?? [];\n  const textParts = [];\n  for (const part of candidates) {\n    if (part.text) {\n      textParts.push(part.text.trim());\n    }\n  }\n  const analysisText = textParts.filter(Boolean).join('\\n\\n') || 'Gemini did not return any analysis.';\n  const htmlBlocks = analysisText\n    .split(/\\n\\n+/)\n    .map(block => `<p>${block.replace(/\\n/g, '<br />')}</p>`)\n    .join('\\n');\n  data.analysis_text = analysisText;\n  data.analysis_html = htmlBlocks;\n  data.analysis_generated_at = new Date().toISOString();\n  delete data.candidates;\n  delete data.promptFeedback;\n  return { json: data, binary: item.binary };\n});"
+      }
+    },
+    {
+      "id": "8",
+      "name": "Set Email Template",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        1220,
+        -20
+      ],
+      "parameters": {
+        "keepOnlySet": false,
+        "values": {
+          "string": [
+            {
+              "name": "email_to",
+              "value": "exports@bazaar.it"
+            },
+            {
+              "name": "email_cc",
+              "value": "markus@bazaar.it"
+            },
+            {
+              "name": "email_from",
+              "value": "qa@bazaar.it"
+            },
+            {
+              "name": "email_subject",
+              "value": "={{`Bazaar export QA: ${$json.project_slug || 'project'} / ${$json.render_id}`}}"
+            },
+            {
+              "name": "email_text",
+              "value": "={{`Export ${$json.render_id} (${ $json.format || 'mp4' } / ${ $json.quality || 'medium' })\\nProject: ${$json.project_slug}\\nCreator: ${$json.user_name} <${$json.user_email}>\\nCompleted at: ${$json.completed_at || 'n/a'}\\nDuration: ${$json.duration || 'n/a'}\\n\\nAnalysis:\\n${$json.analysis_text}\\n\\nVideo link: ${$json.output_url}`}}"
+            },
+            {
+              "name": "email_html",
+              "value": "={{`<h2>Bazaar export QA</h2><p><strong>Project:</strong> ${$json.project_slug}<br/><strong>Render ID:</strong> ${$json.render_id}<br/><strong>Creator:</strong> ${$json.user_name} &lt;${$json.user_email}&gt;<br/><strong>Completed at:</strong> ${$json.completed_at || 'n/a'}<br/><strong>Format:</strong> ${$json.format || 'mp4'} / ${$json.quality || 'medium'}<br/><strong>Duration:</strong> ${$json.duration || 'n/a'}</p><h3>Gemini analysis</h3>${$json.analysis_html}<p><a href='${$json.output_url}'>Download the video</a></p>`}}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "9",
+      "name": "File Size OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        -20
+      ],
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "leftValue": "={{$json[\"file_size\"] || 0}}",
+              "operation": "smaller",
+              "rightValue": 18000000
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "10",
+      "name": "Download Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        1660,
+        -140
+      ],
+      "parameters": {
+        "url": "={{$json[\"output_url\"]}}",
+        "method": "GET",
+        "responseFormat": "file",
+        "dataPropertyName": "video",
+        "options": {
+          "timeout": 240000
+        }
+      }
+    },
+    {
+      "id": "11",
+      "name": "Send Email (with video)",
+      "type": "n8n-nodes-base.sendEmail",
+      "typeVersion": 2,
+      "position": [
+        1860,
+        -140
+      ],
+      "parameters": {
+        "fromEmail": "={{$json[\"email_from\"]}}",
+        "toEmail": "={{$json[\"email_to\"]}}",
+        "ccEmail": "={{$json[\"email_cc\"]}}",
+        "subject": "={{$json[\"email_subject\"]}}",
+        "text": "={{$json[\"email_text\"]}}",
+        "html": "={{$json[\"email_html\"]}}",
+        "additionalFields": {
+          "attachments": [
+            {
+              "binaryPropertyName": "video",
+              "fileName": "={{$json[\"render_id\"] || 'export'}}.mp4"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "smtp": {
+          "name": "Bazaar SMTP"
+        }
+      }
+    },
+    {
+      "id": "12",
+      "name": "Send Email (link only)",
+      "type": "n8n-nodes-base.sendEmail",
+      "typeVersion": 2,
+      "position": [
+        1660,
+        120
+      ],
+      "parameters": {
+        "fromEmail": "={{$json[\"email_from\"]}}",
+        "toEmail": "={{$json[\"email_to\"]}}",
+        "ccEmail": "={{$json[\"email_cc\"]}}",
+        "subject": "={{$json[\"email_subject\"]}}",
+        "text": "={{$json[\"email_text\"]}}",
+        "html": "={{$json[\"email_html\"]}}"
+      },
+      "credentials": {
+        "smtp": {
+          "name": "Bazaar SMTP"
+        }
+      }
+    },
+    {
+      "id": "13",
+      "name": "Mark Completions Processed",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        2080,
+        -20
+      ],
+      "parameters": {
+        "functionCode": "const staticData = this.getWorkflowStaticData('global');\nconst processed = new Set(staticData.processedAnalyticsIds || []);\nfor (const item of items) {\n  const id = item.json.analytics_id;\n  if (id) {\n    processed.add(id);\n  }\n}\nstaticData.processedAnalyticsIds = Array.from(processed).slice(-500);\nreturn items;"
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Completed Events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Completed Events": {
+      "main": [
+        [
+          {
+            "node": "Filter Processed Completions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Processed Completions": {
+      "main": [
+        [
+          {
+            "node": "Hydrate Export Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hydrate Export Context": {
+      "main": [
+        [
+          {
+            "node": "Gemini Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge Export + Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Analysis": {
+      "main": [
+        [
+          {
+            "node": "Merge Export + Analysis",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Export + Analysis": {
+      "main": [
+        [
+          {
+            "node": "Prepare Analysis Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Analysis Fields": {
+      "main": [
+        [
+          {
+            "node": "Set Email Template",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Email Template": {
+      "main": [
+        [
+          {
+            "node": "File Size OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "File Size OK?": {
+      "main": [
+        [
+          {
+            "node": "Download Video",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Email (link only)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Video": {
+      "main": [
+        [
+          {
+            "node": "Send Email (with video)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email (with video)": {
+      "main": [
+        [
+          {
+            "node": "Mark Completions Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email (link only)": {
+      "main": [
+        [
+          {
+            "node": "Mark Completions Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "staticData": {}
+}

@@ -8,6 +8,35 @@
 
 import { transform } from 'sucrase';
 
+function extractComponentName(tsxCode: string, jsCode: string): string | null {
+  // Prefer explicit default export names from the original TSX
+  const defaultFnMatch = tsxCode.match(/export\s+default\s+function\s+([A-Za-z_$][\w$]*)/);
+  if (defaultFnMatch?.[1]) {
+    return defaultFnMatch[1];
+  }
+
+  const defaultRefMatch = tsxCode.match(/export\s+default\s+([A-Za-z_$][\w$]*)/);
+  if (defaultRefMatch?.[1]) {
+    return defaultRefMatch[1];
+  }
+
+  // Fall back to scanning JSX/JS identifiers in the transformed code
+  const candidateRegex = /(?:const|let|var|function)\s+([A-Z][A-Za-z0-9_]*)\s*[=\(]/g;
+  const candidates: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = candidateRegex.exec(jsCode)) !== null) {
+    if (match[1]) {
+      candidates.push(match[1]);
+    }
+  }
+
+  if (candidates.length > 0) {
+    return candidates[candidates.length - 1];
+  }
+
+  return null;
+}
+
 export interface CompilationResult {
   success: boolean;
   jsCode?: string;
@@ -44,8 +73,18 @@ export function compileSceneToJS(tsxCode: string): CompilationResult {
       .replace(/export\s+default\s+(\w+);?\s*/g, '')
       .replace(/export\s+const\s+(\w+)\s*=\s*([^;]+);?/g, 'const $1 = $2;');
 
+    let finalJsCode = jsCode;
+
+    const hasReturnStatement = /\breturn\s+[A-Za-z_$][\w$]*\s*;\s*$/.test(jsCode.trim());
+    if (!hasReturnStatement) {
+      const componentName = extractComponentName(tsxCode, jsCode);
+      if (componentName) {
+        finalJsCode = `${jsCode}\n// Auto-added return\nreturn ${componentName};`;
+      }
+    }
+
     // Validate the output has something
-    if (!jsCode || jsCode.trim().length === 0) {
+    if (!finalJsCode || finalJsCode.trim().length === 0) {
       return {
         success: false,
         error: 'Compilation produced empty output'
@@ -53,13 +92,13 @@ export function compileSceneToJS(tsxCode: string): CompilationResult {
     }
 
     // Check for common issues that might cause runtime problems
-    if (!jsCode.includes('function')) {
+    if (!finalJsCode.includes('function')) {
       console.warn('[compileSceneToJS] Warning: Compiled code may not have a valid component');
     }
 
     return {
       success: true,
-      jsCode,
+      jsCode: finalJsCode,
       compiledAt: new Date()
     };
 

@@ -61,6 +61,8 @@
     "test:ci": "NODE_ENV=development dotenv -e .env.local -- node node_modules/jest/bin/jest.js --ci --coverage",
     "typecheck": "tsc --noEmit",
     "templates:verify": "tsx scripts/verify-templates.ts",
+    "debug:media-plan": "dotenv -e .env.local -- tsx scripts/debug-media-plan.ts",
+    "debug:media-plan-suite": "dotenv -e .env.local -- tsx scripts/run-media-plan-suite.ts",
     "log:agent": "npm run log-agent",
     "log:dev": "cd src/scripts/log-agent && npm run dev",
     "log:clear": "npm run build:log-agent && cd src/scripts/log-agent && node dist/cli.js clear",

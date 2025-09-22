@@ -27,6 +27,7 @@ import { googleAnalyticsRouter } from "~/server/api/routers/admin/google-analyti
 import { iconsRouter } from "~/server/api/routers/icons";
 // import { websitePipelineRouter } from "~/server/api/routers/website-pipeline"; // Disabled - uses non-existent WebAnalysisEnhanced
 import { brandProfileRouter } from "~/server/api/routers/brandProfile";
+import { personalizationTargetRouter } from "~/server/api/routers/personalizationTarget";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 // Import server initialization to start background processes
 import "~/server/init";
@@ -65,6 +66,7 @@ export const appRouter = createTRPCRouter({
   icons: iconsRouter,
   // websitePipeline: websitePipelineRouter, // Disabled - uses non-existent WebAnalysisEnhanced
   brandProfile: brandProfileRouter,
+  personalizationTargets: personalizationTargetRouter,
 });
 
 // export type definition of API

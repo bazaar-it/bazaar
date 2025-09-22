@@ -38,6 +38,7 @@ export default function EnhancedUploadsPanel({ projectId, onInsertToChat }: Uplo
   const projectQuery = api.project.getUploads.useQuery({ projectId }, { enabled: scope === 'project' });
   const userQuery = api.project.getUserUploads.useQuery(undefined, { enabled: scope === 'user' });
   const renameMutation = api.media.renameAsset.useMutation();
+  const linkAssetMutation = api.project.linkAssetToProject.useMutation();
   
   const data = scope === 'project' ? projectQuery.data : userQuery.data as any;
   const isLoading = scope === 'project' ? projectQuery.isLoading : userQuery.isLoading;
@@ -92,19 +93,32 @@ export default function EnhancedUploadsPanel({ projectId, onInsertToChat }: Uplo
   const handleDragStart = useCallback((e: React.DragEvent, asset: MediaAsset) => {
     e.dataTransfer.setData('text/plain', asset.url);
     e.dataTransfer.setData('media/name', (asset as any).customName || asset.originalName || '');
+    if (asset?.id) {
+      const payload = JSON.stringify({ id: asset.id, url: asset.url, type: asset.type });
+      e.dataTransfer.setData('application/bazaar-asset', payload);
+      e.dataTransfer.setData('asset/id', asset.id);
+    }
   }, []);
 
-  const handleClick = useCallback((asset: MediaAsset) => {
+  const handleClick = useCallback(async (asset: MediaAsset) => {
     const name = (asset as any).customName || asset.originalName;
+
+    try {
+      if (asset?.id) {
+        await linkAssetMutation.mutateAsync({ projectId, assetId: asset.id });
+      }
+    } catch (error) {
+      console.warn('[EnhancedUploadsPanel] Failed to link asset to project (continuing anyway):', error);
+    }
+
     onInsertToChat?.(asset.url, name);
     
-    // Show helpful toast
     if (name) {
       toast.info('Media added to chat', {
         description: `You can reference this as "${name}"`
       });
     }
-  }, [onInsertToChat]);
+  }, [linkAssetMutation, onInsertToChat, projectId]);
 
   const formatSize = (bytes?: number) => {
     if (!bytes || bytes <= 0) return '—';
@@ -246,7 +260,7 @@ export default function EnhancedUploadsPanel({ projectId, onInsertToChat }: Uplo
                 {/* Media preview */}
                 <div
                   className="relative cursor-pointer"
-                  onClick={() => handleClick(asset)}
+              onClick={() => { void handleClick(asset); }}
                   title="Click to insert in chat"
                 >
                   {asset.type === 'image' || asset.type === 'logo' ? (

@@ -101,35 +101,6 @@ export async function executeToolFromDecision(
 
   switch (decision.toolName) {
     case 'addScene':
-      // SAFETY OVERRIDE: If audio URLs are present, this is an audio add request.
-      // Some short prompts like "add" may be misclassified by the Brain.
-      if (decision.toolContext?.audioUrls && decision.toolContext.audioUrls.length > 0) {
-        console.log('🎵 [HELPERS] Forcing addAudio: audioUrls present but Brain chose addScene');
-        const addAudioTool = new AddAudioTool();
-        const audioInput: AddAudioInput = {
-          userPrompt: decision.toolContext.userPrompt,
-          projectId,
-          userId,
-          audioUrls: decision.toolContext.audioUrls,
-          ...(typeof decision.toolContext.targetSceneId === 'string' && decision.toolContext.targetSceneId.trim()
-            ? { targetSceneId: decision.toolContext.targetSceneId }
-            : {}),
-        } as AddAudioInput;
-        const audioResult = await addAudioTool.run(audioInput);
-        if (!audioResult.success) {
-          throw new Error(audioResult.error?.message || 'Add audio operation failed');
-        }
-        // Add an assistant message if provided
-        if (audioResult.data?.chatResponse && messageId) {
-          await messageService.createMessage({
-            id: randomUUID(),
-            projectId,
-            content: audioResult.data.chatResponse,
-            role: 'assistant',
-          });
-        }
-        return { success: true };
-      }
       // Get reference scenes if specified by Brain for cross-scene style matching
       let referenceScenes: any[] = [];
       if (decision.toolContext?.referencedSceneIds?.length && decision.toolContext.referencedSceneIds.length > 0) {

@@ -1,0 +1,14 @@
+{
+  "targets": [
+    { "id": "acme-finance", "companyName": "Acme Finance Cloud", "websiteUrl": "https://demo.acmefinancecloud.com", "contactEmail": "deals@acmefinancecloud.com", "sector": "fintech" },
+    { "id": "orbit-health", "companyName": "Orbit Health Platform", "websiteUrl": "https://www.orbithealth.io", "contactEmail": "introductions@orbithealth.io", "sector": "health" },
+    { "id": "pixelwave-studio", "companyName": "Pixelwave Studio", "websiteUrl": "https://pixelwave.studio", "contactEmail": "hello@pixelwave.studio", "sector": "creative" },
+    { "id": "zenledger-analytics", "companyName": "ZenLedger Analytics", "websiteUrl": "https://www.zenledgeranalytics.com", "contactEmail": "partnerships@zenledgeranalytics.com", "sector": "fintech" },
+    { "id": "nectar-ecommerce", "companyName": "Nectar Commerce Suite", "websiteUrl": "https://nectarcommerce.com", "contactEmail": "sales@nectarcommerce.com", "sector": "ecommerce" },
+    { "id": "sentinel-cyber", "companyName": "Sentinel Cyber", "websiteUrl": "https://sentinelcyber.ai", "contactEmail": "demos@sentinelcyber.ai", "sector": "cybersecurity" },
+    { "id": "freightflow-logistics", "companyName": "FreightFlow Logistics", "websiteUrl": "https://freightflow.io", "contactEmail": "ops@freightflow.io", "sector": "logistics" },
+    { "id": "lumen-education", "companyName": "Lumen Education Cloud", "websiteUrl": "https://lumen.education", "contactEmail": "hello@lumen.education", "sector": "education" },
+    { "id": "pulse-insights", "companyName": "Pulse Insights", "websiteUrl": "https://pulseinsights.ai", "contactEmail": "growth@pulseinsights.ai", "sector": "analytics" },
+    { "id": "northwind-ventures", "companyName": "Northwind Ventures", "websiteUrl": "https://northwind.ventures", "contactEmail": "invest@northwind.ventures", "sector": "venture" }
+  ]
+}

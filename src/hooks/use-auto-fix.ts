@@ -5,6 +5,44 @@ import { api } from "~/trpc/react";
 import { useVideoState } from '~/stores/videoState';
 import type { ErrorDetails, AutoFixQueueItem } from '~/lib/types/auto-fix';
 import { toolsLogger } from '~/lib/utils/logger';
+
+// Classify the error type so metrics can track patterns across syntax/import/runtime issues
+const classifyErrorType = (rawMessage?: string): string | undefined => {
+  if (!rawMessage) return undefined;
+  const message = rawMessage.toLowerCase();
+
+  if (message.includes('syntax') || message.includes('unexpected token') || message.includes('parse error')) {
+    return 'syntax';
+  }
+
+  if (message.includes('has already been declared') || message.includes('duplicate identifier')) {
+    return 'duplicate';
+  }
+
+  if (
+    message.includes('is not defined') ||
+    message.includes('cannot find name') ||
+    message.includes('cannot read property') ||
+    message.includes('cannot read') ||
+    message.includes('undefined')
+  ) {
+    return 'undefined';
+  }
+
+  if (message.includes('module not found') || message.includes('cannot find module') || message.includes("didn't find module")) {
+    return 'import';
+  }
+
+  if (message.includes('typeerror') || message.includes('runtime')) {
+    return 'runtime';
+  }
+
+  if (message.includes('timeout')) {
+    return 'timeout';
+  }
+
+  return undefined;
+};
 // Session ID generation for tracking
 const getSessionId = () => {
   if (typeof window === 'undefined') return 'server-session';
@@ -166,6 +204,8 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
         duration: sceneDuration,
         data: {
           code: dbScene.tsxCode,
+          tsxCode: dbScene.tsxCode,
+          jsCode: (dbScene as any).jsCode,
           name: dbScene.name,
           componentId: dbScene.id,
           props: dbScene.props || {}
@@ -251,7 +291,7 @@ COMMON MISTAKES TO AVOID (based on patterns above):
         projectId,
         sceneId,
         errorMessage: errorDetails.errorMessage,
-        errorType: errorDetails.errorType,
+        errorType: errorDetails.errorType ?? classifyErrorType(errorDetails.errorMessage),
         errorSignature: getErrorSignature(sceneId, errorDetails.errorMessage),
         fixAttemptNumber: attemptNumber,
         fixStrategy: strategy || 'progressive',
@@ -723,7 +763,8 @@ COMMON MISTAKES TO AVOID (based on patterns above):
       errorDetails: {
         sceneName,
         errorMessage: error?.message || String(error),
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        errorType: classifyErrorType(error?.message || String(error)),
       },
       attempts: existingItem?.attempts || 0,
       firstErrorTime: existingItem?.firstErrorTime || Date.now(),

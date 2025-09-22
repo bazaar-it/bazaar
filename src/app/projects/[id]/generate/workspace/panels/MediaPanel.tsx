@@ -129,11 +129,26 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
   const handleDragStart = useCallback((e: React.DragEvent, url: string, asset: any) => {
     e.dataTransfer.setData('text/plain', url);
     e.dataTransfer.setData('media/name', asset.customName || asset.originalName || '');
+    if (asset?.id) {
+      const payload = JSON.stringify({ id: asset.id, url, type: asset.type });
+      e.dataTransfer.setData('application/bazaar-asset', payload);
+      e.dataTransfer.setData('asset/id', asset.id);
+    }
   }, []);
 
-  const handleClick = useCallback((url: string, asset: any) => {
+  const linkAssetMutation = api.project.linkAssetToProject.useMutation();
+
+  const handleClick = useCallback(async (url: string, asset: any) => {
+    try {
+      if (asset?.id && projectId) {
+        await linkAssetMutation.mutateAsync({ projectId, assetId: asset.id });
+      }
+    } catch (error) {
+      console.warn('[MediaPanel] Failed to link asset to project (continuing anyway):', error);
+    }
+
     onInsertToChat?.(url, asset.customName || asset.originalName || '');
-  }, [onInsertToChat]);
+  }, [onInsertToChat, linkAssetMutation, projectId]);
 
 
 
@@ -326,7 +341,7 @@ export default function MediaPanel({ projectId, onInsertToChat, defaultTab = 'up
                       className="cursor-grab active:cursor-grabbing"
                       draggable
                       onDragStart={(e) => handleDragStart(e, a.url, a)}
-                      onClick={() => handleClick(a.url, a)}
+                      onClick={() => { void handleClick(a.url, a); }}
                     >
                       {loadingAssetId === a.id ? (
                         <div className="w-full h-28 flex items-center justify-center bg-gray-50">
