@@ -13,6 +13,8 @@ import { generateTitle } from "~/server/services/ai/titleGenerator.service";
 import { executeWithRetry } from "~/server/db";
 import { assetContext } from "~/server/services/context/assetContextService";
 import type { AssetContext as AssetContextType } from "~/lib/types/asset-context";
+import { tokenizeSceneWithLLM } from "~/server/services/automation/sceneTokenizer.service";
+import { compileSceneToJS } from "~/server/utils/compile-scene";
 
 export const projectRouter = createTRPCRouter({
   getById: protectedProcedure
@@ -792,5 +794,121 @@ export const projectRouter = createTRPCRouter({
       }
 
       return { success: true, assetId: input.assetId };
+    }),
+
+  tokenizeScenes: protectedProcedure
+    .input(
+      z.object({
+        projectId: z.string().uuid(),
+        sceneIds: z.array(z.string().uuid()).optional(),
+        dryRun: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const project = await ctx.db.query.projects.findFirst({
+        where: eq(projects.id, input.projectId),
+      });
+
+      if (!project) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Project not found" });
+      }
+
+      if (project.userId !== ctx.session.user.id && !ctx.session.user.isAdmin) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "You don't have access to this project" });
+      }
+
+      const sceneFilter = input.sceneIds && input.sceneIds.length > 0
+        ? (sceneId: string) => input.sceneIds!.includes(sceneId)
+        : () => true;
+
+      const projectScenes = await ctx.db
+        .select({
+          id: scenes.id,
+          tsxCode: scenes.tsxCode,
+          name: scenes.name,
+          order: scenes.order,
+          duration: scenes.duration,
+        })
+        .from(scenes)
+        .where(eq(scenes.projectId, input.projectId))
+        .orderBy(scenes.order);
+
+      const scenesToProcess = projectScenes.filter((scene) => sceneFilter(scene.id));
+
+      if (scenesToProcess.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "No scenes found to tokenize" });
+      }
+
+      const results: Array<{
+        sceneId: string;
+        name: string;
+        changed: boolean;
+        summary?: string;
+        error?: string;
+      }> = [];
+
+      for (const scene of scenesToProcess) {
+        try {
+          const llmResult = await tokenizeSceneWithLLM({
+            sceneName: scene.name,
+            code: scene.tsxCode,
+            projectTitle: project.title,
+            order: scene.order,
+          });
+
+          const newCode = llmResult.code.trim();
+          const originalNormalized = scene.tsxCode.trim();
+          const changed = newCode !== originalNormalized;
+          const compiledNeedsReturnFix = !scene.jsCode || !/\breturn\s+[A-Za-z_$][\w$]*\s*;\s*$/.test(scene.jsCode.trim());
+          const didUpdate = changed || compiledNeedsReturnFix;
+
+          if (!input.dryRun && didUpdate) {
+            const compilation = compileSceneToJS(newCode);
+            if (!compilation.success || !compilation.jsCode) {
+              throw new Error(compilation.error || 'Compilation failed');
+            }
+
+            await ctx.db
+              .update(scenes)
+              .set({
+                tsxCode: newCode,
+                jsCode: compilation.jsCode,
+                jsCompiledAt: compilation.compiledAt ?? new Date(),
+                compilationError: null,
+                compilationVersion: 1,
+                updatedAt: new Date(),
+              })
+              .where(eq(scenes.id, scene.id));
+          }
+
+          results.push({
+            sceneId: scene.id,
+            name: scene.name,
+            changed: didUpdate,
+            summary: llmResult.summary,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          results.push({
+            sceneId: scene.id,
+            name: scene.name,
+            changed: false,
+            error: message,
+          });
+
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: `Failed to tokenize scene "${scene.name}": ${message}`,
+          });
+        }
+      }
+
+      return {
+        projectId: input.projectId,
+        total: scenesToProcess.length,
+        updated: results.filter((r) => r.changed).length,
+        dryRun: !!input.dryRun,
+        results,
+      };
     }),
 }); 

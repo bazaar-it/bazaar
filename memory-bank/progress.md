@@ -1166,3 +1166,32 @@ The core video generation pipeline is **production-ready** with:
 
 2025-09-21 – Sprint 130 kickoff
 - Created `sprint130_mass_brand_personalization` scaffold with scope (theme token refactor, bulk renderer, orchestration UX) and seeded TODO/progress logs.
+
+2025-09-21 – Bulk personalization dataset & UI plan
+- Added Sprint 130 dataset scaffolding (`brand-personalization-dataset.{md,json}`) and evaluated UI entrypoints, recommending a dedicated `/projects/[id]/personalize` page (see `ui-bulk-personalization-options.md`).
+
+2025-09-21 – BrandTheme contract & personalize wireframe
+- Introduced `src/lib/theme/brandTheme.ts` (token contract + profile mapping) and expanded Sprint 130 dataset to 10 targets for regression testing.
+- Sketched dedicated `/projects/[id]/personalize` page wireframe (`personalize-page-wireframe.md`) to host upload, review, and batch launch flows.
+
+2025-09-21 – Personalize workspace scaffold
+- Implemented `/projects/[id]/personalize` prototype using BrandTheme tokens, sample dataset table, and staged upload/launch flow; seeded downloadable `sample-personalization-targets.json`.
+
+2025-09-21 – Automated brand tokenization pipeline
+- Added LLM-powered `project.tokenizeScenes` mutation plus personalize-page button for one-click conversion of scenes to BrandTheme tokens.
+- Brand tokenizer prompt + service outputs JSON (code + summary) and recompiles scenes automatically; UI surfaces success/error via toasts.
+
+2025-09-22 – Brand tokenization guardrails
+- Fixed personalize-tokenization regressions where generated scenes lacked a safe `BrandTheme` fallback and crashed without the runtime.
+- Hardened the tokenizer prompt for SSR-safe retrieval and added server-side rewriting that injects `{ colors: {}, fonts: {}, assets: {} }` fallback objects when missing.
+
+2025-09-22 – Preserve editable scene TSX
+- Stopped the preview sync from overwriting `scene.data.code` with compiled JS so the Monaco editor continues to show the real TSX source.
+- Propagated separate `tsxCode`/`jsCode` fields across workspace mappers and updated hashing logic to detect changes while still preferring precompiled JS in the Remotion player.
+
+2025-09-22 – Token compiler return fix
+- `compileSceneToJS` now mirrors the main compiler by auto-returning the detected component, and the personalize/tokenize mutation recompiles scenes whose stored JS lacks that return so preview evaluation no longer yields `undefined` components.
+
+2025-09-22 – Brand preview workflow
+- Personalize badge detection accepts `theme?.`/`brandThemeRuntime` scenes so the UI reflects token readiness after conversion.
+- Injected a brand-theme toolbar in the Generate preview that hooks into the sample dataset so QA can apply/reset target palettes with a button instead of console scripts.

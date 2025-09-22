@@ -5,6 +5,7 @@ import React, { useEffect, useState, useCallback, useMemo, Suspense, useRef } fr
 import { useVideoState } from '~/stores/videoState';
 import type { InputProps } from '~/lib/types/video/input-props';
 import { Button } from "~/components/ui/button";
+import { Badge } from "~/components/ui/badge";
 import { RefreshCwIcon, CodeIcon, WrenchIcon } from "lucide-react";
 import { ErrorBoundary } from 'react-error-boundary';
 import { transform } from 'sucrase';
@@ -19,6 +20,8 @@ import { computeSceneRanges, findSceneAtFrame } from '~/lib/utils/scene-ranges';
 import { wrapSceneNamespace } from '~/lib/video/wrapSceneNamespace';
 import { buildCompositeHeader } from '~/lib/video/buildCompositeHeader';
 import { buildSingleSceneModule, buildMultiSceneModule } from '~/lib/video/buildComposite';
+import { SAMPLE_PERSONALIZATION_TARGETS } from '~/data/sample-personalization-targets';
+import { DEFAULT_BRAND_THEME } from '~/lib/theme/brandTheme';
 
 // Error fallback component
 function ErrorFallback({ error }: { error: Error }) {
@@ -77,6 +80,9 @@ export function PreviewPanelG({
     const project = state.projects[projectId];
     return project?.props || initial;
   });
+  const [selectedBrandTargetId, setSelectedBrandTargetId] = useState<string>('default');
+  const [activeBrandTargetId, setActiveBrandTargetId] = useState<string>('default');
+  const [isApplyingBrandTheme, setIsApplyingBrandTheme] = useState(false);
   
   // Get audio data from project state
   const projectAudio = useVideoState((state) => state.projects[projectId]?.audio);
@@ -180,10 +186,10 @@ export function PreviewPanelG({
           order: dbScene.order ?? 0,
           name: localName || dbScene.name,
           data: {
-            // Prefer pre-compiled JS if available; fallback to TSX
-            code: (dbScene as any).jsCode || dbScene.tsxCode,
-            jsCode: (dbScene as any).jsCode,
+            // Keep TSX as canonical editing source; expose compiled JS separately
+            code: dbScene.tsxCode,
             tsxCode: dbScene.tsxCode,
+            jsCode: (dbScene as any).jsCode,
             name: localName || dbScene.name,
             componentId: dbScene.id,
             props: dbScene.props || {}
@@ -198,8 +204,10 @@ export function PreviewPanelG({
         const order = s.order ?? 0;
         const duration = s.duration || 150;
         // Prefer compiled JS when present; otherwise use TSX
-        const code = (s?.data?.code || (s as any).jsCode || (s as any).tsxCode || '') as string;
-        const h = (typeof hashString === 'function') ? hashString(code) : String(code.length);
+        const tsx = (s?.data?.tsxCode || s?.data?.code || (s as any).tsxCode || '') as string;
+        const js = ((s?.data as any)?.jsCode || (s as any).jsCode || '') as string;
+        const combined = `${tsx}::${js}`;
+        const h = (typeof hashString === 'function') ? hashString(combined) : String(combined.length);
         return `${s.id}:${order}:${duration}:${h}`;
       }).join('|');
       const serverSig = sigFrom(convertedScenes);
@@ -250,6 +258,117 @@ export function PreviewPanelG({
   const [isCompiling, setIsCompiling] = useState(false);
   const [componentError, setComponentError] = useState<Error | null>(null);
   const [refreshToken, setRefreshToken] = useState(`initial-${Date.now()}`);
+
+  const activeBrandTarget = useMemo(() => {
+    if (activeBrandTargetId === 'default') {
+      return null;
+    }
+    return SAMPLE_PERSONALIZATION_TARGETS.find((target) => target.id === activeBrandTargetId) ?? null;
+  }, [activeBrandTargetId]);
+
+  const applyBrandTheme = useCallback((targetId: string) => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const overrides = targetId === 'default'
+      ? null
+      : SAMPLE_PERSONALIZATION_TARGETS.find((target) => target.id === targetId)?.brandOverrides;
+
+    const mergedTheme = (() => {
+      const base = DEFAULT_BRAND_THEME;
+      if (!overrides) {
+        return {
+          ...base,
+          colors: { ...base.colors },
+          fonts: {
+            heading: { ...base.fonts.heading },
+            body: { ...base.fonts.body },
+            mono: base.fonts.mono ? { ...base.fonts.mono } : undefined,
+          },
+          assets: {
+            ...base.assets,
+            logo: base.assets.logo ? { ...base.assets.logo } : undefined,
+          },
+          iconography: base.iconography ? { ...base.iconography } : undefined,
+          backgroundEffects: base.backgroundEffects ? [...base.backgroundEffects] : undefined,
+          motion: base.motion ? { ...base.motion } : undefined,
+          copy: base.copy ? { ...base.copy } : undefined,
+        };
+      }
+
+      const fontOverrides = overrides.fonts ?? {};
+      const logoOverrides = overrides.logo ?? {};
+      return {
+        ...base,
+        name: (overrides as any)?.name ?? base.name,
+        colors: { ...base.colors, ...(overrides.colors ?? {}) },
+        fonts: {
+          heading: {
+            ...base.fonts.heading,
+            ...(fontOverrides.heading ?? {}),
+          },
+          body: {
+            ...base.fonts.body,
+            ...(fontOverrides.body ?? {}),
+          },
+          mono: fontOverrides.mono
+            ? {
+                ...(base.fonts.mono ?? {}),
+                ...fontOverrides.mono,
+              }
+            : base.fonts.mono,
+        },
+        assets: {
+          ...base.assets,
+          logo: Object.keys(logoOverrides).length
+            ? {
+                ...(base.assets.logo ?? {}),
+                ...logoOverrides,
+              }
+            : base.assets.logo,
+          productShots: base.assets.productShots,
+          heroImage: base.assets.heroImage,
+        },
+        iconography: overrides.iconography
+          ? {
+              ...(base.iconography ?? {}),
+              ...overrides.iconography,
+            }
+          : base.iconography,
+        backgroundEffects: overrides.backgroundEffects ?? base.backgroundEffects,
+        motion: overrides.motion
+          ? {
+              ...(base.motion ?? {}),
+              ...overrides.motion,
+            }
+          : base.motion,
+        copy: overrides.copy
+          ? {
+              ...(base.copy ?? {}),
+              ...overrides.copy,
+            }
+          : base.copy,
+      };
+    })();
+
+    window.BrandTheme = {
+      defaultTheme: mergedTheme,
+      useTheme: () => mergedTheme,
+    };
+
+    setRefreshToken(`brand-${targetId}-${Date.now()}`);
+  }, [setRefreshToken]);
+
+  const handleApplyBrandTheme = useCallback((targetId: string) => {
+    setIsApplyingBrandTheme(true);
+    try {
+      applyBrandTheme(targetId);
+      setActiveBrandTargetId(targetId);
+    } finally {
+      setIsApplyingBrandTheme(false);
+    }
+  }, [applyBrandTheme]);
   
   // Playback speed state
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
@@ -2629,6 +2748,47 @@ export default function FallbackComposition() {
         style={{ display: 'none' }}
         aria-hidden="true"
       />
+
+      <div className="border-b border-slate-200 bg-white px-4 py-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+          <span>Brand theme</span>
+          <Badge variant="outline" className="text-xs">
+            {activeBrandTarget ? activeBrandTarget.companyName : 'Default'}
+          </Badge>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={selectedBrandTargetId}
+            onChange={(event) => setSelectedBrandTargetId(event.target.value)}
+            className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-700 shadow-sm focus:border-slate-500 focus:outline-none"
+          >
+            <option value="default">Default (Bazaar)</option>
+            {SAMPLE_PERSONALIZATION_TARGETS.map((target) => (
+              <option key={target.id} value={target.id}>
+                {target.companyName}
+              </option>
+            ))}
+          </select>
+          <Button
+            size="sm"
+            onClick={() => handleApplyBrandTheme(selectedBrandTargetId)}
+            disabled={isApplyingBrandTheme}
+          >
+            {isApplyingBrandTheme ? 'Applying…' : 'Apply theme'}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setSelectedBrandTargetId('default');
+              handleApplyBrandTheme('default');
+            }}
+            disabled={selectedBrandTargetId === 'default'}
+          >
+            Reset
+          </Button>
+        </div>
+      </div>
       
       <div className="relative flex-grow min-h-0 min-w-0 flex items-center justify-center">
         {/* Preview source indicator removed in this branch */}
