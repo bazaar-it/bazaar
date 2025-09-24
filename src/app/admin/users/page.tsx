@@ -115,6 +115,11 @@ export default function UsersAnalytics() {
     }
   };
 
+  const formatSource = (source?: string | null) => {
+    if (!source || source.trim() === '') return 'unknown';
+    return source;
+  };
+
   const getProjectCountBadge = (count: number) => {
     if (count === 0) return <Badge variant="outline">No Projects</Badge>;
     if (count <= 2) return <Badge variant="secondary">{count} Projects</Badge>;
@@ -447,6 +452,20 @@ export default function UsersAnalytics() {
                       <div className="text-right space-y-1">
                         <p className="text-xs text-muted-foreground">{user.totalUserPrompts} prompts</p>
                         <p className="text-xs text-muted-foreground">{user.totalScenes} scenes</p>
+                      </div>
+
+                      <div className="text-right space-y-1 min-w-[160px]">
+                        <Badge variant="outline">Source: {formatSource(user.attributionSource)}</Badge>
+                        {user.attributionCampaign && (
+                          <p className="text-xs text-muted-foreground truncate" title={`Campaign: ${user.attributionCampaign}`}>
+                            Campaign: {user.attributionCampaign}
+                          </p>
+                        )}
+                        {!user.attributionCampaign && user.attributionMedium && (
+                          <p className="text-xs text-muted-foreground">
+                            Medium: {user.attributionMedium}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>

@@ -1,7 +1,7 @@
 // src/server/api/routers/admin.ts
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
-import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory, emailSubscribers, exports, promoCodes, promoCodeUsage, paywallEvents, paywallAnalytics, creditTransactions, templates, templateUsages, brandProfiles, autofixMetrics, autofixSessions } from "~/server/db/schema";
+import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory, emailSubscribers, exports, promoCodes, promoCodeUsage, paywallEvents, paywallAnalytics, creditTransactions, templates, templateUsages, brandProfiles, autofixMetrics, autofixSessions, userAttribution } from "~/server/db/schema";
 import { sql, and, gte, lt, lte, desc, count, eq, like, or, inArray, asc, countDistinct } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -1398,9 +1398,18 @@ export default function GeneratedScene() {
           isAdmin: users.isAdmin,
           signupDate: users.createdAt,
           oauthProvider: accounts.provider,
+          attributionSource: userAttribution.firstTouchSource,
+          attributionMedium: userAttribution.firstTouchMedium,
+          attributionCampaign: userAttribution.firstTouchCampaign,
+          attributionReferrer: userAttribution.firstTouchReferrer,
+          attributionLandingPath: userAttribution.firstTouchLandingPath,
+          attributionCapturedAt: userAttribution.firstTouchAt,
+          lastTouchSource: userAttribution.lastTouchSource,
+          lastTouchAt: userAttribution.lastTouchAt,
         })
         .from(users)
         .leftJoin(accounts, eq(users.id, accounts.userId))
+        .leftJoin(userAttribution, eq(users.id, userAttribution.userId))
         .$dynamic();
 
       // Apply WHERE conditions
@@ -1413,6 +1422,7 @@ export default function GeneratedScene() {
         .select({ count: sql<number>`COUNT(DISTINCT ${users.id})` })
         .from(users)
         .leftJoin(accounts, eq(users.id, accounts.userId))
+        .leftJoin(userAttribution, eq(users.id, userAttribution.userId))
         .where(whereConditions.length > 0 ? and(...whereConditions) : undefined);
       
       const totalCount = countResult[0]?.count || 0;
@@ -1645,9 +1655,19 @@ export default function GeneratedScene() {
           image: users.image,
           isAdmin: users.isAdmin,
           signupDate: users.createdAt,
-          
+
           // OAuth provider info
           oauthProvider: accounts.provider,
+
+          // Attribution
+          attributionSource: userAttribution.firstTouchSource,
+          attributionMedium: userAttribution.firstTouchMedium,
+          attributionCampaign: userAttribution.firstTouchCampaign,
+          attributionReferrer: userAttribution.firstTouchReferrer,
+          attributionLandingPath: userAttribution.firstTouchLandingPath,
+          attributionCapturedAt: userAttribution.firstTouchAt,
+          lastTouchSource: userAttribution.lastTouchSource,
+          lastTouchAt: userAttribution.lastTouchAt,
           
           // Project metrics
           totalProjects: sql<number>`COUNT(DISTINCT ${projects.id})`.as('total_projects'),
@@ -1688,8 +1708,25 @@ export default function GeneratedScene() {
         .leftJoin(messages, eq(projects.id, messages.projectId))
         .leftJoin(sceneIterations, eq(projects.id, sceneIterations.projectId))
         .leftJoin(projectMemory, eq(projects.id, projectMemory.projectId))
+        .leftJoin(userAttribution, eq(users.id, userAttribution.userId))
         .where(eq(users.id, userId))
-        .groupBy(users.id, users.name, users.email, users.image, users.isAdmin, users.createdAt, accounts.provider)
+        .groupBy(
+          users.id,
+          users.name,
+          users.email,
+          users.image,
+          users.isAdmin,
+          users.createdAt,
+          accounts.provider,
+          userAttribution.firstTouchSource,
+          userAttribution.firstTouchMedium,
+          userAttribution.firstTouchCampaign,
+          userAttribution.firstTouchReferrer,
+          userAttribution.firstTouchLandingPath,
+          userAttribution.firstTouchAt,
+          userAttribution.lastTouchSource,
+          userAttribution.lastTouchAt,
+        )
         .limit(1);
 
       return userDetails[0] || null;

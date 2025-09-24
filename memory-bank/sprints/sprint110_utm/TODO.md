@@ -1,24 +1,25 @@
 # Sprint 110 - TODO
 
 ## Attribution Capture (Client)
-- [ ] Build `useAttributionCapture` hook that reads `utm_*`, `gclid`, `fbclid`, `referrer`, and landing path on first page load.
-- [ ] Persist first-touch bundle to signed cookie `bazaar_attribution` (7-day expiry) and localStorage backup for SPA transitions.
-- [ ] Add SSR-safe helper to expose attribution bundle via `AppRouter` layout so signup page can prefetch it.
+- [x] Build client attribution capture component that reads `utm_*`, `gclid`, `fbclid`, `referrer`, and landing path on first page load.
+- [x] Persist first-touch bundle via signed cookie `bazaar_attribution` using `/api/attribution/capture`, with localStorage fingerprint for retries.
+- [ ] Evaluate whether additional SSR helper is needed beyond root layout capture (follow-up if auth pages need prefetch access).
 
 ## Auth & API Integration
-- [ ] Extend NextAuth `signIn`/`createUser` callback to pull attribution cookie and write DB row only if absent.
-- [ ] Harden against tampering by verifying cookie signature (HMAC with app secret) before trusting payload.
-- [ ] Support both OAuth redirects and email links by replaying cookie after callback.
+- [x] Add post-login `/api/attribution/ingest` endpoint that reads signed cookie once and writes DB row.
+- [x] Harden against tampering by verifying cookie signature (HMAC with app secret) before trusting payload.
+- [ ] Confirm email link flows (if added later) replay attribution cookie safely.
 
 ## Database & Types
-- [ ] Add `user_attribution` table via Drizzle migration (first/last touch fields, timestamps, indexes on `first_touch_source`).
-- [ ] Expose TypeScript types + helper repository methods `createUserAttribution`, `updateLastTouch`.
-- [ ] Backfill existing users with `unknown` records and flag OAuth provider for segmentation.
+- [x] Add `user_attribution` table via Drizzle schema + SQL migration (first/last touch fields, indexes on `first_touch_source`).
+- [ ] Expose helper repository methods `createUserAttribution`, `updateLastTouch` (current API routes inline logic).
+- [x] Backfill existing users with `unknown` records during migration.
 
 ## Reporting & Tooling
 - [ ] Ship SQL snippets (admin analytics folder) for sign-ups by channel, activation by channel, and revenue by channel.
 - [ ] Add admin analytics stub tRPC route `admin.getAttributionSummary` returning basic counts.
 - [ ] Document marketing playbook on building Looker/Preset chart off new table.
+- [x] Surface attribution source/campaign details in existing admin users UI for immediate visibility.
 
 ## QA & Monitoring
 - [ ] Integration test covering email magic link + OAuth Google flows retaining attribution metadata.
