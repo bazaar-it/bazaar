@@ -312,13 +312,17 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
   }, [cacheKey]);
 
   // Fetch database templates with a generous stale time; use cached as placeholder to avoid reorder flash
+  const placeholderFromCache = useMemo(
+    () => (cachedDbTemplates.length ? cachedDbTemplates : undefined),
+    [cachedDbTemplates]
+  );
+
   const { data: databaseTemplates = [], isLoading: isLoadingDbTemplates } = api.templates.getAll.useQuery(
     { format: currentFormat, limit: 100 },
     {
       staleTime: 5 * 60 * 1000,
       refetchOnWindowFocus: false,
-      keepPreviousData: true,
-      placeholderData: cachedDbTemplates.length ? cachedDbTemplates : undefined,
+      placeholderData: (previousData) => previousData ?? placeholderFromCache,
     }
   );
 

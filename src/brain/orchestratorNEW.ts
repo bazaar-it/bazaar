@@ -187,7 +187,7 @@ export class Orchestrator {
       // 2. Analyze intent and select tool
       console.log('🧠 [NEW ORCHESTRATOR] Step 2: Analyzing intent...');
       input.onProgress?.('🎯 Choosing the right approach...', 'building');
-      const toolSelection = await this.intentAnalyzer.analyzeIntent(enhancedInput, contextPacket);
+      let toolSelection = await this.intentAnalyzer.analyzeIntent(enhancedInput, contextPacket);
       console.log('🧠 [NEW ORCHESTRATOR] Tool selected:', {
         tool: toolSelection.toolName,
         reasoning: toolSelection.reasoning?.substring(0, 100) + '...'
@@ -211,7 +211,7 @@ export class Orchestrator {
           reasoning: toolSelection.reasoning
         };
       }
-      
+
       // 3. Return decision (NO EXECUTION!)
       console.log('🧠 [NEW ORCHESTRATOR] Decision complete! Returning to router...');
       

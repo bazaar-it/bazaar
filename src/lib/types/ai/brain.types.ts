@@ -214,9 +214,11 @@ export interface ContextPacket {
   // Persistent asset context from project memory
   assetContext?: {
     allAssets: Array<{
+      id: string;
       url: string;
       type: string;
       originalName: string;
+      tags?: string[];
     }>;
     logos: string[];  // Quick access to logo URLs
     assetUrls: string[];  // All asset URLs for prompt enforcement

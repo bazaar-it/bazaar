@@ -65,24 +65,6 @@ export default function Homepage() {
         {/* Advanced Floating Particles - Hero Section Only */}
         <ParticleEffect />
 
-        {/* Top badge area: Product Hunt badge moved here */}
-        <div className="w-full mb-8 flex justify-center">
-          <a
-            href="https://www.producthunt.com/products/bazaar-2?embed=true&utm_source=badge-featured&utm_medium=badge&utm_source=badge-bazaar-2"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="See Bazaar on Product Hunt"
-          >
-            <img
-              src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=996887&theme=light"
-              alt="Bazaar – Vibe Code your Software Demo Video on Product Hunt"
-              width={250}
-              height={54}
-              className="w-[250px] h-[54px]"
-            />
-          </a>
-        </div>
-        
         <div className="mb-8 md:mb-16 w-full text-center">
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold mb-4 md:mb-6 leading-tight text-gray-900 px-2">
             <span className="relative inline-block px-2 py-1 border-2 border-dashed border-gray-400 bg-white/60 backdrop-blur-sm rounded shadow-md mr-2">
@@ -144,7 +126,6 @@ export default function Homepage() {
           <p className="text-center text-gray-500 text-sm mt-2 mb-0">
             Start with 100 free prompts
           </p>
-          {/* Product Hunt badge moved to top */}
         </div>
         
         {/* Marketing Video Player - responsive positioning */}

@@ -144,53 +144,77 @@ export async function GET(request: NextRequest) {
               prompt: userMessage,
               contextId: projectId,
             }).then(async (titleResult) => {
-              let finalTitle = titleResult.titles?.[0] || "Untitled Video";
-            
-            // ✅ NEW: If title generation failed (returned "Untitled Video"), use proper numbering
-            if (finalTitle === "Untitled Video") {
-              // Get all user's projects with "Untitled Video" pattern to find next number
-              const userProjects = await retryWithBackoff(async () => {
-                return await db.query.projects.findMany({
-                  columns: { title: true },
-                  where: eq(projects.userId, userId), // Use the authenticated userId
-                });
-              }, 2, 500);
-              
-              // Find the highest number used in "Untitled Video X" titles
-              let highestNumber = 0;
-              const untitledProjects = userProjects.filter(p => p.title.startsWith('Untitled Video'));
-              
-              for (const project of untitledProjects) {
-                const match = /^Untitled Video (\d+)$/.exec(project.title);
-                if (match?.[1]) {
-                  const num = parseInt(match[1], 10);
-                  if (!isNaN(num) && num > highestNumber) {
-                    highestNumber = num;
+              const candidateTitles = Array.from(new Set(
+                (titleResult.titles || [])
+                  .map((title) => title?.trim())
+                  .filter((title): title is string => Boolean(title))
+              ));
+
+              const tryUpdateTitle = async (title: string) => {
+                await retryWithBackoff(async () => {
+                  await db
+                    .update(projects)
+                    .set({
+                      title,
+                      updatedAt: new Date(),
+                    })
+                    .where(eq(projects.id, projectId));
+                }, 1, 250);
+              };
+
+              const uniqueViolation = (error: unknown) =>
+                error &&
+                typeof error === 'object' &&
+                'code' in error &&
+                (error as { code?: string }).code === '23505';
+
+              let appliedTitle: string | null = null;
+
+              for (const candidate of candidateTitles) {
+                try {
+                  await tryUpdateTitle(candidate);
+                  appliedTitle = candidate;
+                  break;
+                } catch (error) {
+                  if (uniqueViolation(error)) {
+                    continue; // try next candidate
                   }
+                  throw error;
                 }
               }
-              
-              // Generate proper numbered fallback
-              finalTitle = untitledProjects.length === 0 ? "Untitled Video" : `Untitled Video ${highestNumber + 1}`;
-            }
 
-            // Update the project title
-            await retryWithBackoff(async () => {
-              return await db.update(projects)
-                .set({ 
-                  title: finalTitle,
-                  updatedAt: new Date(),
-                })
-                .where(eq(projects.id, projectId));
-            }, 2, 500);
+              if (!appliedTitle) {
+                // Fall back to deterministic "Untitled Video" numbering
+                const userProjects = await retryWithBackoff(async () => {
+                  return await db.query.projects.findMany({
+                    columns: { title: true },
+                    where: eq(projects.userId, userId),
+                  });
+                }, 2, 500);
 
-            console.log(`[SSE] Generated and set title: "${finalTitle}" for project ${projectId}`);
-            
-              // ✅ NEW: Send title update to client so it can invalidate queries
+                const untitledProjects = userProjects.filter((p) => p.title.startsWith('Untitled Video'));
+                let highestNumber = 0;
+                for (const project of untitledProjects) {
+                  const match = /^Untitled Video (\d+)$/.exec(project.title);
+                  if (match?.[1]) {
+                    const num = Number.parseInt(match[1], 10);
+                    if (!Number.isNaN(num) && num > highestNumber) {
+                      highestNumber = num;
+                    }
+                  }
+                }
+
+                const fallbackTitle = untitledProjects.length === 0 ? 'Untitled Video' : `Untitled Video ${highestNumber + 1}`;
+                await tryUpdateTitle(fallbackTitle);
+                appliedTitle = fallbackTitle;
+              }
+
+              console.log(`[SSE] Generated and set title: "${appliedTitle}" for project ${projectId}`);
+
               await safeWrite({
                 type: 'title_updated',
-                title: finalTitle,
-                projectId: projectId
+                title: appliedTitle,
+                projectId: projectId,
               });
             }).catch((titleError) => {
               // Don't fail the whole request if title generation fails

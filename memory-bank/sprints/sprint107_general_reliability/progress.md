@@ -118,6 +118,22 @@ Audio in the live preview ignored timeline offset and total video duration, star
 ### Next
 - Optional: Persist waveform peaks to IndexedDB for instant timelines across sessions.
 
+## 2025-09-24 - Marketing homepage cleanup
+
+### Change
+- Removed the Product Hunt featured badge embed from `src/app/(marketing)/home/page.tsx` to keep the hero CTA focused now that the launch campaign wrapped.
+
+### Result
+- Above-the-fold layout remains balanced; primary CTA and hero copy stay centered without the external widget.
+
+## 2025-09-24 - Marketing OG metadata refresh
+
+### Change
+- Updated `src/app/layout.tsx` metadata so Open Graph/Twitter cards share the "Bazaar – AI Video Generator for Software Demos" title, refreshed description, and the latest hosted marketing image.
+
+### Result
+- Social previews now match current positioning and render with the correct thumbnail across platforms.
+
 ## 2025-09-11 - ChatPanel Horizontal Overflow Fix
 
 ### Issue
