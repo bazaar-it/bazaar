@@ -11,6 +11,8 @@ import { AnalyticsProvider } from '~/components/AnalyticsProvider';
 import { ErrorBoundary } from '~/components/ErrorBoundary';
 import Script from 'next/script';
 import { siteConfig } from '~/config/site';
+import { AttributionCapture } from "~/components/attribution/AttributionCapture";
+import { AttributionIngestor } from "~/components/attribution/AttributionIngestor";
 import type { Metadata } from "next";
 
 // Generate structured data for the website
@@ -248,6 +250,8 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
           <TRPCReactProvider>
             <SessionProvider>
+              <AttributionCapture />
+              <AttributionIngestor />
               <GlobalDependencyProvider>
                 <AnalyticsProvider>
                   <ErrorBoundary>

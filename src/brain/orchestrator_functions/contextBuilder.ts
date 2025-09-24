@@ -69,27 +69,23 @@ export class ContextBuilder {
         imageContext,
         webContext,
         projectAssetsRaw,
-        mediaLibImagesRaw,
-        mediaLibVideosRaw,
-        userLibImagesRaw,
-        userLibVideosRaw,
+        projectMediaRaw,
+        userMediaRaw,
         templateContext
       ] = await Promise.all([
         this.buildImageContext(input),
         this.buildWebContext(input),
         assetContext.getProjectAssets(input.projectId),
-        assetContext.listProjectAssets(input.projectId, { types: ['image', 'logo'], limit: 50 }),
-        assetContext.listProjectAssets(input.projectId, { types: ['video'], limit: 50 }),
-        assetContext.listUserAssets(input.userId, { types: ['image', 'logo'], limit: 100 }),
-        assetContext.listUserAssets(input.userId, { types: ['video'], limit: 60 }),
+        assetContext.listProjectAssets(input.projectId, { limit: 75 }),
+        assetContext.listUserAssets(input.userId, { limit: 150 }),
         this.buildTemplateContext(input, scenesWithCode),
       ]);
 
       let projectAssets = projectAssetsRaw;
-      let mediaLibImages = mediaLibImagesRaw;
-      let mediaLibVideos = mediaLibVideosRaw;
-      let userLibImages = userLibImagesRaw;
-      let userLibVideos = userLibVideosRaw;
+      let mediaLibImages = projectMediaRaw.filter((asset) => asset.type === 'image' || asset.type === 'logo');
+      let mediaLibVideos = projectMediaRaw.filter((asset) => asset.type === 'video');
+      let userLibImages = userMediaRaw.filter((asset) => asset.type === 'image' || asset.type === 'logo');
+      let userLibVideos = userMediaRaw.filter((asset) => asset.type === 'video');
 
       const attachmentImageUrls = Array.isArray(input.userContext?.imageUrls)
         ? (input.userContext?.imageUrls as string[]).filter(
@@ -113,23 +109,19 @@ export class ContextBuilder {
 
           const [
             refreshedProjectAssets,
-            refreshedMediaLibImages,
-            refreshedMediaLibVideos,
-            refreshedUserLibImages,
-            refreshedUserLibVideos
+            refreshedProjectMedia,
+            refreshedUserMedia
           ] = await Promise.all([
             assetContext.getProjectAssets(input.projectId),
-            assetContext.listProjectAssets(input.projectId, { types: ['image', 'logo'], limit: 50 }),
-            assetContext.listProjectAssets(input.projectId, { types: ['video'], limit: 50 }),
-            assetContext.listUserAssets(input.userId, { types: ['image', 'logo'], limit: 100 }),
-            assetContext.listUserAssets(input.userId, { types: ['video'], limit: 60 })
+            assetContext.listProjectAssets(input.projectId, { limit: 75 }),
+            assetContext.listUserAssets(input.userId, { limit: 150 })
           ]);
 
           projectAssets = refreshedProjectAssets;
-          mediaLibImages = refreshedMediaLibImages;
-          mediaLibVideos = refreshedMediaLibVideos;
-          userLibImages = refreshedUserLibImages;
-          userLibVideos = refreshedUserLibVideos;
+          mediaLibImages = refreshedProjectMedia.filter((asset) => asset.type === 'image' || asset.type === 'logo');
+          mediaLibVideos = refreshedProjectMedia.filter((asset) => asset.type === 'video');
+          userLibImages = refreshedUserMedia.filter((asset) => asset.type === 'image' || asset.type === 'logo');
+          userLibVideos = refreshedUserMedia.filter((asset) => asset.type === 'video');
         }
       }
 

@@ -114,6 +114,11 @@ function UserDetailPageContent({ userId }: { userId: string }) {
     }
   };
 
+  const formatSource = (source?: string | null) => {
+    if (!source || source.trim() === '') return 'unknown';
+    return source;
+  };
+
   return (
     <div className="p-8">
       {/* Header */}
@@ -162,6 +167,25 @@ function UserDetailPageContent({ userId }: { userId: string }) {
               <span>
                 Joined {formatDate(userDetails.signupDate)}
               </span>
+            </div>
+            <div className="mt-2 text-sm text-gray-500 space-y-1">
+              <div>
+                <span className="font-medium text-gray-700">Acquisition:</span> {formatSource(userDetails.attributionSource)}
+              </div>
+              {userDetails.attributionMedium && (
+                <div>Medium: {userDetails.attributionMedium}</div>
+              )}
+              {userDetails.attributionCampaign && (
+                <div className="truncate" title={`Campaign: ${userDetails.attributionCampaign}`}>
+                  Campaign: {userDetails.attributionCampaign}
+                </div>
+              )}
+              {userDetails.attributionCapturedAt && (
+                <div>Captured: {formatDate(userDetails.attributionCapturedAt)}</div>
+              )}
+              {userDetails.lastTouchSource && (
+                <div>Last Touch: {userDetails.lastTouchSource}{userDetails.lastTouchAt ? ` (${formatDaysAgo(userDetails.lastTouchAt)})` : ''}</div>
+              )}
             </div>
           </div>
         </div>

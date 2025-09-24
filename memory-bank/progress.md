@@ -2,6 +2,8 @@
 
 ## 📝 Latest Update (Sep 24, 2025)
 - Sprint 110: Stood up UTM attribution sprint docs (`memory-bank/sprints/sprint110_utm/`) detailing client capture, signed cookie + NextAuth persistence, reporting SQL, success metrics (95% coverage), and staging-first rollout plan.
+- Sprint 110: Implemented attribution capture/ingest stack (client capture, signed cookie HMAC helpers, `/api/attribution/{capture,ingest}`, `user_attribution` schema + SQL migration with backfill) without touching auth critical path.
+- Sprint 110: Admin users view now shows attribution source/campaign via new joins in `admin.getUserAnalytics`/`getUserDetails` for quick acquisition insight.
 
 ## 📝 Latest Update (Sep 15, 2025)
 ## 📝 Latest Update (Sep 16, 2025)
