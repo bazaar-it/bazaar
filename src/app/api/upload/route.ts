@@ -170,8 +170,8 @@ export async function POST(request: NextRequest) {
       try {
         console.log('🎯 [Upload] Starting metadata analysis for asset:', asset.id);
         const { mediaMetadataService } = await import('~/server/services/media/media-metadata.service');
-        // run without blocking response
-        void mediaMetadataService.analyzeAndTag(asset.id, publicUrl).then(() => {
+        // Schedule without blocking response – callers can await ensureAnalyzed later if needed
+        void mediaMetadataService.ensureAnalyzed(asset.id, publicUrl).then(() => {
           console.log('✅ [Upload] Metadata analysis complete for asset:', asset.id);
         }).catch((err) => {
           console.error('❌ [Upload] Metadata analysis failed for asset:', asset.id, err);

@@ -2,6 +2,7 @@ export interface ErrorDetails {
   sceneName: string;
   errorMessage: string;
   timestamp: number;
+  errorType?: string;
 }
 
 export interface AutoFixQueueItem {

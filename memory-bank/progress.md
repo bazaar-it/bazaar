@@ -1,5 +1,8 @@
 # 🏆 Bazaar-Vid Progress Summary
 
+## 📝 Latest Update (Sep 24, 2025)
+- Sprint 110: Stood up UTM attribution sprint docs (`memory-bank/sprints/sprint110_utm/`) detailing client capture, signed cookie + NextAuth persistence, reporting SQL, success metrics (95% coverage), and staging-first rollout plan.
+
 ## 📝 Latest Update (Sep 15, 2025)
 ## 📝 Latest Update (Sep 16, 2025)
 - Sprint 108/Share: Fixed "Illegal return statement" on Share page for all scenes. Root cause: Share page was importing Lambda-targeted `jsCode` which contains a top-level `return Component;` (valid for `new Function` execution), invalid in ES modules. Share player now adapts Lambda JS to ESM on-the-fly (replaces terminal return with `export default`, injects `React`/`Remotion` globals) and remains backward compatible with TSX scenes. Ensures robust playback across both artifact types without altering DB.
@@ -1166,3 +1169,11 @@ The core video generation pipeline is **production-ready** with:
 
 2025-09-21 – Sprint 130 kickoff
 - Created `sprint130_mass_brand_personalization` scaffold with scope (theme token refactor, bulk renderer, orchestration UX) and seeded TODO/progress logs.
+ 
+2025-09-24 – Homepage cleanup
+- Removed the Product Hunt featured badge from the marketing homepage hero to reflect the post-launch state and reduce above-the-fold distractions.
+- Confirmed hero layout still holds spacing and CTA prominence without the external badge embed.
+
+2025-09-24 – OG metadata refresh
+- Updated global Open Graph and Twitter metadata to use the new "Bazaar – AI Video Generator for Software Demos" messaging, refreshed description, and the hosted marketing image asset.
+- Ensures the homepage shares with the correct copy/preview card across social platforms.

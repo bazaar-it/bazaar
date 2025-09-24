@@ -207,13 +207,17 @@ export class MediaPlanService {
 
       const placeholderMatch = token.match(/^(image|video)_(\d+)$/i);
       if (placeholderMatch) {
-        const index = Number.parseInt(placeholderMatch[2], 10) - 1;
+        const indexFragment = placeholderMatch[2];
+        if (!indexFragment) return undefined;
+        const index = Number.parseInt(indexFragment, 10) - 1;
         if (!Number.isNaN(index) && index >= 0) {
           if (kind === 'image') {
-            return attachmentsImages[index];
+            const candidate = attachmentsImages[index];
+            if (typeof candidate === 'string') return candidate;
           }
           if (kind === 'video') {
-            return attachmentsVideos[index];
+            const candidate = attachmentsVideos[index];
+            if (typeof candidate === 'string') return candidate;
           }
         }
       }

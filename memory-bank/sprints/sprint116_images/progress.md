@@ -102,3 +102,12 @@ Date: 2025-09-22 (auto-link drag & paste)
 - Upload/media panels stamp drag payloads with asset IDs and link on click before inserting into chat.
 - ChatPanel now links assets when users drop or paste R2 URLs by resolving IDs from `getUserUploads`; fallback handles normalized URLs.
 - Added textarea paste hook + attachment effect so reused assets auto-link without manual intervention (`2025-09-22-auto-linking-drag-paste.md`).
+
+Date: 2025-09-24 (image recreate prompt guardrail)
+- Adjusted `generateImageRecreationScene` prompt to treat uploaded images as reference-only and forbid `<Img>` embedding when media plan resolves `imageAction: "recreate"`.
+- Updated recreation instructions to emphasize rebuilding layouts with React primitives so AI stops mixing embed + recreate outputs.
+
+Date: 2025-09-24 (metadata synchronization)
+- Added metadata-await logic in `ContextBuilder` so freshly uploaded attachments wait for tagging before Brain decisions; re-fetches asset/media libraries after analysis completes.
+- Introduced `MediaMetadataService.ensureAnalyzed` with shared in-flight promise map, allowing callers (upload + orchestrator) to await tag completion without duplicate AI calls.
+- Upload route now schedules `ensureAnalyzed` instead of fire-and-forget `analyzeAndTag`, giving downstream requests a consistent hook to await metadata readiness.

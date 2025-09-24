@@ -99,13 +99,19 @@ export function CodePanelG({
   const currentProps = getCurrentProps();
   const scenes = (currentProps?.scenes || []) as Scene[];
 
+  const firstSceneId = scenes[0]?.id;
+
   // Auto-select first scene if none is selected but scenes exist
   React.useEffect(() => {
-    if (scenes.length > 0 && (!selectedSceneId || !scenes.some(s => s.id === selectedSceneId))) {
-      if (onSceneSelect) onSceneSelect(scenes[0].id);
+    if (
+      scenes.length > 0 &&
+      firstSceneId &&
+      (!selectedSceneId || !scenes.some((s) => s.id === selectedSceneId))
+    ) {
+      onSceneSelect?.(firstSceneId);
     }
     // Only react to changes in scene list or selectedSceneId
-  }, [scenes.length, scenes[0]?.id, selectedSceneId, onSceneSelect]);
+  }, [scenes.length, firstSceneId, selectedSceneId, onSceneSelect]);
   
   // 🚨 NEW: Add debugging to track state changes
   React.useEffect(() => {
