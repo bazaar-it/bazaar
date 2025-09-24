@@ -138,6 +138,14 @@ We run campaigns across Product Hunt, Toolify, Hacker News, paid ads, and partne
 4. **Phase 3 – Reporting**: Ship SQL snippets, tRPC summary endpoint, documentation for marketing.
 5. **Phase 4 – QA & Rollout**: Run staging end-to-end tests, monitor metrics, enable production flag.
 
+## 2025-09-24 – Implementation Notes
+- Added reusable cookie signing/verification helpers (`src/server/services/attribution/cookie.ts`) with Jest coverage to guarantee tamper detection.
+- Built client attribution capture (`AttributionCapture`) that fingerprints first-touch data, posts to `/api/attribution/capture`, and stores a signed, HttpOnly cookie with 7-day lifetime.
+- Introduced post-login ingestion route (`/api/attribution/ingest`) that runs after authentication, verifies the cookie, writes to `user_attribution`, and clears the cookie without touching the core NextAuth flow.
+- Created manual SQL migration `drizzle/migrations/0019_add_user_attribution.sql` (Drizzle kit blocked by legacy snapshot corruption) to create the table, indexes, and backfill existing users with `unknown` entries; adjusted `drizzle/migrations/meta/0015_snapshot.json` schema metadata but Drizzle CLI still reports the legacy snapshot issue—flagged for follow-up cleanup.
+- Root layout now mounts capture + ingestion components so attribution runs transparently on first visit and first authenticated render.
+- Outstanding follow-ups: add repository helpers for attribution queries, ship SQL snippets/admin API, and confirm email-link auth (if enabled later) maintains cookie continuity.
+
 ## Trade-offs
 - Cookie-based storage avoids server sessions but depends on client cooperation; tamper-proof signature mitigates risk.
 - First-touch only may undercount multi-channel journeys; storing a single `last_touch` column gives basic recency insight without complicating analytics.

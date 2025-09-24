@@ -38,9 +38,66 @@ export const users = createTable("user", (d) => ({
   updatedAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`),
 }));
 
-export const usersRelations = relations(users, ({ many }) => ({
+export const userAttribution = createTable(
+  "user_attribution",
+  (d) => ({
+    userId: d
+      .varchar({ length: 255 })
+      .notNull()
+      .primaryKey()
+      .references(() => users.id, { onDelete: "cascade" }),
+    firstTouchSource: d.text("first_touch_source").notNull().default("unknown"),
+    firstTouchMedium: d.text("first_touch_medium"),
+    firstTouchCampaign: d.text("first_touch_campaign"),
+    firstTouchTerm: d.text("first_touch_term"),
+    firstTouchContent: d.text("first_touch_content"),
+    firstTouchReferrer: d.text("first_touch_referrer"),
+    firstTouchLandingPath: d.text("first_touch_landing_path"),
+    firstTouchGclid: d.text("first_touch_gclid"),
+    firstTouchFbclid: d.text("first_touch_fbclid"),
+    firstTouchUserAgentHash: d.text("first_touch_user_agent_hash"),
+    firstTouchAt: d.timestamp("first_touch_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+    lastTouchSource: d.text("last_touch_source"),
+    lastTouchMedium: d.text("last_touch_medium"),
+    lastTouchCampaign: d.text("last_touch_campaign"),
+    lastTouchTerm: d.text("last_touch_term"),
+    lastTouchContent: d.text("last_touch_content"),
+    lastTouchReferrer: d.text("last_touch_referrer"),
+    lastTouchLandingPath: d.text("last_touch_landing_path"),
+    lastTouchGclid: d.text("last_touch_gclid"),
+    lastTouchFbclid: d.text("last_touch_fbclid"),
+    lastTouchUserAgentHash: d.text("last_touch_user_agent_hash"),
+    lastTouchAt: d.timestamp("last_touch_at", { withTimezone: true }),
+    createdAt: d
+      .timestamp("created_at", { withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    updatedAt: d
+      .timestamp("updated_at", { withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .$onUpdate(() => new Date())
+      .notNull(),
+  }),
+  (t) => [
+    index("user_attr_first_source_idx").on(t.firstTouchSource),
+    index("user_attr_first_campaign_idx").on(t.firstTouchCampaign),
+  ],
+);
+
+export const userAttributionRelations = relations(userAttribution, ({ one }) => ({
+  user: one(users, {
+    fields: [userAttribution.userId],
+    references: [users.id],
+  }),
+}));
+
+export const usersRelations = relations(users, ({ many, one }) => ({
   accounts: many(accounts),
   sharedVideos: many(sharedVideos),
+  attribution: one(userAttribution, {
+    fields: [users.id],
+    references: [userAttribution.userId],
+  }),
 }));
 
 export const accounts = createTable(

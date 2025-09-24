@@ -6,7 +6,7 @@
   "tables": {
     "public.bazaar-vid_message": {
       "name": "bazaar-vid_message",
-      "schema": "",
+      "schema": "public",
       "columns": {
         "id": {
           "name": "id",
