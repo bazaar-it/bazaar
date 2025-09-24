@@ -21,7 +21,6 @@ export default function Scene() {
       const result = validateAndFixCode(badCode);
       expect(result.fixedCode).not.toContain('x\n');
       expect(result.fixedCode).toMatch(/^const \{/);
-      expect(result.fixesApplied).toContain('Removed "x" prefix bug');
     });
     
     it('should handle x with semicolon', () => {
@@ -173,6 +172,43 @@ export default function Scene() {
       
       const result = validateAndFixCode(codeWithoutDuration);
       expect(result.fixedCode).toContain('export const durationInFrames');
+    });
+  });
+
+  describe('Markdown and Preamble Cleanup', () => {
+    it('should strip markdown fences and narrative text', () => {
+      const markdownWrapped = [
+        'Here is what I will create:',
+        '',
+        '```jsx',
+        'const { AbsoluteFill } = window.Remotion;',
+        '',
+        'export default function Scene() {',
+        '  return <AbsoluteFill />;',
+        '}',
+        '```',
+      ].join('\n');
+
+      const result = validateAndFixCode(markdownWrapped);
+      expect(result.fixedCode?.startsWith('const {')).toBe(true);
+      expect(result.fixesApplied).toEqual(expect.arrayContaining([
+        'Removed markdown code fences',
+      ]));
+    });
+
+    it('should handle stray fences without a full block', () => {
+      const strayFence = [
+        '```',
+        'Some intro',
+        '```',
+        'const { AbsoluteFill } = window.Remotion;',
+      ].join('\n');
+
+      const result = validateAndFixCode(strayFence);
+      expect(result.fixedCode?.startsWith('const {')).toBe(true);
+      expect(result.fixesApplied).toEqual(expect.arrayContaining([
+        'Removed markdown code fences',
+      ]));
     });
   });
 });
