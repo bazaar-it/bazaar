@@ -1179,3 +1179,8 @@ The core video generation pipeline is **production-ready** with:
 2025-09-24 – OG metadata refresh
 - Updated global Open Graph and Twitter metadata to use the new "Bazaar – AI Video Generator for Software Demos" messaging, refreshed description, and the hosted marketing image asset.
 - Ensures the homepage shares with the correct copy/preview card across social platforms.
+2025-09-24 – Media plan production crash & GitHub schema fallback
+- Production logs exposed `MediaPlanService.resolvePlan` dereferencing a disabled debug accumulator; wrapped debug map creation so prod runs skip instrumentation without crashing.
+- Added GitHub connection lookup fallback: detects missing `token_type`/`is_active` columns and re-queries using the legacy schema, unblocking brain orchestration while logging a schema-mismatch warning.
+- Incident captured in `sprint116_images/2025-09-24-live-media-plan-failure.md`; follow-up migration needed to align prod table structure with current Drizzle schema.
+

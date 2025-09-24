@@ -111,3 +111,8 @@ Date: 2025-09-24 (metadata synchronization)
 - Added metadata-await logic in `ContextBuilder` so freshly uploaded attachments wait for tagging before Brain decisions; re-fetches asset/media libraries after analysis completes.
 - Introduced `MediaMetadataService.ensureAnalyzed` with shared in-flight promise map, allowing callers (upload + orchestrator) to await tag completion without duplicate AI calls.
 - Upload route now schedules `ensureAnalyzed` instead of fire-and-forget `analyzeAndTag`, giving downstream requests a consistent hook to await metadata readiness.
+
+Date: 2025-09-24 (live prod crash fix)
+- Hardened `MediaPlanService.resolvePlan()` so debug instrumentation is optional; production no longer crashes when `NODE_ENV='production'` disables the debug accumulator.
+- Added live incident doc `2025-09-24-live-media-plan-failure.md` capturing stack trace, asset payload, and follow-up actions.
+- Confirmed GitHub gateway errors stem from schema drift; coordinating fallback in `scene-operations.ts` (see Sprint 107 log update).

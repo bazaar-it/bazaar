@@ -435,21 +435,25 @@ export class MediaPlanService {
       }
     }
 
-    const debugSourceMap: DebugSourceEntry[] = Array.from(debugSourceAccumulator.entries()).map(([url, meta]) => ({
-      url,
-      sources: Array.from(meta.sources),
-      details: meta.details.size ? Array.from(meta.details) : undefined,
-    }));
+    const debugSourceMap: DebugSourceEntry[] | undefined = debugSourceAccumulator
+      ? Array.from(debugSourceAccumulator.entries()).map(([url, meta]) => ({
+          url,
+          sources: Array.from(meta.sources),
+          details: meta.details.size ? Array.from(meta.details) : undefined,
+        }))
+      : undefined;
 
-    result.debug = {
-      sourceMap: debugSourceMap,
-      plannedImages,
-      plannedVideos,
-      attachments: { images: attachmentsImages, videos: attachmentsVideos },
-      plan: plan ? { ...plan } : undefined,
-      mappedDirectives: mappedDirectives,
-      skippedPlanUrls: skippedPlanUrls.map(entry => entry.url),
-    };
+    if (debugSourceMap || shouldLog) {
+      result.debug = {
+        sourceMap: debugSourceMap ?? [],
+        plannedImages,
+        plannedVideos,
+        attachments: { images: attachmentsImages, videos: attachmentsVideos },
+        plan: plan ? { ...plan } : undefined,
+        mappedDirectives: mappedDirectives,
+        skippedPlanUrls: skippedPlanUrls.map((entry) => entry.url),
+      };
+    }
 
     if (skippedPlanUrls.length) {
       result.skippedPlanUrls = skippedPlanUrls.map(entry => entry.url);
@@ -482,7 +486,7 @@ export class MediaPlanService {
             mergedImages: result.imageUrls?.length || 0,
             mergedVideos: result.videoUrls?.length || 0,
           },
-          sourceMap: debugSourceMap,
+          sourceMap: debugSourceMap ?? [],
           skippedPlanUrls: skippedPlanUrls.map(entry => ({
             url: entry.url,
             projectId: entry.projectId,
