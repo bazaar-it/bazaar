@@ -76,7 +76,8 @@ export async function POST(request: Request) {
   }
 
   const secret = getSecret();
-  const existingCookie = cookies().get(ATTRIBUTION_COOKIE_NAME)?.value;
+  const cookieStore = await cookies();
+  const existingCookie = cookieStore.get(ATTRIBUTION_COOKIE_NAME)?.value;
   const existingPayload = existingCookie ? verifySignedPayload(existingCookie, secret) : null;
 
   const payload: AttributionCookiePayload = existingPayload

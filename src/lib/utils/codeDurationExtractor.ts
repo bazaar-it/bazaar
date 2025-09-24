@@ -47,10 +47,16 @@ export function analyzeDuration(code: string): {
   if (code.includes('export const durationInFrames_')) {
     const uniqueIdRegex = /export\s+const\s+durationInFrames_\w+\s*=\s*(\w+);?/;
     const uniqueIdMatch = uniqueIdRegex.exec(code);
-    
-    if (uniqueIdMatch && uniqueIdMatch[1] && code.includes('script_')) {
-      confidence = 'high';
-      source = `NEW unique ID export: durationInFrames_[ID] = ${uniqueIdMatch[1]} (from script.reduce)`;
+
+    if (uniqueIdMatch && uniqueIdMatch[1]) {
+      const literalValue = Number(uniqueIdMatch[1]);
+      if (!Number.isNaN(literalValue)) {
+        confidence = 'high';
+        source = `NEW literal duration: ${literalValue} frames`;
+      } else if (code.includes('script_')) {
+        confidence = 'high';
+        source = `NEW unique ID export: durationInFrames_[ID] = ${uniqueIdMatch[1]} (from script.reduce)`;
+      }
     }
   }
   // Check for LEGACY patterns
@@ -99,23 +105,30 @@ export function extractDurationFromCode(code: string): number {
     
     if (uniqueIdMatch && uniqueIdMatch[1]) {
       const variableName = uniqueIdMatch[1];
-      
+
+      // Look for literal assignment first: export const durationInFrames_<ID> = 240;
+      const literalValue = Number(variableName);
+      if (!Number.isNaN(literalValue) && literalValue > 0 && literalValue <= MAX_DURATION) {
+        console.log(`[DurationExtractor] ✅ Found NEW literal duration: ${literalValue} frames (${Math.round(literalValue/30*10)/10}s)`);
+        return literalValue;
+      }
+
       // Look for: const totalFrames = script_[ID].reduce((s,i) => s + i.frames, 0);
       const calcRegex = new RegExp(`const\\s+${variableName}\\s*=\\s*script_\\w+\\.reduce\\(\\([^)]+\\)\\s*=>\\s*[^,]+\\+[^,]+\\.frames,\\s*0\\);?`);
-      
+
       if (calcRegex.test(cleanCode)) {
         // Extract individual frame values from script array
         const frameRegex = /frames:\s*(\d+)/g;
         let totalCalculated = 0;
         let frameMatch;
-        
+
         while ((frameMatch = frameRegex.exec(cleanCode)) !== null) {
           const frameValue = frameMatch[1] ? parseInt(frameMatch[1], 10) : NaN;
           if (!isNaN(frameValue) && frameValue > 0) {
             totalCalculated += frameValue;
           }
         }
-        
+
         if (totalCalculated > 0 && totalCalculated <= MAX_DURATION) {
           console.log(`[DurationExtractor] ✅ Found NEW unique ID duration: ${totalCalculated} frames (${Math.round(totalCalculated/30*10)/10}s)`);
           return totalCalculated;

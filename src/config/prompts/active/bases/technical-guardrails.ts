@@ -5,9 +5,9 @@ CRITICAL TECHNICAL RULES (APPLY ALWAYS):
 - Export exact duration: export const durationInFrames_[ID] = <number>; do not default to 180.
 - Keep all elements within canvas bounds using useVideoConfig() width/height.
 - Clamp interpolations (extrapolateLeft/Right: 'clamp').
+- For every interpolate() call, the inputRange and outputRange arrays MUST be the same length; never provide mismatched lengths.
 - Use a single transform property per element (compose translate/scale/rotate in one string).
 - Ensure responsive styles; avoid fixed pixel layouts when possible.
 - For edits: limit scope to requested elements; keep unrelated code unchanged.
 - Do not leak global variables; obey scoping; data arrays at top-level if needed.
 `;
-
