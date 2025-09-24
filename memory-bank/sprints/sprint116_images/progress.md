@@ -111,3 +111,20 @@ Date: 2025-09-24 (metadata synchronization)
 - Added metadata-await logic in `ContextBuilder` so freshly uploaded attachments wait for tagging before Brain decisions; re-fetches asset/media libraries after analysis completes.
 - Introduced `MediaMetadataService.ensureAnalyzed` with shared in-flight promise map, allowing callers (upload + orchestrator) to await tag completion without duplicate AI calls.
 - Upload route now schedules `ensureAnalyzed` instead of fire-and-forget `analyzeAndTag`, giving downstream requests a consistent hook to await metadata readiness.
+
+Date: 2025-09-24 (cross-project media guard fix)
+- Relaxed the project-id guard in `mediaPlanService.resolvePlan` by trusting any URL flagged `scope: 'project'` in the media library, even when the R2 path encodes a different project. `resolveToken` now returns `{ url, projectScoped }`, and `canUsePlanUrl` short-circuits for `projectScoped` assets.
+- Added helper `isProjectScopedAsset` so fallback paths (`plan-index`, attachments, direct URLs) also bypass the guard when metadata shows the asset is linked.
+- Introduced regression tests in `src/brain/services/__tests__/media-plan.service.test.ts` to cover legacy-path project assets vs. unlinked user-library assets, ensuring we don't reintroduce the skip.
+
+Date: 2025-09-24 (live prod crash fix)
+- Hardened `MediaPlanService.resolvePlan()` so debug instrumentation is optional; production no longer crashes when `NODE_ENV='production'` disables the debug accumulator.
+- Added live incident doc `2025-09-24-live-media-plan-failure.md` capturing stack trace, asset payload, and follow-up actions.
+- Confirmed GitHub gateway errors stem from schema drift; coordinating fallback in `scene-operations.ts` (see Sprint 107 log update).
+
+Date: 2025-09-24 (cross-project asset guard regression)
+- Investigated prod project `fa164d69…` where image generation now fails immediately when reusing linked assets.
+- Found media-plan guard rejects URLs whose path encodes a different project ID, even when the asset is formally linked via `project_asset` (scope `project`).
+- Documented reproduction + SQL evidence in `2025-09-24-media-plan-cross-project-assets.md`; identified fix path: honour scope/link metadata before falling back to path inference.
+- Next: adjust `mediaPlanService.resolvePlan()` guard + extend media-plan suite with linked-asset cases to prevent regressions.
+- Patched `mediaPlanService.resolvePlan` to trust project-linked assets even when the R2 path encodes a different project, and added unit tests covering trusted vs unlinked assets.

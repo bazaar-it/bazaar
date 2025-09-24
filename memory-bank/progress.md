@@ -1179,3 +1179,18 @@ The core video generation pipeline is **production-ready** with:
 2025-09-24 – OG metadata refresh
 - Updated global Open Graph and Twitter metadata to use the new "Bazaar – AI Video Generator for Software Demos" messaging, refreshed description, and the hosted marketing image asset.
 - Ensures the homepage shares with the correct copy/preview card across social platforms.
+
+2025-09-24 – Media plan guard: project-linked assets
+- Fixed `MediaPlanService.resolvePlan` so project-linked assets survive even when their R2 path encodes a legacy project id. `resolveToken` now propagates a `projectScoped` flag, and `canUsePlanUrl`/`isTrustedUrl` trust any media library entry with `scope: 'project'` + `requiresLink !== true`.
+- Added unit regression coverage (`src/brain/services/__tests__/media-plan.service.test.ts`) covering both the legacy-path success case and the user-library failure path, matching the prod incident for project `fa164d69-…`.
+- Updated sprint doc `2025-09-24-media-plan-cross-project-assets.md` with the fix details and follow-up instrumentation tasks.
+2025-09-24 – Media plan production crash & GitHub schema fallback
+- Production logs exposed `MediaPlanService.resolvePlan` dereferencing a disabled debug accumulator; wrapped debug map creation so prod runs skip instrumentation without crashing.
+- Added GitHub connection lookup fallback: detects missing `token_type`/`is_active` columns and re-queries using the legacy schema, unblocking brain orchestration while logging a schema-mismatch warning.
+- Incident captured in `sprint116_images/2025-09-24-live-media-plan-failure.md`; follow-up migration needed to align prod table structure with current Drizzle schema.
+
+2025-09-24 – Cross-project asset guard regression
+- Prod project `fa164d69…` failing to add scenes traced to new media-plan guard skipping linked assets when the R2 URL encodes a different project UUID.
+- Added `sprint116_images/2025-09-24-media-plan-cross-project-assets.md` with SQL evidence, reproduction steps, and fix recommendation (respect `mediaLibrary.scope`/link metadata before applying the project-id filter).
+- Next step: adjust `mediaPlanService.resolvePlan` to allow project-scoped assets regardless of URL path and extend the media-plan suite with linked-asset coverage.
+- Applied guard refinement in `mediaPlanService.resolvePlan` so project-scoped assets bypass the URL-based project check; added Jest coverage ensuring linked assets succeed while unlinked ones remain blocked (`npm run test -- src/brain/services/__tests__/media-plan.service.test.ts`).

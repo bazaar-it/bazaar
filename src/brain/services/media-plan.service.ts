@@ -117,6 +117,48 @@ export class MediaPlanService {
     }
     if (!hasMediaLibrary(context)) return { suppressed: false, reason: 'No mediaLibrary in context' };
 
+    const trustedUrlSet = new Set<string>();
+    const assetsByUrl = new Map<
+      string,
+      {
+        tags?: string[];
+        originalName?: string;
+        mimeType?: string | null;
+        scope?: 'project' | 'user';
+        requiresLink?: boolean;
+      }
+    >();
+
+    const registerAsset = (
+      asset: any,
+      scope: 'project' | 'user',
+    ) => {
+      if (!asset || typeof asset.url !== 'string') return;
+      const normalizedTags = Array.isArray(asset.tags) ? (asset.tags as string[]) : undefined;
+      assetsByUrl.set(asset.url, {
+        tags: normalizedTags,
+        originalName: asset.originalName,
+        mimeType: asset.mimeType ?? null,
+        scope,
+        requiresLink: scope === 'user' ? true : asset.requiresLink,
+      });
+      if (scope === 'project' && asset.requiresLink !== true) {
+        trustedUrlSet.add(asset.url);
+      }
+    };
+
+    const isProjectScopedAsset = (url: string | undefined) => {
+      if (!url) return false;
+      const meta = assetsByUrl.get(url);
+      return !!meta && meta.scope === 'project' && meta.requiresLink !== true;
+    };
+
+    const isTrustedUrl = (url: string | undefined) => {
+      if (!url) return false;
+      if (trustedUrlSet.has(url)) return true;
+      return isProjectScopedAsset(url);
+    };
+
     // Build ID → URL map
     const idToUrl = new Map<string, string>();
     const userLibraryById = new Map<string, { url: string; scope?: 'project' | 'user'; sourceProjectId?: string | null }>();
@@ -126,6 +168,7 @@ export class MediaPlanService {
         continue;
       }
       idToUrl.set(a.id, a.url);
+      registerAsset(a, 'project');
     }
     for (const a of context.mediaLibrary.videos) {
       if (a.scope === 'user') {
@@ -133,6 +176,14 @@ export class MediaPlanService {
         continue;
       }
       idToUrl.set(a.id, a.url);
+      registerAsset(a, 'project');
+    }
+
+    for (const a of context.mediaLibrary.images) {
+      if (a.scope === 'user') registerAsset(a, 'user');
+    }
+    for (const a of context.mediaLibrary.videos) {
+      if (a.scope === 'user') registerAsset(a, 'user');
     }
 
     const isHttp = (u: any) => typeof u === 'string' && /^https?:\/\//i.test(u);
@@ -178,8 +229,10 @@ export class MediaPlanService {
       trackSource(url, 'plan-skipped', detail?.reason ? `skipped-${detail.reason}` : 'skipped');
     };
 
-    const canUsePlanUrl = (url: string | undefined) => {
+    const canUsePlanUrl = (url: string | undefined, options?: { projectScoped?: boolean }) => {
       if (!url) return false;
+      if (options?.projectScoped) return true;
+      if (isTrustedUrl(url)) return true;
       if (!projectId) return true;
       const planProjectId = extractProjectId(url);
       if (planProjectId && planProjectId !== projectId) {
@@ -190,10 +243,13 @@ export class MediaPlanService {
       return true;
     };
 
-    const resolveToken = (token: string | undefined, kind: 'image' | 'video'): string | undefined => {
-      if (!token) return undefined;
+    const resolveToken = (
+      token: string | undefined,
+      kind: 'image' | 'video'
+    ): { url?: string; projectScoped?: boolean } => {
+      if (!token) return {};
       const mapped = idToUrl.get(token);
-      if (mapped) return mapped;
+      if (mapped) return { url: mapped, projectScoped: true };
 
       const userAsset = userLibraryById.get(token);
       if (userAsset) {
@@ -204,28 +260,32 @@ export class MediaPlanService {
           reason: 'requires-linking',
         });
         trackSource(userAsset.url, 'plan-unlinked', inferredProject ? `unlinked-project:${inferredProject}` : 'scope:user');
-        return undefined;
+        return {};
       }
-      if (token.startsWith('http')) return token;
+      if (token.startsWith('http')) return { url: token, projectScoped: isProjectScopedAsset(token) };
 
       const placeholderMatch = token.match(/^(image|video)_(\d+)$/i);
       if (placeholderMatch) {
         const indexFragment = placeholderMatch[2];
-        if (!indexFragment) return undefined;
+        if (!indexFragment) return {};
         const index = Number.parseInt(indexFragment, 10) - 1;
         if (!Number.isNaN(index) && index >= 0) {
           if (kind === 'image') {
             const candidate = attachmentsImages[index];
-            if (typeof candidate === 'string') return candidate;
+            if (typeof candidate === 'string') {
+              return { url: candidate, projectScoped: isProjectScopedAsset(candidate) };
+            }
           }
           if (kind === 'video') {
             const candidate = attachmentsVideos[index];
-            if (typeof candidate === 'string') return candidate;
+            if (typeof candidate === 'string') {
+              return { url: candidate, projectScoped: isProjectScopedAsset(candidate) };
+            }
           }
         }
       }
 
-      return undefined;
+      return {};
     };
 
     // Map ordered IDs → URLs; allow direct URLs if the plan accidentally included them
@@ -250,21 +310,29 @@ export class MediaPlanService {
       const results: string[] = [];
       (ids || []).forEach((id, idx) => {
         const resolved = resolveToken(id, kind);
-        if (resolved) {
+        const resolvedUrl = resolved.url;
+        if (resolvedUrl) {
+          if (idToUrl.get(id) === resolvedUrl) {
+            trustedUrlSet.add(resolvedUrl);
+          }
           const fromLibrary = idToUrl.has(id);
-          if (!canUsePlanUrl(resolved)) return;
+          if (!canUsePlanUrl(resolvedUrl, { projectScoped: resolved.projectScoped })) return;
           trackSource(
-            resolved,
+            resolvedUrl,
             'plan',
             fromLibrary ? `mapped-from-library:${id}` : `plan-token:${id}`
           );
-          results.push(resolved);
+          results.push(resolvedUrl);
           return;
         }
 
         const fallback = fallbackTokenMap.get(id);
         if (fallback) {
-          if (!canUsePlanUrl(fallback)) return;
+          const meta = assetsByUrl.get(fallback);
+          if (meta?.scope === 'project' && meta.requiresLink !== true) {
+            trustedUrlSet.add(fallback);
+          }
+          if (!canUsePlanUrl(fallback, { projectScoped: isProjectScopedAsset(fallback) })) return;
           trackSource(fallback, 'plan-fallback', `fallback-token:${id}`);
           results.push(fallback);
           return;
@@ -272,14 +340,18 @@ export class MediaPlanService {
 
         const byIndex = kind === 'image' ? attachmentsImages[idx] : attachmentsVideos[idx];
         if (byIndex) {
-          if (!canUsePlanUrl(byIndex)) return;
+          const meta = assetsByUrl.get(byIndex);
+          if (meta?.scope === 'project' && meta.requiresLink !== true) {
+            trustedUrlSet.add(byIndex);
+          }
+          if (!canUsePlanUrl(byIndex, { projectScoped: isProjectScopedAsset(byIndex) })) return;
           trackSource(byIndex, 'plan-index', `index:${idx}|token:${id}`);
           results.push(byIndex);
           return;
         }
 
         if (id.startsWith('http')) {
-          if (!canUsePlanUrl(id)) return;
+          if (!canUsePlanUrl(id, { projectScoped: isProjectScopedAsset(id) })) return;
           trackSource(id, 'direct-url', `direct-token:${id}`);
           results.push(id);
         }
@@ -295,9 +367,9 @@ export class MediaPlanService {
       ? (plan as any).imageDirectives
           .map((d: any) => {
             const token = typeof d?.urlOrId === 'string' ? d.urlOrId : (typeof d?.url === 'string' ? d.url : undefined);
-            const resolvedUrl = resolveToken(token, 'image');
-            return resolvedUrl && isValidAction(d?.action)
-              ? { url: resolvedUrl, action: d.action as 'embed' | 'recreate', target: d.target }
+            const resolvedInfo = resolveToken(token, 'image');
+            return resolvedInfo.url && isValidAction(d?.action)
+              ? { url: resolvedInfo.url, action: d.action as 'embed' | 'recreate', target: d.target }
               : undefined;
           })
           .filter((x: any): x is ImageDirective => !!x)
@@ -339,15 +411,6 @@ export class MediaPlanService {
     result.imageDirectives = mappedDirectives && mappedDirectives.length ? mappedDirectives : undefined;
 
     const hasResolvedImages = (result.imageUrls?.length || 0) > 0;
-
-    const assetsByUrl = new Map<string, { tags?: string[]; originalName?: string; mimeType?: string | null }>();
-    for (const asset of context.mediaLibrary.images || []) {
-      assetsByUrl.set(asset.url, {
-        tags: asset.tags,
-        originalName: asset.originalName,
-        mimeType: asset.mimeType,
-      });
-    }
 
     const attachmentInfo = (result.imageUrls || []).map((url) => {
       const asset = assetsByUrl.get(url);
@@ -435,21 +498,25 @@ export class MediaPlanService {
       }
     }
 
-    const debugSourceMap: DebugSourceEntry[] = Array.from(debugSourceAccumulator.entries()).map(([url, meta]) => ({
-      url,
-      sources: Array.from(meta.sources),
-      details: meta.details.size ? Array.from(meta.details) : undefined,
-    }));
+    const debugSourceMap: DebugSourceEntry[] | undefined = debugSourceAccumulator
+      ? Array.from(debugSourceAccumulator.entries()).map(([url, meta]) => ({
+          url,
+          sources: Array.from(meta.sources),
+          details: meta.details.size ? Array.from(meta.details) : undefined,
+        }))
+      : undefined;
 
-    result.debug = {
-      sourceMap: debugSourceMap,
-      plannedImages,
-      plannedVideos,
-      attachments: { images: attachmentsImages, videos: attachmentsVideos },
-      plan: plan ? { ...plan } : undefined,
-      mappedDirectives: mappedDirectives,
-      skippedPlanUrls: skippedPlanUrls.map(entry => entry.url),
-    };
+    if (debugSourceMap || shouldLog) {
+      result.debug = {
+        sourceMap: debugSourceMap ?? [],
+        plannedImages,
+        plannedVideos,
+        attachments: { images: attachmentsImages, videos: attachmentsVideos },
+        plan: plan ? { ...plan } : undefined,
+        mappedDirectives: mappedDirectives,
+        skippedPlanUrls: skippedPlanUrls.map((entry) => entry.url),
+      };
+    }
 
     if (skippedPlanUrls.length) {
       result.skippedPlanUrls = skippedPlanUrls.map(entry => entry.url);
@@ -482,7 +549,7 @@ export class MediaPlanService {
             mergedImages: result.imageUrls?.length || 0,
             mergedVideos: result.videoUrls?.length || 0,
           },
-          sourceMap: debugSourceMap,
+          sourceMap: debugSourceMap ?? [],
           skippedPlanUrls: skippedPlanUrls.map(entry => ({
             url: entry.url,
             projectId: entry.projectId,
