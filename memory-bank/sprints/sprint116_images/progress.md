@@ -128,3 +128,13 @@ Date: 2025-09-24 (cross-project asset guard regression)
 - Documented reproduction + SQL evidence in `2025-09-24-media-plan-cross-project-assets.md`; identified fix path: honour scope/link metadata before falling back to path inference.
 - Next: adjust `mediaPlanService.resolvePlan()` guard + extend media-plan suite with linked-asset cases to prevent regressions.
 - Patched `mediaPlanService.resolvePlan` to trust project-linked assets even when the R2 path encodes a different project, and added unit tests covering trusted vs unlinked assets.
+
+Date: 2025-09-24 (prompt guard for interpolate ranges)
+- Added a technical guardrail shared by add/edit prompts: every `interpolate()` call must use inputRange and outputRange arrays of equal length.
+- Update lives in `TECHNICAL_GUARDRAILS_BASE`, so both CodeGenerator and CodeEditor inherit the requirement; prevents Remotion runtime errors like “inputRange (2) and outputRange (3) must have the same length.”
+- Logged this regression from prod repro (AnimateLogo scene) and folded it into sprint docs to keep the LLM from emitting mismatched animation config.
+
+Date: 2025-09-24 (duration extractor literal support)
+- Expanded `extractDurationFromCode` so suffixed exports like `export const durationInFrames_animate_logo = 240;` are parsed correctly instead of falling back to 180 frames.
+- Added Jest coverage (`src/lib/utils/__tests__/codeDurationExtractor.test.ts`) for the new literal path, legacy literals, and fallback behavior.
+- Keeps timeline/DB duration aligned with the scene’s exported frame count even when the LLM emits a direct literal.
