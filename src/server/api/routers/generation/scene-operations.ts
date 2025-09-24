@@ -213,18 +213,60 @@ export const generateScene = protectedProcedure
       try {
         const { githubConnections } = await import("~/server/db/schema/github-connections");
         const { eq, and } = await import("drizzle-orm");
-        
-        const connections = await db
-          .select()
-          .from(githubConnections)
-          .where(and(
-            eq(githubConnections.userId, userId),
-            eq(githubConnections.isActive, true)
-          ));
-        
-        if (connections[0]) {
+
+        const isMissingColumnError = (err: unknown): err is { code?: string } => {
+          return typeof err === 'object' && err !== null && 'code' in err && (err as any).code === '42703';
+        };
+
+        type GitHubConnectionRow = {
+          id: string | null;
+          accessToken: string | null;
+          isActive?: boolean | null;
+        };
+
+        let connections: GitHubConnectionRow[] = [];
+
+        try {
+          connections = await db
+            .select({
+              id: githubConnections.id,
+              accessToken: githubConnections.accessToken,
+              isActive: githubConnections.isActive,
+            })
+            .from(githubConnections)
+            .where(
+              and(
+                eq(githubConnections.userId, userId),
+                eq(githubConnections.isActive, true)
+              )
+            );
+        } catch (innerError) {
+          if (isMissingColumnError(innerError)) {
+            const legacyConnections = await db
+              .select({
+                id: githubConnections.id,
+                accessToken: githubConnections.accessToken,
+              })
+              .from(githubConnections)
+              .where(eq(githubConnections.userId, userId));
+
+            connections = legacyConnections as GitHubConnectionRow[];
+            console.warn(
+              `[${response.getRequestId()}] GitHub connection schema mismatch detected; falling back to legacy column set.`
+            );
+          } else {
+            throw innerError;
+          }
+        }
+
+        const activeConnection = connections.find((connection) => {
+          const isActive = typeof connection.isActive === 'boolean' ? connection.isActive : true;
+          return isActive && !!connection.accessToken;
+        });
+
+        if (activeConnection) {
           githubConnected = true;
-          githubAccessToken = connections[0].accessToken;
+          githubAccessToken = activeConnection.accessToken ?? undefined;
           console.log(`[${response.getRequestId()}] User has GitHub connection`);
         }
       } catch (error) {
