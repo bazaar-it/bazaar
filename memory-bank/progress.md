@@ -1204,3 +1204,4 @@ The core video generation pipeline is **production-ready** with:
 - Added `sprint116_images/2025-09-24-media-plan-cross-project-assets.md` with SQL evidence, reproduction steps, and fix recommendation (respect `mediaLibrary.scope`/link metadata before applying the project-id filter).
 - Next step: adjust `mediaPlanService.resolvePlan` to allow project-scoped assets regardless of URL path and extend the media-plan suite with linked-asset coverage.
 - Applied guard refinement in `mediaPlanService.resolvePlan` so project-scoped assets bypass the URL-based project check; added Jest coverage ensuring linked assets succeed while unlinked ones remain blocked (`npm run test -- src/brain/services/__tests__/media-plan.service.test.ts`).
+- Patched `codeValidator` to strip markdown fences/preambles before validation, fixing the logo animation scene that fell back to the placeholder after Anthropic returned prose + ```jsx``` blocks (`Unexpected token` in SceneCompiler).

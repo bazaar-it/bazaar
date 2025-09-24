@@ -138,3 +138,7 @@ Date: 2025-09-24 (duration extractor literal support)
 - Expanded `extractDurationFromCode` so suffixed exports like `export const durationInFrames_animate_logo = 240;` are parsed correctly instead of falling back to 180 frames.
 - Added Jest coverage (`src/lib/utils/__tests__/codeDurationExtractor.test.ts`) for the new literal path, legacy literals, and fallback behavior.
 - Keeps timeline/DB duration aligned with the scene’s exported frame count even when the LLM emits a direct literal.
+
+Date: 2025-09-24 (media-plan skip for non-media edits)
+- Short-circuited `Orchestrator` so `mediaPlanService.resolvePlan` runs only when the brain actually returns plan data (images, videos, directives). Pure text edits now bypass the heavy media orchestration path, cutting unnecessary compute when users tweak copy/colors.
+- Added lightweight logging to confirm the skip path; tools still receive any attachments via `userContext` when no plan is present.
