@@ -310,3 +310,8 @@ The most important fix was the simplest: **Stop breaking working code.**
 - Found the client `title_updated` handler only invalidated queries, so React Query kept serving the cached "Untitled" title to `GenerateWorkspaceRoot` until a manual refetch.
 - Added optimistic cache updates for both `project.getById` and `project.list` before invalidation so the header updates instantly while still syncing with the server.
 - ESLint run (`npx eslint src/hooks/use-sse-generation.ts`) is still blocked in this sandbox by the `structuredClone` requirement; needs rerun once tooling allows it.
+
+Date: 2025-09-24 (markdown fence strip)
+- Found addScene output still shipping markdown + narrative preambles, causing SceneCompiler to throw `Unexpected token` and preview fallback placeholder (project 816bba6d…).
+- Updated `applyTemplateFixes` in `codeValidator` to strip code fences/preambles before syntax validation, and added Jest coverage for markdown-stripped inputs.
+- Result: generated scenes now compile even when the model wraps code in ```jsx blocks or adds prose descriptions.

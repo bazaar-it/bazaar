@@ -121,6 +121,24 @@ export function applyTemplateFixes(code: string): { code: string; fixes: string[
   
   console.log('[CODE VALIDATOR] Applying critical fixes only');
   
+  // 0. Strip markdown fences and narrative preambles
+  const fenceRegex = /```(?:jsx|tsx|javascript)?\s*([\s\S]*?)```/i;
+  const fenceMatch = fixedCode.match(fenceRegex);
+  if (fenceMatch) {
+    fixedCode = fenceMatch[1].trim();
+    fixesApplied.push('Removed markdown code fences');
+  } else if (fixedCode.includes('```')) {
+    fixedCode = fixedCode.replace(/```[a-z]*\s*/gi, '').replace(/```/g, '').trimStart();
+    fixesApplied.push('Removed stray markdown fences');
+  }
+
+  const preambleRegex = /(const\s+\{|export\s+default|function\s+[A-Z])/;
+  const preambleMatch = fixedCode.match(preambleRegex);
+  if (preambleMatch && preambleMatch.index && preambleMatch.index > 0) {
+    fixedCode = fixedCode.slice(preambleMatch.index).trimStart();
+    fixesApplied.push('Removed narrative preamble');
+  }
+
   // 1. Remove the "x" streaming artifact (CRITICAL - corrupts everything)
   const firstLine = fixedCode.split('\n')[0].trim();
   if (firstLine === 'x' || firstLine === 'x;' || firstLine === 'x ') {
