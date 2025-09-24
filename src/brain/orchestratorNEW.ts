@@ -10,12 +10,13 @@ import type {
   OrchestrationOutput 
 } from "~/lib/types/ai/brain.types";
 import { FEATURES } from "~/config/features";
+import { mediaPlanService } from "./services/media-plan.service";
 
 export class Orchestrator {
   private contextBuilder = new ContextBuilder();
   private intentAnalyzer = new IntentAnalyzer();
 
-  async processUserInput(input: OrchestrationInput): Promise<OrchestrationOutput> {
+  async processUserInput(input: OrchestrationInput, options?: { requestId?: string }): Promise<OrchestrationOutput> {
     console.log('\n🧠 [NEW ORCHESTRATOR] === PROCESSING USER INPUT ===');
     console.log('🧠 [NEW ORCHESTRATOR] Input:', {
       prompt: input.prompt,
@@ -25,6 +26,9 @@ export class Orchestrator {
       hasAudio: !!(input.userContext?.audioUrls as string[])?.length,
       sceneCount: input.storyboardSoFar?.length || 0
     });
+
+    const requestId = options?.requestId;
+    const shouldLogStructured = process.env.NODE_ENV !== 'production';
     
     // Define enhancedPrompt at the beginning of the function
     let enhancedPrompt = input.prompt;
@@ -183,7 +187,7 @@ export class Orchestrator {
       // 2. Analyze intent and select tool
       console.log('🧠 [NEW ORCHESTRATOR] Step 2: Analyzing intent...');
       input.onProgress?.('🎯 Choosing the right approach...', 'building');
-      const toolSelection = await this.intentAnalyzer.analyzeIntent(enhancedInput, contextPacket);
+      let toolSelection = await this.intentAnalyzer.analyzeIntent(enhancedInput, contextPacket);
       console.log('🧠 [NEW ORCHESTRATOR] Tool selected:', {
         tool: toolSelection.toolName,
         reasoning: toolSelection.reasoning?.substring(0, 100) + '...'
@@ -207,7 +211,7 @@ export class Orchestrator {
           reasoning: toolSelection.reasoning
         };
       }
-      
+
       // 3. Return decision (NO EXECUTION!)
       console.log('🧠 [NEW ORCHESTRATOR] Decision complete! Returning to router...');
       
@@ -227,7 +231,81 @@ export class Orchestrator {
         console.log(`🧠 [ORCHESTRATOR] Parsed duration from prompt: ${requestedDurationFrames} frames`);
       }
 
-      const result = {
+      // Resolve media plan via service (maps IDs→URLs, merges attachments, applies suppression & heuristics)
+      const planned = mediaPlanService.resolvePlan(
+        toolSelection,
+        contextPacket,
+        input.prompt,
+        { imageUrls: input.userContext?.imageUrls as string[] | undefined, videoUrls: input.userContext?.videoUrls as string[] | undefined },
+        { requestId, projectId: input.projectId }
+      );
+      if (!planned.suppressed && ((planned.imageUrls?.length || 0) > 0 || (planned.videoUrls?.length || 0) > 0)) {
+        console.log('🧠 [NEW ORCHESTRATOR][MediaPlan] Using planned media', {
+          images: planned.imageUrls?.length || 0,
+          videos: planned.videoUrls?.length || 0,
+          rationale: toolSelection.mediaPlan?.rationale || 'n/a'
+        });
+      } else if (planned.suppressed) {
+        console.log('🛑 [NEW ORCHESTRATOR][MediaPlan] Suppressing planned media', { reason: planned.reason });
+      }
+
+      const mediaPlanDebug = planned.debug;
+
+      if (shouldLogStructured) {
+        try {
+          const attachments = {
+            images: (input.userContext?.imageUrls as string[] | undefined)?.length || 0,
+            videos: (input.userContext?.videoUrls as string[] | undefined)?.length || 0,
+            audio: (input.userContext?.audioUrls as string[] | undefined)?.length || 0,
+          };
+          const summary = {
+            type: 'orchestrator.mediaPlan.summary',
+            requestId,
+            projectId: input.projectId,
+            promptPreview: input.prompt.slice(0, 160),
+            tool: toolSelection.toolName,
+            mediaPlan: toolSelection.mediaPlan ? {
+              hasPlan: true,
+              imagesOrdered: toolSelection.mediaPlan.imagesOrdered?.length || 0,
+              videosOrdered: toolSelection.mediaPlan.videosOrdered?.length || 0,
+              directives: Array.isArray((toolSelection as any).mediaPlan?.imageDirectives)
+                ? (toolSelection as any).mediaPlan.imageDirectives.length
+                : 0,
+            } : { hasPlan: false },
+            attachments,
+            resolved: {
+              suppressed: planned.suppressed,
+              reason: planned.reason,
+              imageUrls: planned.imageUrls?.length || 0,
+              videoUrls: planned.videoUrls?.length || 0,
+              imageAction: planned.imageAction || (toolSelection.imageAction ?? null),
+              directives: planned.imageDirectives?.length || 0,
+              sourceMap: mediaPlanDebug?.sourceMap?.length || 0,
+              skippedPlan: planned.skippedPlanUrls?.length || 0,
+            },
+            debug: mediaPlanDebug ? {
+              planImagesOrdered: mediaPlanDebug.plan?.imagesOrdered || [],
+              planVideosOrdered: mediaPlanDebug.plan?.videosOrdered || [],
+              planMapping: mediaPlanDebug.plan?.mapping,
+              sourceMap: mediaPlanDebug.sourceMap,
+              plannedImages: mediaPlanDebug.plannedImages,
+              plannedVideos: mediaPlanDebug.plannedVideos,
+              attachments: mediaPlanDebug.attachments,
+              mappedDirectives: mediaPlanDebug.mappedDirectives,
+              skippedPlanUrls: mediaPlanDebug.skippedPlanUrls,
+            } : undefined,
+          };
+          console.log('[MEDIA_PLAN_SUMMARY]', JSON.stringify(summary));
+        } catch (err) {
+          console.warn('🧠 [NEW ORCHESTRATOR] Failed to log media plan summary:', err);
+        }
+      }
+
+      // Heuristics for imageAction are handled inside mediaPlanService
+
+      const result: OrchestrationOutput & {
+        result: OrchestrationOutput['result'] & { workflow?: any };
+      } = {
         success: true,
         toolUsed: toolSelection.toolName,
         reasoning: toolSelection.reasoning,
@@ -243,8 +321,9 @@ export class Orchestrator {
             referencedSceneIds: toolSelection.referencedSceneIds,
             // Website pipeline disabled: do not pass websiteUrl
             websiteUrl: FEATURES.WEBSITE_TO_VIDEO_ENABLED ? toolSelection.websiteUrl : undefined,
-            imageUrls: (input.userContext?.imageUrls as string[]) || undefined,
-            videoUrls: (input.userContext?.videoUrls as string[]) || undefined,
+            // Prefer Brain mediaPlan; merge with any user attachments (dedup)
+            imageUrls: planned.suppressed ? ((input.userContext?.imageUrls as string[]) || undefined) : planned.imageUrls || ((input.userContext?.imageUrls as string[]) || undefined),
+            videoUrls: planned.suppressed ? ((input.userContext?.videoUrls as string[]) || undefined) : planned.videoUrls || ((input.userContext?.videoUrls as string[]) || undefined),
             audioUrls: (input.userContext?.audioUrls as string[]) || undefined,
             webContext: contextPacket.webContext,
             modelOverride: input.userContext?.modelOverride, // Pass model override if provided
@@ -254,12 +333,25 @@ export class Orchestrator {
             isYouTubeAnalysis: hasYouTube && hasTimeSpec,
             // Include template context for better first-scene generation
             templateContext: contextPacket.templateContext,
-            imageAction: toolSelection.imageAction,
-            imageDirectives: toolSelection.imageDirectives
+            // Only pass a valid imageAction enum; drop 'mixed' or unknown
+            imageAction: planned.imageAction || (toolSelection.imageAction === 'embed' || toolSelection.imageAction === 'recreate' ? toolSelection.imageAction : undefined),
+            imageDirectives: planned.imageDirectives && planned.imageDirectives.length ? planned.imageDirectives : undefined
           },
           workflow: toolSelection.workflow,
-        }
+        },
       };
+
+      if (mediaPlanDebug) {
+        result.mediaPlanDebug = {
+          plan: mediaPlanDebug.plan,
+          sourceMap: mediaPlanDebug.sourceMap,
+          plannedImages: mediaPlanDebug.plannedImages,
+          plannedVideos: mediaPlanDebug.plannedVideos,
+          attachments: mediaPlanDebug.attachments,
+          mappedDirectives: mediaPlanDebug.mappedDirectives,
+          skippedPlanUrls: mediaPlanDebug.skippedPlanUrls,
+        };
+      }
       
       // Debug logging for video URLs and template context
       console.log('🧠 [NEW ORCHESTRATOR] Tool context being passed:', {
@@ -271,10 +363,13 @@ export class Orchestrator {
         templateNames: contextPacket.templateContext?.examples?.map(t => t.name) || [],
       }); 
       
-      // Log actual image URLs being passed to tools
-      if ((input.userContext?.imageUrls as string[])?.length) {
-        console.log('📸 [NEW ORCHESTRATOR] Image URLs being passed to tool:', input.userContext?.imageUrls);
-      }
+      // Log actual image URLs being passed to tools (from toolContext)
+      try {
+        const imgUrlsForLog = (result.result.toolContext)?.imageUrls as string[] | undefined;
+        if (imgUrlsForLog?.length) {
+          console.log('📸 [NEW ORCHESTRATOR] Image URLs being passed to tool:', imgUrlsForLog);
+        }
+      } catch {}
       
       console.log('🧠 [NEW ORCHESTRATOR] === ORCHESTRATION COMPLETE ===\n');
       return result;

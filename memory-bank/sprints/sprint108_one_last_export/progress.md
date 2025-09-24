@@ -93,3 +93,24 @@ This affects all 5 chunks in the video export, happening in VideoComposition com
   - Keeps existing static replacements and direct path rewrites
   - Placeholder: transparent 1x1 PNG data URL for unknown names
 - Expected result: Avatar-heavy scenes export correctly; no dependency on `window.BazaarAvatars` in Lambda
+## 2025-09-16 — Share Page playback fix
+
+- Bug: All scenes on `/share/[id]` failed with "Scene Error: Illegal return statement".
+- Root cause: Share route used `dbScene.jsCode` (Lambda-targeted) which embeds a top-level `return Component;` and strips `window.Remotion` destructuring. This is valid for `new Function(...)` execution in Lambda/preview, but illegal in ES module dynamic `import()` used by the share player.
+- Fix: In `ShareVideoPlayerClient(Optimized)`, detect precompiled code and adapt it to ESM at runtime:
+  - Prepend bindings: `const React = window.React;` and `const { ... } = (window.Remotion || {});`
+  - Replace trailing `return Component;` with `export default Component;`
+  - Ensure `window.React` and `window.Remotion` are populated from app imports (`import * as Remotion from 'remotion'`).
+- Result: Share page correctly loads both TSX scenes (client-compiled) and precompiled JS scenes (Lambda-style) without server/DB changes.
+- Next: Consider emitting a dual artifact in DB (Lambda `jsCode_function` + ESM `jsCode_esm`) to avoid client-side adaptation, and add an evaluation in `/src/lib/evals/` to assert share playback across artifact types.
+
+## 2025-09-21 – Export QA automation plan
+- Added `n8n-export-gemini-analysis.md` outlining a poll-based n8n workflow that watches `export_analytics` completions, uploads MP4s to Gemini for qualitative review, and emails the findings plus playback link.
+- Confirmed Neon schema (exports + users) provides everything needed to hydrate analysis context without extra app changes; documented fallback paths if Gemini upload or email fails.
+
+## 2025-09-21 – Bulk brand customization workflow
+- Authored `bulk-brand-customization-workflow.md` outlining how n8n orchestrates brand scraping, project cloning, and render queueing for 200 personalized exports.
+- Catalogued service gaps: service-token access for brand extraction, new `BulkBrandRenderer` helper, and render job throttling.
+
+## 2025-09-21 – Token-driven brand variants
+- Authored deep dive (`token-driven-brand-variants.md`) detailing how to shift from per-scene LLM rewrites to brand JSON driven renders, plus trade-offs across storage, orchestration, and testing.

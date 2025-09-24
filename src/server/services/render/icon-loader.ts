@@ -6,28 +6,48 @@ import type { IconifyJSON } from '@iconify/types';
 import { getIconData, iconToSVG, replaceIDs } from '@iconify/utils';
 import { uploadFile, getPublicUrl, fileExists } from '../../../../packages/r2';
 
+function ensureIconifyJSON(payload: unknown, source: string): IconifyJSON {
+  if (
+    payload &&
+    typeof payload === 'object' &&
+    typeof (payload as { prefix?: unknown }).prefix === 'string' &&
+    typeof (payload as { icons?: unknown }).icons === 'object'
+  ) {
+    return payload as IconifyJSON;
+  }
+  throw new Error(`[Icon Loader] Unexpected icon payload from ${source}`);
+}
+
+const loadIconSet = (label: string, importer: () => Promise<unknown>) => {
+  return async (): Promise<IconifyJSON> => {
+    const mod = await importer();
+    const payload = (mod as { default?: unknown })?.default ?? mod;
+    return ensureIconifyJSON(payload, label);
+  };
+};
+
 // Lazy load icon sets to avoid loading unused sets
 const iconSetLoaders: Record<string, () => Promise<IconifyJSON>> = {
   // Primary icon sets
-  mdi: () => import('@iconify-json/mdi/icons.json').then(m => m.default || m),
-  'material-symbols': () => import('@iconify-json/material-symbols/icons.json').then(m => m.default || m),
-  lucide: () => import('@iconify-json/lucide/icons.json').then(m => m.default || m),
-  carbon: () => import('@iconify-json/carbon/icons.json').then(m => m.default || m),
-  tabler: () => import('@iconify-json/tabler/icons.json').then(m => m.default || m),
-  
+  mdi: loadIconSet('mdi', () => import('@iconify-json/mdi/icons.json')),
+  'material-symbols': loadIconSet('material-symbols', () => import('@iconify-json/material-symbols/icons.json')),
+  lucide: loadIconSet('lucide', () => import('@iconify-json/lucide/icons.json')),
+  carbon: loadIconSet('carbon', () => import('@iconify-json/carbon/icons.json')),
+  tabler: loadIconSet('tabler', () => import('@iconify-json/tabler/icons.json')),
+
   // Additional icon sets found in codebase
-  'simple-icons': () => import('@iconify-json/simple-icons/icons.json').then(m => m.default || m),
-  heroicons: () => import('@iconify-json/heroicons/icons.json').then(m => m.default || m),
-  healthicons: () => import('@iconify-json/healthicons/icons.json').then(m => m.default || m),
-  bi: () => import('@iconify-json/bi/icons.json').then(m => m.default || m),
-  codicon: () => import('@iconify-json/codicon/icons.json').then(m => m.default || m),
-  devicon: () => import('@iconify-json/devicon/icons.json').then(m => m.default || m),
-  'fa6-brands': () => import('@iconify-json/fa6-brands/icons.json').then(m => m.default || m),
-  'fa6-solid': () => import('@iconify-json/fa6-solid/icons.json').then(m => m.default || m),
-  logos: () => import('@iconify-json/logos/icons.json').then(m => m.default || m),
-  octicon: () => import('@iconify-json/octicon/icons.json').then(m => m.default || m),
-  'akar-icons': () => import('@iconify-json/akar-icons/icons.json').then(m => m.default || m),
-  ic: () => import('@iconify-json/ic/icons.json').then(m => m.default || m),
+  'simple-icons': loadIconSet('simple-icons', () => import('@iconify-json/simple-icons/icons.json')),
+  heroicons: loadIconSet('heroicons', () => import('@iconify-json/heroicons/icons.json')),
+  healthicons: loadIconSet('healthicons', () => import('@iconify-json/healthicons/icons.json')),
+  bi: loadIconSet('bi', () => import('@iconify-json/bi/icons.json')),
+  codicon: loadIconSet('codicon', () => import('@iconify-json/codicon/icons.json')),
+  devicon: loadIconSet('devicon', () => import('@iconify-json/devicon/icons.json')),
+  'fa6-brands': loadIconSet('fa6-brands', () => import('@iconify-json/fa6-brands/icons.json')),
+  'fa6-solid': loadIconSet('fa6-solid', () => import('@iconify-json/fa6-solid/icons.json')),
+  logos: loadIconSet('logos', () => import('@iconify-json/logos/icons.json')),
+  octicon: loadIconSet('octicon', () => import('@iconify-json/octicon/icons.json')),
+  'akar-icons': loadIconSet('akar-icons', () => import('@iconify-json/akar-icons/icons.json')),
+  ic: loadIconSet('ic', () => import('@iconify-json/ic/icons.json')),
 };
 
 // Cache loaded icon sets to avoid reloading

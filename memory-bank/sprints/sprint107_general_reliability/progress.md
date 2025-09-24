@@ -118,6 +118,22 @@ Audio in the live preview ignored timeline offset and total video duration, star
 ### Next
 - Optional: Persist waveform peaks to IndexedDB for instant timelines across sessions.
 
+## 2025-09-24 - Marketing homepage cleanup
+
+### Change
+- Removed the Product Hunt featured badge embed from `src/app/(marketing)/home/page.tsx` to keep the hero CTA focused now that the launch campaign wrapped.
+
+### Result
+- Above-the-fold layout remains balanced; primary CTA and hero copy stay centered without the external widget.
+
+## 2025-09-24 - Marketing OG metadata refresh
+
+### Change
+- Updated `src/app/layout.tsx` metadata so Open Graph/Twitter cards share the "Bazaar – AI Video Generator for Software Demos" title, refreshed description, and the latest hosted marketing image.
+
+### Result
+- Social previews now match current positioning and render with the correct thumbnail across platforms.
+
 ## 2025-09-11 - ChatPanel Horizontal Overflow Fix
 
 ### Issue
@@ -264,3 +280,33 @@ The system was over-engineered. We were trying to "fix" code that was already co
 **Success**: All goals met or exceeded
 
 The most important fix was the simplest: **Stop breaking working code.**
+
+---
+
+## 2025-09-16: Share Flow Polish
+
+- Prevented project header Share button from opening the share page after copy.
+- Ensures clipboard-only behavior to keep users inside the editor while they distribute links.
+
+## 2025-09-16: Preview Audio Restoration
+
+- Rewired `buildComposite.ts` single- and multi-scene wrappers to read audio from Remotion Player props with a window fallback.
+- Fixes silent in-browser previews when `window.projectAudio` is stripped, while exports already carried sound.
+- Ensured `RemotionPreview.tsx` unlocks audio synchronously on pointer gestures with a document-level listener, so Chrome accepts the gesture and plays audio immediately.
+
+## 2025-09-16: Media Plan Null Safety
+
+- Added guard in `MediaPlanService.resolvePlan` to tolerate tool decisions without a `mediaPlan`.
+- Prevents staging crash (`Cannot read properties of undefined (reading 'imagesOrdered')`) when Brain selects `addAudio` or other tools that skip media planning.
+
+## 2025-09-16: Honor Brain Tool Selection
+
+- Removed the helper override that auto-swapped `addScene` to `addAudio` whenever `audioUrls` were present.
+- Restores ability to add scenes after uploading audio; Brain stays in control of tool choice.
+
+## 2025-09-21: Auto-generated title propagation
+
+- Debugged reports where SSE logs confirmed a generated title but the workspace header stayed on the fallback numbering.
+- Found the client `title_updated` handler only invalidated queries, so React Query kept serving the cached "Untitled" title to `GenerateWorkspaceRoot` until a manual refetch.
+- Added optimistic cache updates for both `project.getById` and `project.list` before invalidation so the header updates instantly while still syncing with the server.
+- ESLint run (`npx eslint src/hooks/use-sse-generation.ts`) is still blocked in this sandbox by the `structuredClone` requirement; needs rerun once tooling allows it.

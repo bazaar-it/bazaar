@@ -1,0 +1,375 @@
+Pre-Merge Smoke Checklist
+
+  1. Project Setup
+      - Create a fresh project (or duplicate an existing one) on dev.
+      - Confirm the console shows [project.create] and initial VideoState hydration logs.
+  2. Media Panel Upload
+      - Upload an image via Media Panel.
+      - Expected console:
+          - [UploadsPanel] upload (client)
+          - [AssetContext] Successfully linked asset … on save
+          - If fallback needed: [AssetContext] Fallback link insert …
+      - Verify the image appears in Media Panel and projectAssets table (dev DB).
+  3. Insertion Paths
+      - Media Panel Insert: click the newly uploaded asset → expect [MediaPanel] insert and
+  [assetContext.linkAssetToProject] logs.
+      - Chat Drop: drag the same asset from Media Panel into Chat input; watch for the auto-link logs:
+          - [ChatPanelG] drop → [AssetContext] Linked existing asset …
+      - Chat Paste: copy the asset’s URL, paste into the chat input → expect [ChatPanelG] paste and the
+  same auto-link success log.
+      - After each insertion, check the tRPC mutation logs in terminal:
+          - project.linkAssetToProject mutation output with projectId/assetId.
+  4. Media-Plan Generation (Recreate)
+      - With the newly linked UI screenshot, issue a prompt like “Animate this UI” in chat.
+      - Expect the orchestrator logs you saw in the prod replay:
+          - [CONTEXT BUILDER] Found X persistent assets
+          - 🎯 [NEW INTENT ANALYZER] … metadata hints
+          - 🧠 [NEW ORCHESTRATOR][MediaPlan] Using planned media { images: 1 … }
+          - Resolved media should show imageAction: "recreate" and no plan-skipped.
+      - Validate that the tool executes (e.g., editScene or addScene) and the scene updates.
+  5. Media-Plan Generation (Embed)
+      - Upload a photo-like asset (hint:embed) and prompt “Use this as background”.
+      - Expect [NEW ORCHESTRATOR][MediaPlan] … imageAction: "embed" and the tool context to include
+  the asset.
+      - Confirm the scene/tool output reflects an embedded background.
+  6. Delete All Scenes Fallback
+      - Delete every scene in the project.
+      - Console should show [VideoState] scenes updated plus the Preview component log:
+          - [RemotionPreview] No scenes left; compiling placeholder.
+      - Verify the preview switches to the placeholder immediately (no stale scene).
+  7. Shared Player Smoke
+      - Publish or create a share link for the project.
+      - Open /share/[id] and /share/[id]/optimized locally.
+      - Watch for [ShareVideoPlayer] load logs and confirm playback (simulated video/placeholder).
+      - Ensure no hydration errors in the console.
+  8. Prod Media-Plan Replay Sanity
+      - Already ran logs/media-plan-prod-new.json; review the four requests with skippedPlan > 0.
+      - Optionally re-run with --limit 20 after any fixes, expecting skippedPlan = 0 when ready to
+  enforce.
+  9. TypeScript & Lint
+      - Bring npm run typecheck to 0 errors (cleanup legacy scenes/tests or exclude them).
+      - Run npm run lint once typecheck passes.
+  10. Documentation
+      - Record findings in memory-bank/progress.md and the active sprint progress file (Sprint 116).
+
+
+
+
+
+2. Media Panel Upload
+      - Upload an image via Media Panel.
+    
+      - Expected console:
+          - [UploadsPanel] upload (client)
+          - [AssetContext] Successfully linked asset … on save
+          - If fallback needed: [AssetContext] Fallback link insert …
+      - Verify the image appears in Media Panel and projectAssets table (dev DB).
+Creating HTTP-based fallback connection
+ ✓ Compiled /api/upload in 1586ms (11287 modules)
+[DB] Using HTTP-based connection (pooling not available)
+[DB] Creating HTTP-based fallback connection
+[auth][warn][debug-enabled] Read more: https://warnings.authjs.dev#debug-enabled
+[Upload] Processing image upload: {
+  fileName: 'Screenshot 2025-09-18 at 22.07.13.png',
+  fileSize: 2059053,
+  fileType: 'image/png',
+  projectId: '12a79a20-a6ff-46e8-9bf6-60544fdd8926',
+  userId: 'b0f9c12d-a3e5-4169-aa66-ee860e6977aa'
+}
+[Upload] ✅ Image uploaded successfully: {
+  originalName: 'Screenshot 2025-09-18 at 22.07.13.png',
+  originalNameSanitized: 'Screenshot 2025-09-18 at 22.07.13.png',
+  uniqueKey: 'projects/12a79a20-a6ff-46e8-9bf6-60544fdd8926/images/1758709790384-b998d1da-1c0a-40b2-979b-5886b6f5703b.png',
+  publicUrl: 'https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/12a79a20-a6ff-46e8-9bf6-60544fdd8926/im...',
+  fileSize: 2059053
+}
+[AssetContext] Successfully linked asset c20bb531-ee8f-41d9-a85d-0c9261dc2eb0 to project 12a79a20-a6ff-46e8-9bf6-60544fdd8926
+[Upload] 💾 Asset saved to context: {
+  assetId: 'c20bb531-ee8f-41d9-a85d-0c9261dc2eb0',
+  type: 'image',
+  projectId: '12a79a20-a6ff-46e8-9bf6-60544fdd8926'
+}
+🎯 [Upload] Starting metadata analysis for asset: c20bb531-ee8f-41d9-a85d-0c9261dc2eb0
+[APIKeyRotation] Initialized 3 Anthropic API keys
+[APIKeyRotation] Initialized 3 OpenAI API keys
+🔍 [MediaMetadata] Starting analysis for asset: c20bb531-ee8f-41d9-a85d-0c9261dc2eb0
+🔍 [MediaMetadata] Image URL: https://pub-f970b0ef1f2e418e8d902ba0973ff5cf.r2.dev/projects/12a79a20-a6ff-46e8-9bf6-60544fdd8926/images/1758709790384-b998d1da-1c0a-40b2-979b-5886b6f5703b.png
+ POST /api/upload 200 in 3463ms
+🔍 [MediaMetadata] Using model: openai gpt-4o-mini
+🔍 [MediaMetadata] Sending image to AI for analysis...
+[APIKeyRotation] Using openai Primary
+ GET /api/live-status 200 in 597ms
+ GET /api/live-status 200 in 978ms
+[APIKeyRotation] Initialized 3 Anthropic API keys
+[APIKeyRotation] Initialized 3 OpenAI API keys
+ GET /api/trpc/project.getUserUploads?batch=1&input=%7B%220%22%3A%7B%22json%22%3Anull%2C%22meta%22%3A%7B%22values%22%3A%5B%22undefined%22%5D%7D%7D%7D 200 in 1237ms
+[DB] Using HTTP-based connection (pooling not available)
+[DB] Creating HTTP-based fallback connection
+🔍 [MediaMetadata] Raw AI response: {
+  "kind": "ui",
+  "detectedText": [
+    "Discover The Best AI Websites & Tools",
+    "26745 AIs and 459 categories in the best AI tools directory.",
+    "Search by AI, e.g. Video Translation AI Tool"
+  ],
+  "brandText": "Toolify.ai",
+  "dominantColors": ["#6a5acd", "#ffffff", "#f0f0f0"],
+  "layout": "dashboard",
+  "hints": {
+    "embedRecommended": false,
+    "recreateRecommended": true
+  },
+  "confidence": 0.95
+}
+🔍 [MediaMetadata] Parsed metadata: {
+  kind: 'ui',
+  detectedText: [
+    'Discover The Best AI Websites & Tools',
+    '26745 AIs and 459 categories in the best AI tools directory.',
+    'Search by AI, e.g. Video Translation AI Tool'
+  ],
+  brandText: 'Toolify.ai',
+  dominantColors: [ '#6a5acd', '#ffffff', '#f0f0f0' ],
+  layout: 'dashboard',
+  hints: { embedRecommended: false, recreateRecommended: true },
+  confidence: 0.95
+}
+🔍 [MediaMetadata] Detected kind: ui
+🔍 [MediaMetadata] Detected layout: dashboard
+🔍 [MediaMetadata] Detected colors: [ '#6a5acd', '#ffffff', '#f0f0f0' ]
+🔍 [MediaMetadata] Text detected in image
+🔍 [MediaMetadata] AI recommends: RECREATE
+🔍 [MediaMetadata] Generated tags: [
+  'kind:ui',
+  'layout:dashboard',
+  'color:#6a5acd',
+  'color:#ffffff',
+  'color:#f0f0f0',
+  'hasText',
+  'hint:recreate'
+]
+🔍 [MediaMetadata] Merged tags (old + new): [
+  'kind:ui',
+  'layout:dashboard',
+  'color:#6a5acd',
+  'color:#ffffff',
+  'color:#f0f0f0',
+  'hasText',
+  'hint:recreate'
+]
+✅ [MediaMetadata] Successfully tagged asset c20bb531-ee8f-41d9-a85d-0c9261dc2eb0 with tags: [
+  'kind:ui',
+  'layout:dashboard',
+  'color:#6a5acd',
+  'color:#ffffff',
+  'color:#f0f0f0',
+  'hasText',
+  'hint:recreate'
+]
+✅ [Upload] Metadata analysis complete for asset: c20bb531-ee8f-41d9-a85d-0c9261dc2eb0
+[APIKeyRotation] Initialized 3 Anthropic API keys
+[APIKeyRotation] Initialized 3 OpenAI API keys
+ GET /api/trpc/project.getUserUploads?batch=1&input=%7B%220%22%3A%7B%22json%22%3Anull%2C%22meta%22%3A%7B%22values%22%3A%5B%22undefined%22%5D%7D%7D%7D 200 in 886ms
+[DB] Using HTTP-based connection (pooling not available)
+[DB] Creating HTTP-based fallback connection
+[APIKeyRotation] Initialized 3 Anthropic API keys
+[APIKeyRotation] Initialized 3 OpenAI API keys
+ GET /api/trpc/project.getUserUploads?batch=1&input=%7B%220%22%3A%7B%22json%22%3Anull%2C%22meta%22%3A%7B%22values%22%3A%5B%22undefined%22%5D%7D%7D%7D 200 in 1004ms
+[DB] Using HTTP-based connection (pooling not available)
+[DB] Creating HTTP-based fallback connection
+
+
+
+
+  3. Insertion Paths
+      - Media Panel Insert: click the newly uploaded asset → expect [MediaPanel] insert and
+  [assetContext.linkAssetToProject] logs.
+      - Chat Drop: drag the same asset from Media Panel into Chat input; watch for the auto-link logs:
+          - [ChatPanelG] drop → [AssetContext] Linked existing asset …
+      - Chat Paste: copy the asset’s URL, paste into the chat input → expect [ChatPanelG] paste and the
+  same auto-link success log.
+      - After each insertion, check the tRPC mutation logs in terminal:
+          - project.linkAssetToProject mutation output with projectId/assetId.
+
+ << query #33 project.getUserUploads 
+Object
+loggerLink.mjs:124  >> mutation #34 project.linkAssetToProject 
+Object
+context
+: 
+[[Prototype]]
+: 
+Object
+input
+: 
+assetId
+: 
+"c20bb531-ee8f-41d9-a85d-0c9261dc2eb0"
+projectId
+: 
+"12a79a20-a6ff-46e8-9bf6-60544fdd8926"
+[[Prototype]]
+: 
+Object
+[[Prototype]]
+: 
+Object
+MediaPanel.tsx:83  >> query #35 project.getUserUploads 
+Object
+context
+: 
+[[Prototype]]
+: 
+Object
+input
+: 
+undefined
+[[Prototype]]
+: 
+Object
+loggerLink.mjs:124  << mutation #34 project.linkAssetToProject 
+Object
+context
+: 
+[[Prototype]]
+: 
+Object
+elapsedMs
+: 
+1387
+input
+: 
+assetId
+: 
+"c20bb531-ee8f-41d9-a85d-0c9261dc2eb0"
+projectId
+: 
+"12a79a20-a6ff-46e8-9bf6-60544fdd8926"
+[[Prototype]]
+: 
+Object
+result
+: 
+context
+: 
+response
+: 
+Response
+body
+: 
+(...)
+bodyUsed
+: 
+true
+headers
+: 
+Headers {}
+ok
+: 
+true
+redirected
+: 
+false
+status
+: 
+200
+statusText
+: 
+"OK"
+type
+: 
+"basic"
+url
+: 
+"http://localhost:3000/api/trpc/project.linkAssetToProject?batch=1"
+[[Prototype]]
+: 
+Response
+[[Prototype]]
+: 
+Object
+result
+: 
+data
+: 
+success
+: 
+true
+[[Prototype]]
+: 
+Object
+[[Prototype]]
+: 
+Object
+[[Prototype]]
+: 
+Object
+[[Prototype]]
+: 
+Object
+loggerLink.mjs:124  >> mutation #36 project.linkAssetToProject 
+Object
+context
+: 
+[[Prototype]]
+: 
+Object
+input
+: 
+assetId
+: 
+"c20bb531-ee8f-41d9-a85d-0c9261dc2eb0"
+projectId
+: 
+"12a79a20-a6ff-46e8-9bf6-60544fdd8926"
+[[Prototype]]
+: 
+Object
+[[Prototype]]
+: 
+Object
+loggerLink.mjs:124  << query #35 project.getUserUploads 
+Object
+loggerLink.mjs:124  << mutation #36 project.linkAssetToProject 
+Object
+context
+: 
+{}
+elapsedMs
+: 
+1136
+input
+: 
+assetId
+: 
+"c20bb531-ee8f-41d9-a85d-0c9261dc2eb0"
+projectId
+: 
+"12a79a20-a6ff-46e8-9bf6-60544fdd8926"
+[[Prototype]]
+: 
+Object
+result
+: 
+context
+: 
+response
+: 
+Response {type: 'basic', url: 'http://localhost:3000/api/trpc/project.linkAssetToProject?batch=1', redirected: false, status: 200, ok: true, …}
+[[Prototype]]
+: 
+Object
+result
+: 
+data
+: 
+{success: true}
+[[Prototype]]
+: 
+Object
+[[Prototype]]
+: 
+Object
+[[Prototype]]
+: 
+Object

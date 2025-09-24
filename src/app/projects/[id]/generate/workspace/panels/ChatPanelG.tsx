@@ -135,6 +135,110 @@ export default function ChatPanelG({
   
   // Fetch user assets for @mentions
   const { data: userAssets } = api.project.getUserUploads.useQuery();
+  const linkAssetMutation = api.project.linkAssetToProject.useMutation();
+  const linkedAssetIdsRef = useRef<Set<string>>(new Set());
+  const pendingLinkPromisesRef = useRef<Set<Promise<void>>>(new Set());
+
+  const trackLinkPromise = useCallback((promise: Promise<void> | undefined | null) => {
+    if (!promise) return promise ?? undefined;
+    pendingLinkPromisesRef.current.add(promise);
+    promise.finally(() => {
+      pendingLinkPromisesRef.current.delete(promise);
+    });
+    return promise;
+  }, []);
+
+  const normalizeAssetUrl = useCallback((url?: string | null) => {
+    if (!url) return '';
+    try {
+      const parsed = new URL(url, typeof window !== 'undefined' ? window.location.href : undefined);
+      return `${parsed.origin}${parsed.pathname}`;
+    } catch {
+      const hashStripped = url.split('#')[0] ?? url;
+      return hashStripped.split('?')[0] ?? hashStripped;
+    }
+  }, []);
+
+  const assetUrlToId = useMemo(() => {
+    const map = new Map<string, string>();
+    if (userAssets?.assets) {
+      for (const asset of userAssets.assets) {
+        if (!asset?.url || !asset?.id) continue;
+        map.set(asset.url, asset.id);
+        const normalized = normalizeAssetUrl(asset.url);
+        if (normalized && normalized !== asset.url) {
+          map.set(normalized, asset.id);
+        }
+      }
+    }
+    return map;
+  }, [normalizeAssetUrl, userAssets]);
+
+  const linkAssetById = useCallback(async (assetId?: string | null) => {
+    if (!assetId) return;
+    if (linkedAssetIdsRef.current.has(assetId)) return;
+    linkedAssetIdsRef.current.add(assetId);
+    try {
+      await linkAssetMutation.mutateAsync({ projectId, assetId });
+    } catch (error) {
+      console.warn('[ChatPanelG] Failed to link asset to project:', error);
+      linkedAssetIdsRef.current.delete(assetId);
+    }
+  }, [linkAssetMutation, projectId]);
+
+  const linkAssetByUrl = useCallback(async (url?: string | null) => {
+    if (!url) return;
+    const direct = assetUrlToId.get(url);
+    const normalized = assetUrlToId.get(normalizeAssetUrl(url));
+    const assetId = direct ?? normalized;
+    if (assetId) {
+      await linkAssetById(assetId);
+    }
+  }, [assetUrlToId, normalizeAssetUrl, linkAssetById]);
+
+  const linkAssetFromTransfer = useCallback((dataTransfer: DataTransfer | null, fallbackUrl?: string | null) => {
+    const promise = (async () => {
+      if (!dataTransfer) {
+        await linkAssetByUrl(fallbackUrl ?? undefined);
+        return;
+      }
+
+      let candidateUrl = fallbackUrl ?? undefined;
+      let assetId: string | undefined;
+
+      const jsonPayload = dataTransfer.getData('application/bazaar-asset');
+      if (jsonPayload) {
+        try {
+          const parsed = JSON.parse(jsonPayload);
+          if (parsed?.id) assetId = parsed.id;
+          if (!candidateUrl && typeof parsed?.url === 'string') candidateUrl = parsed.url;
+        } catch {
+          // ignore malformed payloads
+        }
+      }
+
+      const explicitId = dataTransfer.getData('asset/id');
+      if (explicitId) {
+        assetId = explicitId;
+      }
+
+      if (assetId) {
+        await linkAssetById(assetId);
+        return;
+      }
+
+      if (!candidateUrl) {
+        const transferUrl = dataTransfer.getData('text/plain') || dataTransfer.getData('text/uri-list');
+        if (transferUrl) {
+          candidateUrl = transferUrl;
+        }
+      }
+
+      await linkAssetByUrl(candidateUrl);
+    })();
+
+    return trackLinkPromise(promise);
+  }, [linkAssetById, linkAssetByUrl, trackLinkPromise]);
   
 
   
@@ -144,7 +248,7 @@ export default function ChatPanelG({
     { forceRefresh: false },
     { enabled: !!githubConnection?.isConnected }
   );
-  
+
   // Get video state and current scenes
   const { getCurrentProps, replace, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene, deleteScene, removeMessage, setSceneGenerating, updateProjectAudio, syncDbMessages } = useVideoState();
   const currentProps = getCurrentProps();
@@ -255,9 +359,18 @@ export default function ChatPanelG({
       staleTime: 30000, // Cache for 30 seconds
     }
   );
-  
+
   // 🚨 NEW: Get tRPC utils for cache invalidation
   const utils = api.useUtils();
+
+  // Ensure any cached uploaded URLs from the user library are linked to the current project
+  useEffect(() => {
+    uploadedImages.forEach((media) => {
+      if (media.url) {
+        trackLinkPromise(linkAssetByUrl(media.url));
+      }
+    });
+  }, [linkAssetByUrl, trackLinkPromise, uploadedImages]);
   
   // Use auto-fix hook early to ensure consistent hook order
   // IMPORTANT: This must be called before any conditional logic
@@ -395,6 +508,21 @@ export default function ChatPanelG({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim() || isGenerating) return;
+
+    // Block sending while any attachments are still uploading to avoid losing media
+    const uploadingCount = uploadedImages.filter((m) => m.status === 'uploading').length;
+    if (uploadingCount > 0) {
+      toast.warning(`Uploading ${uploadingCount} file${uploadingCount > 1 ? 's' : ''}… I\'ll send once done.`);
+      return;
+    }
+
+    if (pendingLinkPromisesRef.current.size > 0) {
+      try {
+        await Promise.all(Array.from(pendingLinkPromisesRef.current));
+      } catch (error) {
+        console.warn('[ChatPanelG] Failed to link assets before submit:', error);
+      }
+    }
 
     let trimmedMessage = message.trim();
     const originalMessage = trimmedMessage; // Keep original for display
@@ -697,6 +825,21 @@ export default function ChatPanelG({
     }
   }, [userAssets, projectId, setDraftMessage]);
 
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const text = e.clipboardData?.getData('text/plain');
+    if (!text) return;
+
+    const potentialUrls = text.match(/https?:\/\/[^\s]+/g);
+    if (!potentialUrls) return;
+
+    potentialUrls.forEach((rawUrl) => {
+      const sanitized = rawUrl.replace(/[)\],.;]+$/, '');
+      if (sanitized.includes('.r2.dev/')) {
+        trackLinkPromise(linkAssetByUrl(sanitized));
+      }
+    });
+  }, [linkAssetByUrl, trackLinkPromise]);
+
   // ✅ NEW: Handle edit scene plan - copy prompt to input
   const handleEditScenePlan = useCallback((prompt: string) => {
     setMessage(prompt);
@@ -922,11 +1065,12 @@ export default function ChatPanelG({
         // Use the actual name if provided, otherwise fallback to URL
         const fileName = name || url.split('/').pop() || 'media';
         setUploadedImages((prev) => ([...prev, { id, file: new File([], fileName), status: 'uploaded', url, type, isLoaded: true }]));
+        trackLinkPromise(linkAssetByUrl(url));
       }
     };
     window.addEventListener('chat-insert-media-url', handler as EventListener);
     return () => window.removeEventListener('chat-insert-media-url', handler as EventListener);
-  }, []);
+  }, [linkAssetByUrl, trackLinkPromise]);
 
   // Wrap drag handlers to manage isDragOver state
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -1040,10 +1184,11 @@ export default function ChatPanelG({
         const file = new File([], fileName, { type: isAudio ? 'audio/mpeg' : isVideo ? 'video/mp4' : 'image/jpeg' });
         
         setUploadedImages((prev) => ([...prev, { id, file, status: 'uploaded', url, type, isLoaded: true }]));
+        void linkAssetFromTransfer(e.dataTransfer, url);
       }
     } catch {}
     setIsDragOver(false);
-  }, [imageHandlers, setUploadedImages]);
+  }, [imageHandlers, linkAssetFromTransfer, setUploadedImages]);
 
   // Handle audio extraction from video
   const handleAudioExtract = useCallback(async (videoMedia: UploadedMedia) => {
@@ -1817,6 +1962,7 @@ export default function ChatPanelG({
                   value={message}
                   onChange={handleMessageChange}
                   onKeyDown={handleKeyDown}
+                  onPaste={handlePaste}
                   placeholder={!message ? "Describe what you want to create" : ""}
                   className={cn(
                     "w-full resize-none bg-transparent border-none",

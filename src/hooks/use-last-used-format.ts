@@ -6,13 +6,23 @@ import { api } from "~/trpc/react";
 
 const STORAGE_KEY = 'bazaar-last-format';
 
-export function useLastUsedFormat() {
+interface Options {
+  /**
+   * Whether we should fall back to querying the project list when localStorage
+   * does not contain a persisted format. Disable for flows that need to avoid
+   * the heavy project list query (e.g. quick-create).
+   */
+  enableRemoteFallback?: boolean;
+}
+
+export function useLastUsedFormat(options?: Options) {
+  const enableRemoteFallback = options?.enableRemoteFallback ?? true;
   const [lastFormat, setLastFormat] = useState<VideoFormat>('landscape');
   const [isLoaded, setIsLoaded] = useState(false);
   
   // Query recent projects to infer format if localStorage is empty
   const { data: recentProjects } = api.project.list.useQuery(undefined, {
-    enabled: !isLoaded, // Only query if we haven't loaded from localStorage yet
+    enabled: enableRemoteFallback && !isLoaded,
   });
 
   useEffect(() => {

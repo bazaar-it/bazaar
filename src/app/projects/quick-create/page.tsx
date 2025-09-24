@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { api } from "~/trpc/react";
@@ -9,15 +9,34 @@ import { useLastUsedFormat } from "~/hooks/use-last-used-format";
 export default function QuickCreatePage() {
   const router = useRouter();
   const { data: session, status } = useSession();
-  const { lastFormat } = useLastUsedFormat();
+  const { lastFormat } = useLastUsedFormat({ enableRemoteFallback: false });
   const hasRedirectedRef = useRef(false);
-  const createTimerRef = useRef<number | null>(null);
+  const redirectTargetRef = useRef<string | null>(null);
+  const pruneScheduledRef = useRef(false);
+  const [cachedProjectId, setCachedProjectId] = useState<string | null>(null);
+  const [isCacheLoaded, setIsCacheLoaded] = useState(false);
   
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      setIsCacheLoaded(true);
+      return;
+    }
+    try {
+      const stored = window.localStorage.getItem("lastProjectId");
+      setCachedProjectId(stored && stored.length > 0 ? stored : null);
+    } catch (error) {
+      console.warn('[QuickCreate] Failed to read lastProjectId from localStorage:', error);
+      setCachedProjectId(null);
+    } finally {
+      setIsCacheLoaded(true);
+    }
+  }, []);
+
   // Create project mutation
   const createProjectMutation = api.project.create.useMutation({
     onSuccess: (result) => {
       console.log(`[QuickCreate] Project created, redirecting to: /projects/${result.projectId}/generate`);
-      router.push(`/projects/${result.projectId}/generate`);
+      redirectTo(result.projectId, 'created');
     },
     onError: (error) => {
       console.error("[QuickCreate] Failed to create project:", error);
@@ -32,11 +51,32 @@ export default function QuickCreatePage() {
     refetchOnWindowFocus: false,
   });
 
+  const redirectTo = useCallback((projectId: string, reason: 'cached' | 'latest' | 'created') => {
+    if (!projectId) return;
+    if (hasRedirectedRef.current && redirectTargetRef.current === projectId) return;
+
+    hasRedirectedRef.current = true;
+    redirectTargetRef.current = projectId;
+
+    const path = `/projects/${projectId}/generate`;
+    const method = reason === 'created' ? router.push : router.replace;
+    console.log(`[QuickCreate] Redirecting (${reason}) to: ${path}`);
+    method(path);
+
+    if (!pruneScheduledRef.current) {
+      pruneScheduledRef.current = true;
+      queueMicrotask(() => {
+        // Run prune in background after navigation is triggered
+        pruneMutation.mutate(undefined, { onError: (err) => console.warn('[QuickCreate] pruneEmpty failed:', err) });
+      });
+    }
+  }, [router, pruneMutation]);
+
   // (Optional) We no longer rely on lastProjectId for speed — prefer latestId fast path.
 
   useEffect(() => {
     // Simple, direct logic - no complex dependencies
-    
+
     // 1. Wait for auth to load
     if (status === "loading") {
       console.log('[QuickCreate] Waiting for auth...');
@@ -50,41 +90,49 @@ export default function QuickCreatePage() {
       return;
     }
 
-    // 3. If already creating or created, wait
-    if (createProjectMutation.isPending || createProjectMutation.isSuccess) {
-      console.log('[QuickCreate] Already creating or created');
+    if (!isCacheLoaded) {
       return;
     }
 
-    // 4. First, prune empty projects in background (non-blocking)
-    if (!pruneMutation.isPending && !pruneMutation.isSuccess) {
-      pruneMutation.mutate();
-    }
-
-    // 5. Prefer redirect to latest if available quickly
-    if (latestIdQuery.data && !hasRedirectedRef.current) {
-      hasRedirectedRef.current = true;
-      if (createTimerRef.current) { clearTimeout(createTimerRef.current); createTimerRef.current = null; }
-      console.log('[QuickCreate] Redirecting to latest project:', latestIdQuery.data);
-      router.replace(`/projects/${latestIdQuery.data}/generate`);
+    // 3. If we already redirected (cached or mutation), nothing else to do
+    if (hasRedirectedRef.current) {
       return;
     }
 
-    // 6. Schedule creation fallback after a short window (prevents stalls on large accounts)
-    if (!hasRedirectedRef.current && !createProjectMutation.isPending && !createProjectMutation.isSuccess && createTimerRef.current == null) {
-      createTimerRef.current = window.setTimeout(() => {
-        if (!hasRedirectedRef.current && !createProjectMutation.isPending && !createProjectMutation.isSuccess) {
-          hasRedirectedRef.current = true;
-          console.log('[QuickCreate] Creating new project (fallback) with format:', lastFormat);
-          createProjectMutation.mutate({ format: lastFormat });
-        }
-      }, 600); // 600ms window for latestId fast path
+    // 4. Cached project wins for instant redirect
+    if (cachedProjectId) {
+      redirectTo(cachedProjectId, 'cached');
+      return;
     }
 
-    return () => {
-      if (createTimerRef.current) { clearTimeout(createTimerRef.current); createTimerRef.current = null; }
-    };
-  }, [status, session, latestIdQuery.data, latestIdQuery.isLoading, createProjectMutation.isPending, createProjectMutation.isSuccess, lastFormat, router, pruneMutation.isPending, pruneMutation.isSuccess]);
+    // 5. If server responded with a latest project, redirect there
+    if (latestIdQuery.data) {
+      redirectTo(latestIdQuery.data, 'latest');
+      return;
+    }
+
+    // 6. If the query finished and there is no existing project, create one now
+    if (latestIdQuery.status === 'success' && !latestIdQuery.data && !createProjectMutation.isPending) {
+      console.log('[QuickCreate] No existing project found, creating new with format:', lastFormat);
+      createProjectMutation.mutate({ format: lastFormat });
+      return;
+    }
+
+    // 7. Handle query errors by creating a new project (best effort)
+    if (latestIdQuery.status === 'error' && !createProjectMutation.isPending) {
+      console.warn('[QuickCreate] Failed to load latest project, creating new. Error:', latestIdQuery.error);
+      createProjectMutation.mutate({ format: lastFormat });
+    }
+  }, [status, session, cachedProjectId, isCacheLoaded, latestIdQuery.data, latestIdQuery.status, createProjectMutation.isPending, lastFormat, redirectTo]);
+
+  // If we redirected based on cache and later receive a different latest ID, swap targets
+  useEffect(() => {
+    if (!latestIdQuery.data) return;
+    if (!hasRedirectedRef.current) return;
+    if (redirectTargetRef.current === latestIdQuery.data) return;
+
+    redirectTo(latestIdQuery.data, 'latest');
+  }, [latestIdQuery.data]);
 
   // Loading state
   return (

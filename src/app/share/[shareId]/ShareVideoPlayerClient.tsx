@@ -4,9 +4,10 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Player } from '@remotion/player';
 import { AbsoluteFill, Sequence } from 'remotion';
+import * as Remotion from 'remotion';
 import { transform } from 'sucrase';
 import type { InputProps } from '~/lib/types/video/input-props';
-import { LoopToggle } from '~/components/ui/LoopToggle';
+// Loop control is handled by SharePageContent; no overlay here
 
 interface ShareVideoPlayerClientProps {
   inputProps: InputProps;
@@ -30,12 +31,37 @@ const DynamicScene: React.FC<{ code: string; sceneProps: any; isPreCompiled?: bo
             }
 
             try {
-                // Skip transformation if we already have compiled JS
-                const transformedCode = isPreCompiled ? code : transform(code, {
-                    transforms: ['typescript', 'jsx'],
-                    production: true,
-                }).code;
-                
+                // Ensure globals used by dynamic modules
+                (window as any).React = (window as any).React || React;
+                (window as any).Remotion = (window as any).Remotion || Remotion;
+
+                // Skip transformation if we already have compiled JS; adapt Lambda-compiled code to ESM
+                let transformedCode = code;
+                if (isPreCompiled) {
+                    const hasExportDefault = /export\s+default\s+/.test(code);
+                    const hasReactVar = /\b(?:const|let|var)\s+React\b/.test(code);
+                    const hasRemotionDestructure = /\bconst\s*\{[^}]*\}\s*=\s*window\.Remotion\b/.test(code);
+                    const headerParts: string[] = [];
+                    if (!hasReactVar) headerParts.push('const React = window.React;');
+                    if (!hasRemotionDestructure) headerParts.push('const { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate, spring, random, Sequence, Audio, Video, Img, staticFile } = (window.Remotion || {});');
+                    const header = headerParts.length ? headerParts.join('\n') + '\n' : '';
+
+                    if (!hasExportDefault) {
+                      const iife = `(function __bazaar_module__(){\n${code}\n})();`;
+                      transformedCode = `${header}const __bazaar_default__ = ${iife}\nexport default __bazaar_default__;`;
+                    } else {
+                      transformedCode = `${header}${code}`;
+                    }
+                } else {
+                    transformedCode = transform(code, {
+                        transforms: ['typescript', 'jsx'],
+                        production: true,
+                    }).code;
+                    if (!/\b(?:const|let|var)\s+React\b/.test(transformedCode)) {
+                      transformedCode = `const React = window.React;\n` + transformedCode;
+                    }
+                }
+
                 const blob = new Blob([transformedCode], { type: 'application/javascript' });
                 blobUrl = URL.createObjectURL(blob);
 
@@ -98,6 +124,12 @@ export default function ShareVideoPlayerClient({ inputProps, audio, isLooping, s
       }
     };
   }, [audio]);
+  
+  // Ensure React and Remotion are accessible for dynamically imported scene modules
+  useEffect(() => {
+    (window as any).React = (window as any).React || React;
+    (window as any).Remotion = (window as any).Remotion || Remotion;
+  }, []);
   
   console.log('[ShareVideoPlayerClient] Rendering with inputProps:', {
     sceneCount: inputProps?.scenes?.length || 0,

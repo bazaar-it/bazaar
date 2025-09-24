@@ -1,6 +1,12 @@
 # 🏆 Bazaar-Vid Progress Summary
 
+## 📝 Latest Update (Sep 24, 2025)
+- Sprint 110: Stood up UTM attribution sprint docs (`memory-bank/sprints/sprint110_utm/`) detailing client capture, signed cookie + NextAuth persistence, reporting SQL, success metrics (95% coverage), and staging-first rollout plan.
+
 ## 📝 Latest Update (Sep 15, 2025)
+## 📝 Latest Update (Sep 16, 2025)
+- Sprint 108/Share: Fixed "Illegal return statement" on Share page for all scenes. Root cause: Share page was importing Lambda-targeted `jsCode` which contains a top-level `return Component;` (valid for `new Function` execution), invalid in ES modules. Share player now adapts Lambda JS to ESM on-the-fly (replaces terminal return with `export default`, injects `React`/`Remotion` globals) and remains backward compatible with TSX scenes. Ensures robust playback across both artifact types without altering DB.
+- Sprint 107/Preview: Audio now rides through Remotion Player props. `buildComposite.ts` no longer depends on `window.projectAudio`; compositions read `props.audio` with a window fallback. Fixes silent previews in browsers that sandbox globals while export audio stayed intact.
 - Marketing: Added Product Hunt featured badge to homepage (under hero CTA) ahead of launch. Link opens in new tab with noopener for safety; uses official PH SVG widget.
 - Sprint 107/UX: Fixed portrait preview sizing in workspace. Reworked RemotionPreview to compute fit via ResizeObserver (min(container/comp)) and removed brittle aspect-ratio wrapper. Prevents preview from overflowing under Timeline and ensures live resize when adding side panels.
 - UX: Enabled default autoplay for preview player (new and existing projects). Player now starts automatically; audio remains gesture-unlocked per existing logic.
@@ -1087,7 +1093,87 @@ The core video generation pipeline is **production-ready** with:
  - 2025-08-30: Drafted Deep Research–powered “Make Better” design.
    - Added `memory-bank/sprints/sprint98_autofix_analysis/DEEP-RESEARCH-MAKE-BETTER-DESIGN.md`.
    - Defined plan-only Phase 1 with SSE progress and safety rails (compile → auto-fix → eval) before rollout.
- - 2025-08-30: Transition Tool design + scaffold.
-   - Added `src/tools/transition/transition.ts` and types in `src/tools/helpers/types.ts`.
-   - Documented in `memory-bank/sprints/sprint98_autofix_analysis/TRANSITION-TOOL-DESIGN.md`.
-   - Next: add Remotion overlap renderer and executor glue to apply snippets via Edit Tool.
+- 2025-08-30: Transition Tool design + scaffold.
+  - Added `src/tools/transition/transition.ts` and types in `src/tools/helpers/types.ts`.
+  - Documented in `memory-bank/sprints/sprint98_autofix_analysis/TRANSITION-TOOL-DESIGN.md`.
+  - Next: add Remotion overlap renderer and executor glue to apply snippets via Edit Tool.
+- 2025-09-16: Share link UX hardening on project page.
+  - Stopped auto-opening share URLs after copy in `src/components/AppHeader.tsx`.
+  - Keeps creators focused in the editor; copy workflows unchanged across browsers.
+- 2025-09-16: Preview audio parity with exports.
+  - Updated `src/lib/video/buildComposite.ts` to hydrate Remotion compositions from `props.audio` before falling back to `window.projectAudio`.
+  - Resolves muted preview playback when browsers isolate globals despite correct export audio.
+  - Follow-up: `RemotionPreview.tsx` now unlocks audio synchronously on pointer interaction with a document-level gesture hook, preventing Chrome's autoplay rejection.
+- 2025-09-16: Media-plan guards in orchestration.
+  - `MediaPlanService.resolvePlan` now bails when the Brain omits a plan instead of throwing on `imagesOrdered`.
+- Fixes staging crash when tools like `addAudio` skip media planning (error `Cannot read properties of undefined`).
+- Media plan suite now enforces the cross-project guardrail: pipeline aggregates `skippedPlan` hits and fails prod replays unless the new `--skip-plan-policy` flag downgrades behaviour. Added follow-up doc `sprint116_images/2025-09-22-media-plan-skip-assertion.md`.
+- Context builder now splits project assets vs. user library; orchestrator only auto-resolves `scope=project` items and logs user-library references as `plan-unlinked` (`sprint116_images/2025-09-22-asset-context-scope.md`).
+- Chat drag/paste auto-link flow: panels embed asset IDs in drag payloads and ChatPanel links user-library items on drop/paste via `linkAssetToProject` (`sprint116_images/2025-09-22-auto-linking-drag-paste.md`).
+- 2025-09-16: Respect Brain tool choice after audio uploads.
+  - Removed helper override that forced `addAudio` whenever `audioUrls` existed.
+  - Fixes regression where users with project audio couldn’t add new scenes (0 scenes generated).
+- 2025-09-16: Image workflow regression notes captured in `sprint116_images/2025-09-16-image-workflow-status.md`.
+  - Verified upload → asset-context → media-plan mapping path; added follow-up instrumentation checklist.
+- 2025-09-16: Deep dive on prompt vs. context weighting (`sprint116_images/2025-09-16-prompt-context-analysis.md`).
+  - Highlighted how attachments compete with historical assets in Brain intent decisions.
+  - Proposed deterministic keyword pre-rules, orchestration logging, and temperature tweaks to keep current user intent dominant.
+- 2025-09-16: Added `sprint116_images/image-prompt-eval-guide.md` with 30 evaluation scenarios.
+  - Canonical prompts covering embed vs. recreate, multi-attachment directives, historical asset recall, and clarification cases.
+  - Designed for regression tests and manual QA to ensure tool selection and `imageAction` stay deterministic.
+- 2025-09-16: Documented current vs. optimal image orchestration (`sprint116_images/2025-09-16-optimal-vs-current.md`).
+  - Identified gaps in deterministic intent handling, instrumentation, and UX.
+  - Outlined roadmap: keyword pre-rules, structured logging, eval harness, prompt refinements, and potential user toggles.
+- 2025-09-16: Added dev-only media-plan instrumentation (orchestrator + service emit structured logs).
+  - Logs include prompt preview, attachment counts, plan status, resolved `imageAction`, and requestId (skip in production).
+- 2025-09-16: Added CLI dry-run tool `npm run debug:media-plan` for orchestration tests without UI.
+- 2025-09-16: Added batch suite `npm run debug:media-plan-suite` (cases + prod sampling).
+- 2025-09-16: CLI harness outputs `latencyMs` and supports `--output` to persist NDJSON summaries.
+- 2025-09-16: Curated prod-based eval dataset in `scripts/data/media-plan-curated.json` (real R2 URLs + project/user IDs).
+
+2025-09-20 – Media plan prod sweep
+- Analyzed 50 prod orchestrator summaries; editScene 32 / addScene 18, recreate dominating (31/50).
+- Highlighted 21 cases where `resolvedMedia.images` > attachment count plus one null `imageAction`; noted probable `resolvePlan()` merge issue.
+- Captured findings/next steps in `memory-bank/sprints/sprint116_images/2025-09-20-prod-media-plan-analysis.md`.
+
+2025-09-20 – Media plan instrumentation follow-up
+- `mediaPlanService.resolvePlan()` now tracks URL provenance and enforces non-null `imageAction`; mp4 attachments are reclassified into `videoUrls`.
+- Orchestrator surfaces `mediaPlanDebug`; suite script supports `--focus` replay and writes debug payloads. Drift IDs stored at `logs/media-plan-drift-requests.json`.
+- Focused re-run prepared (`node --loader tsx scripts/run-media-plan-suite.ts --mode prod --focus logs/media-plan-drift-requests.json ...`), but Neon access is blocked in sandbox (ENOTFOUND).
+
+2025-09-20 – Media panel linking
+- Added backend `linkAssetToProject` mutation + MediaPanel hook so clicking an asset re-associates it with the active project before insertion.
+- Ensures reused uploads appear in project media context and future media-plan decisions show same-project provenance.
+- Logged details in `sprint116_images/2025-09-20-media-panel-linking.md`; drag-and-drop path remains a follow-up.
+
+2025-09-21 – Media plan guardrail
+- Added cross-project filter inside `mediaPlanService.resolvePlan()`; plan URLs whose bucket doesn’t match the active project are dropped and logged as `plan-skipped`.
+- Orchestrator + CLI summaries now include `skippedPlan` metrics; added notes in `sprint116_images/2025-09-21-media-plan-guardrail.md`.
+- Focused media-plan suite couldn’t rerun here (Neon DNS blocked); rerun pending in a network-enabled environment.
+
+2025-09-21 – Export QA automation workflow
+- Drafted `sprint108_one_last_export/n8n-export-gemini-analysis.md` describing n8n pipeline that watches completed exports, uploads MP4s to Gemini, and emails QA findings.
+- Verified Neon tables (`bazaar-vid_export_analytics`, `bazaar-vid_exports`, `bazaar-vid_user`) and sample payloads to ensure the workflow can hydrate user/email context.
+
+2025-09-21 – Bulk brand customization design
+ - Drafted `sprint108_one_last_export/bulk-brand-customization-workflow.md` describing n8n loop that extracts brand profiles for ~200 company sites, re-themes master Remotion scenes, and queues renders.
+ - Identified required services (BulkBrandRenderer, API endpoints, render queue integration) and scaling considerations for mass-personalized exports.
+
+2025-09-21 – Auto-title UI sync
+- Investigated why previews stayed on "Untitled Video" after SSE logged a generated name; issue traced to client caches not hydrating with the streamed title update.
+- Updated `src/hooks/use-sse-generation.ts` to optimistically rewrite the `project.getById` and `project.list` caches on `title_updated` events before invalidating.
+- Lint pass (`npx eslint src/hooks/use-sse-generation.ts`) still blocked in sandbox because the config expects `structuredClone`; noted for follow-up when running in an unrestricted environment.
+
+2025-09-21 – Token-driven variants deep dive
+- Documented `token-driven-brand-variants.md` covering scene refactors, render-prop pipeline, storage model, orchestration options, and QA for mass B2B personalization.
+
+2025-09-21 – Sprint 130 kickoff
+- Created `sprint130_mass_brand_personalization` scaffold with scope (theme token refactor, bulk renderer, orchestration UX) and seeded TODO/progress logs.
+ 
+2025-09-24 – Homepage cleanup
+- Removed the Product Hunt featured badge from the marketing homepage hero to reflect the post-launch state and reduce above-the-fold distractions.
+- Confirmed hero layout still holds spacing and CTA prominence without the external badge embed.
+
+2025-09-24 – OG metadata refresh
+- Updated global Open Graph and Twitter metadata to use the new "Bazaar – AI Video Generator for Software Demos" messaging, refreshed description, and the hosted marketing image asset.
+- Ensures the homepage shares with the correct copy/preview card across social platforms.
