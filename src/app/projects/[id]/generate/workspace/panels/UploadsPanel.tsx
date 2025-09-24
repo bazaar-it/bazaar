@@ -38,13 +38,31 @@ export default function UploadsPanel({ projectId, onInsertToChat }: UploadsPanel
     return list;
   }, [data, filter]);
 
-  const handleDragStart = useCallback((e: React.DragEvent, url: string) => {
-    e.dataTransfer.setData('text/plain', url);
+  const linkAssetMutation = api.project.linkAssetToProject.useMutation();
+
+  const handleDragStart = useCallback((e: React.DragEvent, asset: any) => {
+    e.dataTransfer.setData('text/plain', asset.url);
+    if (asset?.customName || asset?.originalName) {
+      e.dataTransfer.setData('media/name', asset.customName || asset.originalName || '');
+    }
+    if (asset?.id) {
+      const payload = JSON.stringify({ id: asset.id, url: asset.url, type: asset.type });
+      e.dataTransfer.setData('application/bazaar-asset', payload);
+      e.dataTransfer.setData('asset/id', asset.id);
+    }
   }, []);
 
-  const handleClick = useCallback((url: string) => {
-    onInsertToChat?.(url);
-  }, [onInsertToChat]);
+  const handleClick = useCallback(async (asset: any) => {
+    try {
+      if (asset?.id) {
+        await linkAssetMutation.mutateAsync({ projectId, assetId: asset.id });
+      }
+    } catch (error) {
+      console.warn('[UploadsPanel] Failed to link asset to project (continuing anyway):', error);
+    }
+
+    onInsertToChat?.(asset.url);
+  }, [linkAssetMutation, onInsertToChat, projectId]);
 
   const formatSize = (bytes?: number) => {
     if (!bytes || bytes <= 0) return '—';
@@ -149,8 +167,8 @@ export default function UploadsPanel({ projectId, onInsertToChat }: UploadsPanel
               key={a.id}
               className="group border rounded-lg overflow-hidden cursor-grab active:cursor-grabbing"
               draggable
-              onDragStart={(e) => handleDragStart(e, a.url)}
-              onClick={() => handleClick(a.url)}
+              onDragStart={(e) => handleDragStart(e, a)}
+              onClick={() => { void handleClick(a); }}
               title={a.originalName}
             >
               {a.type === 'image' || a.type === 'logo' ? (

@@ -7,9 +7,14 @@ import { eq, desc, and, inArray } from "drizzle-orm";
 import type { OrchestrationInput, ContextPacket } from "~/lib/types/ai/brain.types";
 import { extractFirstValidUrl, normalizeUrl, isValidWebUrl } from "~/lib/utils/url-detection";
 import { assetContext } from "~/server/services/context/assetContextService";
-import type { AssetContext } from "~/lib/types/asset-context";
 import { templateMatcher } from "~/services/ai/templateMatching.service";
 import { templateLoader } from "~/services/ai/templateLoader.service";
+
+const extractProjectIdFromUrl = (url: string | undefined | null): string | null => {
+  if (!url) return null;
+  const match = url.match(/projects\/([0-9a-fA-F-]+)/);
+  return match ? match[1] : null;
+};
 
 export class ContextBuilder {
 
@@ -18,7 +23,7 @@ export class ContextBuilder {
     console.log('📚 [CONTEXT BUILDER] Project:', input.projectId);
     console.log('📚 [CONTEXT BUILDER] Has images:', !!(input.userContext?.imageUrls as string[])?.length);
     
-          try {
+    try {
         // 1. Get scenes with FULL TSX code for cross-scene operations
         const attachedSceneIds = (input.userContext?.sceneUrls ?? []) as string[];
         
@@ -64,6 +69,8 @@ export class ContextBuilder {
         projectAssets,
         mediaLibImages,
         mediaLibVideos,
+        userLibImages,
+        userLibVideos,
         templateContext
       ] = await Promise.all([
         this.buildImageContext(input),
@@ -71,6 +78,8 @@ export class ContextBuilder {
         assetContext.getProjectAssets(input.projectId),
         assetContext.listProjectAssets(input.projectId, { types: ['image', 'logo'], limit: 50 }),
         assetContext.listProjectAssets(input.projectId, { types: ['video'], limit: 50 }),
+        assetContext.listUserAssets(input.userId, { types: ['image', 'logo'], limit: 100 }),
+        assetContext.listUserAssets(input.userId, { types: ['video'], limit: 60 }),
         this.buildTemplateContext(input, scenesWithCode),
       ]);
 
@@ -79,8 +88,50 @@ export class ContextBuilder {
 
       let mediaLibrary: ContextPacket['mediaLibrary'] | undefined = undefined;
       try {
-        mediaLibrary = { images: mediaLibImages, videos: mediaLibVideos };
-        console.log(`📚 [CONTEXT BUILDER] MediaLibrary built: images=${mediaLibImages.length}, videos=${mediaLibVideos.length}`);
+        const annotate = <T extends { id: string; url: string }>(
+          items: T[],
+          scope: 'project' | 'user'
+        ) =>
+          items.map((item) => ({
+            ...item,
+            scope,
+            requiresLink: scope === 'user',
+            sourceProjectId: extractProjectIdFromUrl(item.url),
+          }));
+
+        const projectImages = annotate(mediaLibImages, 'project');
+        const projectVideos = annotate(mediaLibVideos, 'project');
+        const userImages = annotate(userLibImages, 'user');
+        const userVideos = annotate(userLibVideos, 'user');
+
+        const mergeById = <T extends { id: string }>(primary: T[], secondary: T[]) => {
+          const map = new Map<string, T>();
+          for (const item of primary) map.set(item.id, item);
+          for (const item of secondary) {
+            if (!map.has(item.id)) {
+              map.set(item.id, item);
+            }
+          }
+          return Array.from(map.values());
+        };
+
+        const combinedImages = mergeById(projectImages, userImages);
+        const combinedVideos = mergeById(projectVideos, userVideos);
+
+        mediaLibrary = {
+          images: combinedImages,
+          videos: combinedVideos,
+          meta: {
+            projectImageCount: projectImages.length,
+            userImageCount: userImages.length,
+            projectVideoCount: projectVideos.length,
+            userVideoCount: userVideos.length,
+          },
+        };
+
+        console.log(
+          `📚 [CONTEXT BUILDER] MediaLibrary built: images(project=${projectImages.length}, user=${userImages.length} -> total=${combinedImages.length}), videos(project=${projectVideos.length}, user=${userVideos.length} -> total=${combinedVideos.length})`
+        );
       } catch (e) {
         console.warn('📚 [CONTEXT BUILDER] Failed to construct MediaLibrary (non-fatal):', e);
       }

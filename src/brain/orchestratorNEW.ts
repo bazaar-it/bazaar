@@ -16,7 +16,7 @@ export class Orchestrator {
   private contextBuilder = new ContextBuilder();
   private intentAnalyzer = new IntentAnalyzer();
 
-  async processUserInput(input: OrchestrationInput): Promise<OrchestrationOutput> {
+  async processUserInput(input: OrchestrationInput, options?: { requestId?: string }): Promise<OrchestrationOutput> {
     console.log('\n🧠 [NEW ORCHESTRATOR] === PROCESSING USER INPUT ===');
     console.log('🧠 [NEW ORCHESTRATOR] Input:', {
       prompt: input.prompt,
@@ -26,6 +26,9 @@ export class Orchestrator {
       hasAudio: !!(input.userContext?.audioUrls as string[])?.length,
       sceneCount: input.storyboardSoFar?.length || 0
     });
+
+    const requestId = options?.requestId;
+    const shouldLogStructured = process.env.NODE_ENV !== 'production';
     
     // Define enhancedPrompt at the beginning of the function
     let enhancedPrompt = input.prompt;
@@ -233,7 +236,8 @@ export class Orchestrator {
         toolSelection,
         contextPacket,
         input.prompt,
-        { imageUrls: input.userContext?.imageUrls as string[] | undefined, videoUrls: input.userContext?.videoUrls as string[] | undefined }
+        { imageUrls: input.userContext?.imageUrls as string[] | undefined, videoUrls: input.userContext?.videoUrls as string[] | undefined },
+        { requestId, projectId: input.projectId }
       );
       if (!planned.suppressed && ((planned.imageUrls?.length || 0) > 0 || (planned.videoUrls?.length || 0) > 0)) {
         console.log('🧠 [NEW ORCHESTRATOR][MediaPlan] Using planned media', {
@@ -245,9 +249,63 @@ export class Orchestrator {
         console.log('🛑 [NEW ORCHESTRATOR][MediaPlan] Suppressing planned media', { reason: planned.reason });
       }
 
+      const mediaPlanDebug = planned.debug;
+
+      if (shouldLogStructured) {
+        try {
+          const attachments = {
+            images: (input.userContext?.imageUrls as string[] | undefined)?.length || 0,
+            videos: (input.userContext?.videoUrls as string[] | undefined)?.length || 0,
+            audio: (input.userContext?.audioUrls as string[] | undefined)?.length || 0,
+          };
+          const summary = {
+            type: 'orchestrator.mediaPlan.summary',
+            requestId,
+            projectId: input.projectId,
+            promptPreview: input.prompt.slice(0, 160),
+            tool: toolSelection.toolName,
+            mediaPlan: toolSelection.mediaPlan ? {
+              hasPlan: true,
+              imagesOrdered: toolSelection.mediaPlan.imagesOrdered?.length || 0,
+              videosOrdered: toolSelection.mediaPlan.videosOrdered?.length || 0,
+              directives: Array.isArray((toolSelection as any).mediaPlan?.imageDirectives)
+                ? (toolSelection as any).mediaPlan.imageDirectives.length
+                : 0,
+            } : { hasPlan: false },
+            attachments,
+            resolved: {
+              suppressed: planned.suppressed,
+              reason: planned.reason,
+              imageUrls: planned.imageUrls?.length || 0,
+              videoUrls: planned.videoUrls?.length || 0,
+              imageAction: planned.imageAction || (toolSelection.imageAction ?? null),
+              directives: planned.imageDirectives?.length || 0,
+              sourceMap: mediaPlanDebug?.sourceMap?.length || 0,
+              skippedPlan: planned.skippedPlanUrls?.length || 0,
+            },
+            debug: mediaPlanDebug ? {
+              planImagesOrdered: mediaPlanDebug.plan?.imagesOrdered || [],
+              planVideosOrdered: mediaPlanDebug.plan?.videosOrdered || [],
+              planMapping: mediaPlanDebug.plan?.mapping,
+              sourceMap: mediaPlanDebug.sourceMap,
+              plannedImages: mediaPlanDebug.plannedImages,
+              plannedVideos: mediaPlanDebug.plannedVideos,
+              attachments: mediaPlanDebug.attachments,
+              mappedDirectives: mediaPlanDebug.mappedDirectives,
+              skippedPlanUrls: mediaPlanDebug.skippedPlanUrls,
+            } : undefined,
+          };
+          console.log('[MEDIA_PLAN_SUMMARY]', JSON.stringify(summary));
+        } catch (err) {
+          console.warn('🧠 [NEW ORCHESTRATOR] Failed to log media plan summary:', err);
+        }
+      }
+
       // Heuristics for imageAction are handled inside mediaPlanService
 
-      const result = {
+      const result: OrchestrationOutput & {
+        result: OrchestrationOutput['result'] & { workflow?: any };
+      } = {
         success: true,
         toolUsed: toolSelection.toolName,
         reasoning: toolSelection.reasoning,
@@ -280,8 +338,20 @@ export class Orchestrator {
             imageDirectives: planned.imageDirectives && planned.imageDirectives.length ? planned.imageDirectives : undefined
           },
           workflow: toolSelection.workflow,
-        }
+        },
       };
+
+      if (mediaPlanDebug) {
+        result.mediaPlanDebug = {
+          plan: mediaPlanDebug.plan,
+          sourceMap: mediaPlanDebug.sourceMap,
+          plannedImages: mediaPlanDebug.plannedImages,
+          plannedVideos: mediaPlanDebug.plannedVideos,
+          attachments: mediaPlanDebug.attachments,
+          mappedDirectives: mediaPlanDebug.mappedDirectives,
+          skippedPlanUrls: mediaPlanDebug.skippedPlanUrls,
+        };
+      }
       
       // Debug logging for video URLs and template context
       console.log('🧠 [NEW ORCHESTRATOR] Tool context being passed:', {
