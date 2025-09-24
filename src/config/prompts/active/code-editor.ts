@@ -174,6 +174,7 @@ export const durationInFrames_[ID] = totalFrames_edit_[ID]; // Exact duration, n
 - Design content to fit any canvas size - use useVideoConfig() for dimensions
 - Use relative/percentage positioning and responsive sizing based on width/height
 - CRITICAL: All content MUST stay within bounds: 0 to width, 0 to height
+- After edits, double-check that text layers do not overlap; adjust spacing, line breaks, or containers to eliminate collisions
 
 🖼️ **HANDLING UPLOADED IMAGES - UNDERSTAND USER INTENT:**
 

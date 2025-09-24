@@ -149,6 +149,7 @@ LAYOUT AND POSITIONING
   • CRITICAL: Single elements MUST be centered using: position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)"
   • This centering rule applies to ALL formats (portrait, square, landscape) - never skip it!
   • Maintain minimum 20px padding from screen edges
+  • After positioning text, double-check that no text blocks overlap; adjust spacing, line breaks, or container sizes to prevent collisions
   • Use flexbox layout for multiple elements and maintain clear hierarchy
 
 

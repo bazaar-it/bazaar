@@ -84,9 +84,11 @@ export class MediaPlanService {
     const shouldLog = process.env.NODE_ENV !== 'production';
     const projectId = opts?.projectId;
 
-    const debugSourceAccumulator = new Map<string, { sources: Set<MediaSourceTag>; details: Set<string> }>();
+    const debugSourceAccumulator = shouldLog
+      ? new Map<string, { sources: Set<MediaSourceTag>; details: Set<string> }>()
+      : undefined;
     const trackSource = (url: string | undefined, source: MediaSourceTag, detail?: string) => {
-      if (!url) return;
+      if (!debugSourceAccumulator || !url) return;
       const entry = debugSourceAccumulator.get(url) ?? {
         sources: new Set<MediaSourceTag>(),
         details: new Set<string>(),
@@ -173,6 +175,7 @@ export class MediaPlanService {
       if (!url || skippedUrlSet.has(url)) return;
       skippedUrlSet.add(url);
       skippedPlanUrls.push({ url, ...detail });
+      trackSource(url, 'plan-skipped', detail?.reason ? `skipped-${detail.reason}` : 'skipped');
     };
 
     const canUsePlanUrl = (url: string | undefined) => {

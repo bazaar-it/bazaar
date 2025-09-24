@@ -18,7 +18,6 @@ const HomePageTemplatesSection = dynamic(
 import AspectRatioTransitionPlayer from "~/components/AspectRatioTransitionPlayer";
 import DynamicFormatTitle from "~/components/DynamicFormatTitle";
 import ParticleEffect from "~/components/marketing/ParticleEffect";
-import LiveBadge from "~/components/marketing/LiveBadge";
 
 export default function Homepage() {
   const { data: session, status } = useSession();
@@ -58,7 +57,7 @@ export default function Homepage() {
 
   return (
     <div className="min-h-screen bg-white flex flex-col animate-fade-in">
-      <MarketingHeader ref={marketingHeaderRef} redirectTo='/' showLiveButton />
+      <MarketingHeader ref={marketingHeaderRef} redirectTo='/' />
 
       {/* Main content */}
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-4 md:py-8 max-w-6xl mx-auto w-full relative overflow-hidden">
