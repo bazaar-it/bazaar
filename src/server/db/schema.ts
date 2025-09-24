@@ -42,7 +42,7 @@ export const userAttribution = createTable(
   "user_attribution",
   (d) => ({
     userId: d
-      .varchar({ length: 255 })
+      .varchar("user_id", { length: 255 })
       .notNull()
       .primaryKey()
       .references(() => users.id, { onDelete: "cascade" }),

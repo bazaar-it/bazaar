@@ -67,7 +67,8 @@ export async function POST() {
 
   const response = new NextResponse(null, { status: 204 });
   const secret = getSecret();
-  const cookieValue = cookies().get(ATTRIBUTION_COOKIE_NAME)?.value;
+  const cookieStore = await cookies();
+  const cookieValue = cookieStore.get(ATTRIBUTION_COOKIE_NAME)?.value;
 
   if (!cookieValue) {
     return response;
@@ -75,6 +76,7 @@ export async function POST() {
 
   const payload = verifySignedPayload(cookieValue, secret);
 
+  cookieStore.delete({ name: ATTRIBUTION_COOKIE_NAME, path: "/" });
   response.cookies.set({
     name: ATTRIBUTION_COOKIE_NAME,
     value: "",
