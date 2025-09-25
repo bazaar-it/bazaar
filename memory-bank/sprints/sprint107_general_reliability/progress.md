@@ -315,3 +315,8 @@ Date: 2025-09-24 (markdown fence strip)
 - Found addScene output still shipping markdown + narrative preambles, causing SceneCompiler to throw `Unexpected token` and preview fallback placeholder (project 816bba6d…).
 - Updated `applyTemplateFixes` in `codeValidator` to strip code fences/preambles before syntax validation, and added Jest coverage for markdown-stripped inputs.
 - Result: generated scenes now compile even when the model wraps code in ```jsx blocks or adds prose descriptions.
+
+## 2025-09-25
+- Investigated 404 on `/projects/quick-create` for brand-new users; traced to client calling `pruneEmpty` right after creating the first workspace.
+- Documented root cause + remediation options in `analysis/2025-09-25-quick-create-404.md` so onboarding fix can ship without breaking returning users.
+- Shipped mitigation: skip prune-after-create, exclude the active workspace from pruning, and add grace-period guard inside `project.pruneEmpty`, unblocking new-user onboarding.

@@ -63,11 +63,14 @@ export default function QuickCreatePage() {
     console.log(`[QuickCreate] Redirecting (${reason}) to: ${path}`);
     method(path);
 
-    if (!pruneScheduledRef.current) {
+    if (!pruneScheduledRef.current && reason !== 'created') {
       pruneScheduledRef.current = true;
       queueMicrotask(() => {
         // Run prune in background after navigation is triggered
-        pruneMutation.mutate(undefined, { onError: (err) => console.warn('[QuickCreate] pruneEmpty failed:', err) });
+        pruneMutation.mutate(
+          { excludeProjectId: projectId },
+          { onError: (err) => console.warn('[QuickCreate] pruneEmpty failed:', err) },
+        );
       });
     }
   }, [router, pruneMutation]);

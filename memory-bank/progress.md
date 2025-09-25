@@ -1,5 +1,10 @@
 # 🏆 Bazaar-Vid Progress Summary
 
+## 📝 Latest Update (Sep 27, 2025)
+- Sprint 140: Documented desktop vs mobile UX map for Projects and Generate flows to anchor upcoming mobile-first work.【memory-bank/sprints/sprint140_mobile/desktop-vs-mobile-ux-map.md:1】
+- Sprint 140: Logged sprint progress items detailing priority mobile pain points for planning next iterations.【memory-bank/sprints/sprint140_mobile/progress.md:30】
+- Sprint 140: Delivered mobile chat composer improvements (safe-area sticky bar, compact attachment tray) to stop keyboard overlap on phones.【src/app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx:1828】
+
 ## 📝 Latest Update (Sep 26, 2025)
 - Sprint 140: Implemented mobile navigation overhaul—bottom nav state persists per project with haptic feedback, quick actions for generate/preview/timeline, and documented approach in the navigation analysis.【F:src/app/projects/[id]/generate/workspace/MobileWorkspaceLayout.tsx†L1-L233】【F:memory-bank/sprints/sprint140_mobile/navigation-wayfinding-analysis.md†L1-L33】
 - Added floating timeline drawer and fullscreen preview quick action to keep mobile workflows thumb-friendly after the first prompt.【F:src/app/projects/[id]/generate/workspace/MobileWorkspaceLayout.tsx†L134-L210】
@@ -1215,3 +1220,10 @@ The core video generation pipeline is **production-ready** with:
 - Next step: adjust `mediaPlanService.resolvePlan` to allow project-scoped assets regardless of URL path and extend the media-plan suite with linked-asset coverage.
 - Applied guard refinement in `mediaPlanService.resolvePlan` so project-scoped assets bypass the URL-based project check; added Jest coverage ensuring linked assets succeed while unlinked ones remain blocked (`npm run test -- src/brain/services/__tests__/media-plan.service.test.ts`).
 - Patched `codeValidator` to strip markdown fences/preambles before validation, fixing the logo animation scene that fell back to the placeholder after Anthropic returned prose + ```jsx``` blocks (`Unexpected token` in SceneCompiler).
+2025-09-25 – Toolify referral activation audit
+- Pulled prod attribution + engagement data for the newest 50 accounts; built sprint 110 analysis showing Toolify referrals deliver 0 prompts/custom projects so far.
+- Highlighted uniform Toolify referrers/landing paths, noted negative signup vs. first_touch_at delta, and proposed instrumentation + channel QA follow-ups in `sprints/sprint110_utm/2025-09-25-toolify-referral-quality.md`.
+2025-09-25 – Quick-create 404 regression
+- Reproduced fresh-signup 404 and traced it to `QuickCreatePage` running `pruneEmpty` microtask immediately after `project.create`, deleting the just-created welcome project.
+- Logged detailed RCA + fix plan in `sprints/sprint107_general_reliability/analysis/2025-09-25-quick-create-404.md` to unblock onboarding repair.
+- Applied fix: guard the client redirect from pruning on create, exclude the active workspace, and added a 15-minute/isWelcome safety net in `project.pruneEmpty` so new workspaces persist long enough for users to send their first prompt.
