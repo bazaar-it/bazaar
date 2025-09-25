@@ -8,6 +8,7 @@ import { type VideoFormat } from "~/lib/types/video/remotion-constants";
 import { api } from "~/trpc/react";
 import { useSession } from "next-auth/react";
 import { useLastUsedFormat } from "~/hooks/use-last-used-format";
+import { useIsMobile } from "~/hooks/use-breakpoint";
 
 interface NewProjectButtonProps {
   className?: string;
@@ -37,7 +38,9 @@ export function NewProjectButton({
   const [showFormatOptions, setShowFormatOptions] = useState(false);
   const [selectedFormat, setSelectedFormat] = useState<VideoFormat | null>(null);
   const { lastFormat, updateLastFormat } = useLastUsedFormat();
-  
+  const isMobile = useIsMobile();
+  const [showMobileFormatSheet, setShowMobileFormatSheet] = useState(false);
+
   // Refs for handling long press and hover
   const buttonRef = useRef<HTMLButtonElement>(null);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -198,38 +201,46 @@ export function NewProjectButton({
       return;
     }
     
-    // Server-side instant creation + redirect (faster and more reliable)
-    router.push(`/projects/new?format=${lastFormat}`);
-  }, [onStart, session?.user, router]);
+    const formatParam = typeof lastFormat === 'string' ? lastFormat : 'landscape';
 
-  // Detect if we're on mobile
-  const [isMobile, setIsMobile] = useState(false);
-  
+    if (isMobile) {
+      try {
+        sessionStorage.setItem('bazaar:new-project-mobile', '1');
+      } catch {}
+    }
+
+    router.push(`/projects/new?format=${formatParam}`);
+  }, [onStart, session?.user, router, isMobile, lastFormat]);
+
+  // Auto-close mobile format sheet when not applicable
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768 || 'ontouchstart' in window);
-    };
-    
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+    if (!isMobile || disableFormatDropdown) {
+      setShowMobileFormatSheet(false);
+    }
+  }, [isMobile, disableFormatDropdown]);
 
   // Handle button click
   const handleButtonClick = useCallback(() => {
-    // If it was a long press, don't handle the click
     if (isLongPressRef.current) {
       return;
     }
-    
-    // Use quick create with last format when enabled, otherwise show format selector
+
+    const shouldShowFormatSelection = !disableFormatDropdown && isMobile;
+
     if (enableQuickCreate) {
-      handleQuickCreate();
+      if (shouldShowFormatSelection) {
+        setShowMobileFormatSheet(true);
+      } else {
+        handleQuickCreate();
+      }
     } else {
-      handleCreateProject();
+      if (shouldShowFormatSelection) {
+        setShowMobileFormatSheet(true);
+      } else {
+        handleCreateProject();
+      }
     }
-  }, [handleQuickCreate, handleCreateProject, enableQuickCreate]);
+  }, [enableQuickCreate, disableFormatDropdown, isMobile, handleQuickCreate, handleCreateProject]);
 
   // Hover handlers - only trigger when in sidebar context
   const handleMouseEnter = useCallback(() => {
@@ -324,8 +335,8 @@ export function NewProjectButton({
           id="new-project-format-overlay"
           className="fixed bg-white border border-gray-200 rounded-lg shadow-lg z-50 w-[180px]"
           style={{
-            left: 'calc(4rem + 20px)', // Same as workspace left positioning (4rem sidebar + 10px margin + 10px gap)
-            top: 'calc(68px + 10px)', // Header height (68px) + 10px buffer zone = 78px
+            left: 'calc(4rem + 20px)',
+            top: 'calc(68px + 10px)',
           }}
           onMouseEnter={() => setShowFormatOptions(true)}
           onMouseLeave={() => setShowFormatOptions(false)}
@@ -361,6 +372,44 @@ export function NewProjectButton({
                 </button>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {isMobile && !disableFormatDropdown && showMobileFormatSheet && (
+        <div className="fixed inset-0 z-[60] flex flex-col bg-black/50 backdrop-blur-sm">
+          <div className="mt-auto w-full rounded-t-3xl bg-white p-5 pb-8 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-gray-900">Choose format</h2>
+              <button
+                type="button"
+                onClick={() => setShowMobileFormatSheet(false)}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200"
+              >
+                <PlusIcon className="h-4 w-4 rotate-45" />
+                <span className="sr-only">Close</span>
+              </button>
+            </div>
+            <div className="space-y-2">
+              {formatOptions.map((format) => {
+                const Icon = format.icon;
+                const isCurrentFormat = format.id === lastFormat;
+                return (
+                  <button
+                    key={format.id}
+                    onClick={() => handleFormatSelect(format.id)}
+                    className={`w-full flex items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-colors ${
+                      isCurrentFormat ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-200 bg-white hover:bg-gray-50'
+                    }`}
+                    disabled={createProjectMutation.isPending}
+                  >
+                    <Icon className={`h-5 w-5 ${isCurrentFormat ? 'text-blue-600' : 'text-gray-500'}`} />
+                    <div className="flex-1 text-sm font-medium">{format.label}</div>
+                    <div className="text-xs text-gray-500">{format.subtitle}</div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}

@@ -12,6 +12,8 @@ import { Player } from "@remotion/player";
 import { transform } from "sucrase";
 import { toast } from "sonner";
 
+import { useIsTouchDevice } from "~/hooks/use-is-touch";
+
 interface MyProjectsPanelGProps {
   currentProjectId: string;
 }
@@ -171,7 +173,8 @@ const ProjectPreview = ({
   onEditKeyPress,
   onEditBlur,
   isVisible = true,
-  isLoading = false
+  isLoading = false,
+  isTouchDevice = false
 }: { 
   project: Project; 
   onClick: () => void;
@@ -186,30 +189,67 @@ const ProjectPreview = ({
   onEditBlur: () => void;
   isVisible?: boolean;
   isLoading?: boolean;
+  isTouchDevice?: boolean;
 }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+
+  const previewActive = isTouchDevice ? showPreview : isHovered;
+  const shouldLoadScenes = isVisible || previewActive;
+  const showChrome = isTouchDevice || isHovered;
+  const lastUpdatedLabel = useMemo(() => {
+    const source = project.updatedAt ?? project.createdAt;
+    try {
+      return new Date(source).toLocaleDateString();
+    } catch {
+      return '';
+    }
+  }, [project.updatedAt, project.createdAt]);
 
   const handleMouseEnter = useCallback(() => {
-    setIsHovered(true);
-  }, []);
+    if (!isTouchDevice) {
+      setIsHovered(true);
+    }
+  }, [isTouchDevice]);
 
   const handleMouseLeave = useCallback(() => {
-    setIsHovered(false);
-  }, []);
+    if (!isTouchDevice) {
+      setIsHovered(false);
+    }
+  }, [isTouchDevice]);
 
   const handleDeleteClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent triggering the onClick for navigation
+    e.stopPropagation();
     onDelete(project);
   }, [project, onDelete]);
 
+  const handlePreviewToggle = useCallback((event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setShowPreview((prev) => !prev);
+  }, []);
+
+  const handleRenameClick = useCallback((event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onStartEdit(project, event);
+  }, [project, onStartEdit]);
+
+  React.useEffect(() => {
+    if (!isTouchDevice && showPreview) {
+      setShowPreview(false);
+    }
+  }, [isTouchDevice, showPreview]);
+
+  React.useEffect(() => {
+    setShowPreview(false);
+  }, [project.id]);
+
   return (
     <div className="relative">
-      <div 
-        className={`relative w-full aspect-video bg-black rounded overflow-hidden cursor-pointer transition-all duration-200 group ${
-          isCurrentProject ? 'ring-2 ring-orange-400 ring-offset-2' : ''
-        }`}
+      <div
+        className={`relative w-full aspect-video bg-black rounded overflow-hidden cursor-pointer transition-all duration-200 ${isCurrentProject ? 'ring-2 ring-orange-400 ring-offset-2' : ''}`}
         onClick={(e) => {
-          // Only allow navigation if we're not currently editing this project's title
           if (editingProject !== project.id) {
             onClick();
           }
@@ -217,45 +257,48 @@ const ProjectPreview = ({
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        {/* Top action buttons - visible on hover */}
-        {isHovered && (
-          <div className="absolute top-2 left-2 right-2 z-20 flex justify-between">
-            {/* Delete button */}
+        {showChrome && (
+          <div className="absolute top-2 left-2 right-2 z-20 flex items-center justify-between gap-2">
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 w-6 p-0 bg-red-500/80 hover:bg-red-600 text-white rounded-full transition-all duration-200"
+              className="h-7 w-7 p-0 bg-red-500/80 hover:bg-red-600 text-white rounded-full transition-all duration-200"
               onClick={handleDeleteClick}
             >
-              <X className="h-3 w-3" />
+              <X className="h-3.5 w-3.5" />
             </Button>
-            
-            {/* Favorite button */}
-            <Button
-              variant="ghost"
-              size="sm"
-              className={`h-7 w-7 p-0 rounded-full transition-all duration-200 ${
-                project.isFavorite 
-                  ? 'bg-pink-500/90 hover:bg-pink-600 text-white' 
-                  : 'bg-black/50 hover:bg-black/70 text-white'
-              }`}
-              onClick={(e) => onToggleFavorite(project, e)}
-            >
-              <Heart 
-                className={`h-3.5 w-3.5 ${project.isFavorite ? 'fill-current' : ''}`} 
-              />
-            </Button>
+
+            <div className="flex items-center gap-2">
+              {isTouchDevice && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-3"
+                  onClick={handlePreviewToggle}
+                >
+                  {showPreview ? 'Hide preview' : 'Preview'}
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`h-7 w-7 p-0 rounded-full transition-all duration-200 ${project.isFavorite ? 'bg-pink-500/90 hover:bg-pink-600 text-white' : 'bg-black/50 hover:bg-black/70 text-white'}`}
+                onClick={(e) => onToggleFavorite(project, e)}
+              >
+                <Heart className={`h-3.5 w-3.5 ${project.isFavorite ? 'fill-current' : ''}`} />
+              </Button>
+            </div>
           </div>
         )}
-        
-        {/* Show static frame by default, playing video on hover */}
-        {isHovered ? (
-          <ProjectVideoPlayer project={project} isVisible={isVisible} />
-        ) : (
-          <ProjectThumbnail project={project} isVisible={isVisible} />
-        )}
-        
-        {/* Loading overlay */}
+
+        <div className="absolute inset-0">
+          {previewActive ? (
+            <ProjectVideoPlayer project={project} isVisible={shouldLoadScenes} />
+          ) : (
+            <ProjectThumbnail project={project} isVisible={shouldLoadScenes} />
+          )}
+        </div>
+
         {isLoading && (
           <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm z-30 flex items-center justify-center rounded">
             <div className="bg-white/90 rounded-full p-3 shadow-lg">
@@ -264,7 +307,6 @@ const ProjectPreview = ({
           </div>
         )}
 
-        {/* Current project badge */}
         {isCurrentProject && (
           <div className="absolute top-1 sm:top-2 right-1 sm:right-2 z-10">
             <div className="bg-gradient-to-r from-orange-400 to-orange-300 text-white text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full font-medium shadow-sm">
@@ -273,9 +315,8 @@ const ProjectPreview = ({
           </div>
         )}
 
-        {/* Project name overlay - only visible on hover */}
-        {isHovered && (
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2 sm:p-3 z-10">
+        {showChrome && (
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 z-10 space-y-2">
             <div className="text-white text-xs sm:text-sm font-medium">
               {editingProject === project.id ? (
                 <input
@@ -286,30 +327,36 @@ const ProjectPreview = ({
                   onBlur={onEditBlur}
                   autoFocus
                   className="bg-transparent border-none outline-none text-white text-xs sm:text-sm font-medium w-full p-0 m-0"
-                  style={{ background: 'transparent' }}
                 />
               ) : (
                 <span
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    // Force immediate edit mode without any navigation
                     onStartEdit(project, e);
-                    return false;
                   }}
                   onMouseDown={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
                   }}
-                  style={{ pointerEvents: 'auto' }}
-                  className="cursor-text hover:bg-white/10 rounded px-1 -mx-1 transition-colors relative z-30"
+                  className="cursor-text hover:bg-white/10 rounded px-1 -mx-1 transition-colors"
                 >
                   {project.title}
                 </span>
               )}
             </div>
-            <div className="text-gray-300 text-xs mt-1">
-              {new Date(project.updatedAt || '').toLocaleDateString()}
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-gray-300">
+              {lastUpdatedLabel && <span>Updated {lastUpdatedLabel}</span>}
+              {isTouchDevice && editingProject !== project.id && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-3 text-xs"
+                  onClick={handleRenameClick}
+                >
+                  Rename
+                </Button>
+              )}
             </div>
           </div>
         )}
@@ -554,6 +601,7 @@ export default function MyProjectsPanelG({ currentProjectId }: MyProjectsPanelGP
   const [loadingProjectId, setLoadingProjectId] = useState<string | null>(null);
   const projectsPerPage = 10;
   const router = useRouter();
+  const isTouchDevice = useIsTouchDevice();
   
   // Fetch all projects
   const { data: projects, isLoading, error } = api.project.list.useQuery();
@@ -805,8 +853,8 @@ export default function MyProjectsPanelG({ currentProjectId }: MyProjectsPanelGP
             </div>
           </div>
         ) : (
-          <div 
-            className="grid gap-2 sm:gap-3 grid-cols-2 sm:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]"
+          <div
+            className={isTouchDevice ? "flex flex-col gap-3" : "grid gap-2 sm:gap-3 grid-cols-2 sm:grid-cols-[repeat(auto-fit,minmax(200px,1fr))]"}
           >
             {paginatedProjects.map((project) => (
               <Card key={`project-${project.id}`} className="overflow-hidden hover:shadow-lg transition-shadow p-0">
@@ -824,6 +872,7 @@ export default function MyProjectsPanelG({ currentProjectId }: MyProjectsPanelGP
                   onEditBlur={handleSaveEdit}
                   isVisible={true} // Projects on current page are visible
                   isLoading={loadingProjectId === project.id}
+                  isTouchDevice={isTouchDevice}
                 />
               </Card>
             ))}
