@@ -43,3 +43,29 @@
 - Added `personalization_target` table plus tRPC router so users can paste a website URL and trigger brand extraction (Playwright → SimplifiedBrandData → `BrandTheme`).
 - Personalize page now lists real targets, shows extraction status, and offers an “Add from website” form; preview panel consumes the stored themes in its selector.
 - Converted OKLCH and other CSS color formats to hex when building `BrandTheme` so previews use each company’s actual palette.
+
+## 2025-09-25 – Structured copy + font tokenization
+- Formalized `BrandThemeCopy` contract with brand metadata (name/short/initial/tagline) plus hero/CTAs/features/stats/voice structures and hardened merge helpers.
+- Enriched `SimplifiedBrandData` mapping (fonts, voice, hero copy, CTA labels) and `createBrandThemeFromExtraction` so URL intake populates brand-aware copy tokens by default.
+- Updated brand tokenizer prompt and runtime fallbacks (`sceneTokenizer`, `PreviewPanelG`) to expect `theme.copy.brand.*`, preventing undefined text tokens during scene rewrites.
+- Attempted full `npm run typecheck`; build still fails on longstanding repository issues (see CLI output), but new modules compile under updated helpers.
+
+## 2025-09-25 – Brand edit mutation (experimental)
+- Added `editSceneForBrandWithLLM` service + `BRAND_EDITOR_PROMPT` to rewrite scenes directly from brand payload (colors/fonts/copy/initials).
+- New `project.applyBrandToScenes` tRPC mutation fetches `personalization_target.brandTheme`, runs the edit pass, recompiles TSX→JS, and stores updates.
+- Preview panel now triggers the mutation when “Apply theme” targets a saved brand, then reapplies the theme runtime.
+- Personalize page auto-prepares scenes for each ready target and caches variants in `brandTheme.variants`; generate panel reads those variants for instant theme swapping.
+
+## 2025-09-26 – Personalize dashboard v2
+- Rebuilt `/projects/[id]/personalize` client to match workspace styling: left rail for target intake, detail pane for brand snapshot + scene personalization.
+- Surface extraction + per-scene edit status using `brandTheme.meta.sceneStatuses`, including live progress counts and progress bar.
+- Added scene selection controls (all/none toggles, checklists) and wired brand edit button to `applyBrandToScenes` with optional subsets.
+- Persist local in-flight status overrides so users see immediate feedback while LLM edits run; refresh invalidates personalization target cache post-run.
+- Server page now provides scene metadata to the client, enabling UI summaries and selection lists.
+
+## 2025-09-27 – Extraction accuracy & assertive edits
+- Hardened WebAnalysisV4 company detection to ignore customer logo grids, honour `og:site_name`, and fall back to the project domain when the first logo is unrelated.
+- Gave the analyzer longer to load hero content and expanded status logging before converting to the simplified dataset.
+- Added smart name derivation in `brandDataAdapter` so derived themes default to the site domain when scraped identity names conflict.
+- `forceBrandThemeFallback` now accepts the active theme, injecting brand-specific copy when the preview falls back to literals.
+- Strengthened the brand editor prompt + payload expectations to mandate palette swaps, copy refreshes, and removal of legacy brand references.

@@ -8,6 +8,14 @@
 - Sprint 107/UX: Fixed portrait preview sizing in workspace. Reworked RemotionPreview to compute fit via ResizeObserver (min(container/comp)) and removed brittle aspect-ratio wrapper. Prevents preview from overflowing under Timeline and ensures live resize when adding side panels.
 - UX: Enabled default autoplay for preview player (new and existing projects). Player now starts automatically; audio remains gesture-unlocked per existing logic.
 
+## 📝 Latest Update (Sep 26, 2025)
+- Sprint 130: Rebuilt the personalize dashboard with a two-panel layout showing extraction status, brand snapshot, and per-scene personalization controls. Scene selection now feeds directly into the new `applyBrandToScenes` LLM edit pipeline with live status feedback.
+- Sprint 130: generate workspace fix—brand variant selection no longer crashes due to block-scoped ordering; active variants are memoized and reused during VideoState sync so theme swaps immediately show edited scenes.
+
+## 📝 Latest Update (Sep 27, 2025)
+- Sprint 130: WebAnalysisV4 now ignores customer logo carousels, honours `og:site_name`, derives a fallback from the request domain, and waits longer before scraping so brand names like Y Combinator are detected instead of partner logos.
+- Sprint 130: Brand editor prompt/payload upgraded to demand palette swaps and copy overrides; fallback theme injection now uses the active brand copy to prevent legacy "Bazaar" strings from leaking into variants.
+
 ## 📝 Latest Update (Sep 11, 2025)
 ## 📝 Latest Update (Sep 13, 2025)
 - Sprint 107: Fixed preview crash when scene names contained apostrophes (e.g., Build a' word slide template). Root cause was unescaped dynamic strings injected into generated composite code; Sucrase failed with "Invalid scope depth". Escaped dynamic values via JSON.stringify in `PreviewPanelG.tsx` and added a browser-safe console logger to avoid `setImmediate` errors from Winston in `use-auto-fix`.

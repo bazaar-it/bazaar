@@ -94,6 +94,12 @@ export default async function PersonalizePage({
           approxDurationSeconds,
           format: projectProps?.meta?.format ?? null,
           isTokenized,
+          scenes: scenes.map((scene) => ({
+            id: scene.id,
+            name: scene.name ?? `Scene ${scene.order ?? 0}`,
+            order: scene.order ?? 0,
+            duration: scene.duration ?? 150,
+          })),
         }}
         brandTheme={brandTheme}
         targets={targets}

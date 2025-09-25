@@ -58,8 +58,21 @@ export const SAMPLE_PERSONALIZATION_TARGETS: PersonalizationTarget[] = [
         light: 'https://assets.demo.bazaar.it/orbit-health/logo.svg',
       },
       copy: {
-        cta: 'Book a compliance-ready demo',
-        tagline: 'Streamline patient engagement with automation',
+        brand: {
+          name: 'Orbit Health',
+          shortName: 'Orbit',
+          tagline: 'Automation for patient engagement',
+          initial: 'O',
+        },
+        hero: {
+          headline: 'Orbit Health keeps every patient aligned',
+          subheadline: 'Clinical outreach, scheduling, and compliance in one workflow.',
+          tagline: 'Streamline patient engagement with automation',
+        },
+        ctas: {
+          primary: 'Book a compliance-ready demo',
+          additional: [],
+        },
       },
     },
     status: 'pending',

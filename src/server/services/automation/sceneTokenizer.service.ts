@@ -2,6 +2,7 @@ import { z } from "zod";
 import { AIClientService, type AIMessage } from "~/server/services/ai/aiClient.service";
 import { resolveModel } from "~/config/models.config";
 import { BRAND_TOKENIZER_PROMPT } from "~/config/prompts/active/brand-tokenizer";
+import { DEFAULT_BRAND_THEME, ensureBrandThemeCopy, type BrandTheme } from "~/lib/theme/brandTheme";
 
 const responseSchema = z.object({
   code: z.string().min(10),
@@ -25,7 +26,7 @@ export type TokenizeSceneLLMResult = z.infer<typeof responseSchema> & {
   raw?: string;
 };
 
-function forceBrandThemeFallback(code: string): string {
+export function forceBrandThemeFallback(code: string, fallbackTheme?: BrandTheme | null): string {
   if (code.includes("brandThemeRuntime")) {
     return code;
   }
@@ -41,7 +42,18 @@ function forceBrandThemeFallback(code: string): string {
   const indentationMatch = declaration.match(/^(\s*)/);
   const indent = indentationMatch?.[1] ?? "";
 
-  const replacement = `${indent}const brandThemeRuntime = typeof window !== "undefined" ? window.BrandTheme : undefined;\n${indent}const theme = brandThemeRuntime?.useTheme?.() ?? brandThemeRuntime?.defaultTheme ?? { colors: {}, fonts: {}, assets: {} };`;
+  const theme = fallbackTheme ?? DEFAULT_BRAND_THEME;
+  const fallbackThemeLiteral = JSON.stringify({
+    colors: theme.colors ?? {},
+    fonts: theme.fonts ?? {},
+    assets: theme.assets ?? {},
+    iconography: theme.iconography ?? {},
+    backgroundEffects: Array.isArray(theme.backgroundEffects) ? theme.backgroundEffects : [],
+    motion: theme.motion ?? {},
+    copy: ensureBrandThemeCopy(theme.copy),
+  });
+
+  const replacement = `${indent}const brandThemeRuntime = typeof window !== "undefined" ? window.BrandTheme : undefined;\n${indent}const theme = brandThemeRuntime?.useTheme?.() ?? brandThemeRuntime?.defaultTheme ?? ${fallbackThemeLiteral};`;
 
   return code.replace(themeDeclarationPattern, replacement);
 }
@@ -106,7 +118,7 @@ export async function tokenizeSceneWithLLM(params: {
 
     const parsed = responseSchema.parse(JSON.parse(content));
 
-    const safeCode = forceBrandThemeFallback(parsed.code);
+    const safeCode = forceBrandThemeFallback(parsed.code, DEFAULT_BRAND_THEME);
 
     if (/_(optionalChain|nullishCoalesce)/.test(safeCode)) {
       throw new Error(

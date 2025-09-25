@@ -20,7 +20,7 @@ import { computeSceneRanges, findSceneAtFrame } from '~/lib/utils/scene-ranges';
 import { wrapSceneNamespace } from '~/lib/video/wrapSceneNamespace';
 import { buildCompositeHeader } from '~/lib/video/buildCompositeHeader';
 import { buildSingleSceneModule, buildMultiSceneModule } from '~/lib/video/buildComposite';
-import { DEFAULT_BRAND_THEME, type BrandTheme } from '~/lib/theme/brandTheme';
+import { DEFAULT_BRAND_THEME, ensureBrandThemeCopy, type BrandTheme } from '~/lib/theme/brandTheme';
 
 function sanitizeTheme(theme: BrandTheme | null | undefined): BrandTheme {
   if (!theme) {
@@ -64,7 +64,9 @@ function sanitizeTheme(theme: BrandTheme | null | undefined): BrandTheme {
     iconography: theme.iconography || DEFAULT_BRAND_THEME.iconography,
     backgroundEffects: theme.backgroundEffects || DEFAULT_BRAND_THEME.backgroundEffects,
     motion: theme.motion || DEFAULT_BRAND_THEME.motion,
-    copy: theme.copy || DEFAULT_BRAND_THEME.copy,
+    copy: ensureBrandThemeCopy(theme.copy),
+    variants: theme.variants || DEFAULT_BRAND_THEME.variants,
+    meta: theme.meta || DEFAULT_BRAND_THEME.meta,
   };
 }
 
@@ -118,6 +120,12 @@ export function PreviewPanelG({
   initial?: InputProps;
   selectedSceneId?: string | null;
 }) {
+  const utils = api.useUtils();
+  const brandifyScenesMutation = api.project.applyBrandToScenes.useMutation({
+    onSuccess: async () => {
+      await utils.generation.getProjectScenes.invalidate({ projectId });
+    },
+  });
   // Phase 1 metrics (lightweight, console-based)
   const metricsRef = useRef({ precompiled: 0, slowPath: 0, errors: 0, runs: 0 });
   // ✅ FIXED: Use separate selectors to prevent infinite loops
@@ -208,11 +216,36 @@ useEffect(() => {
   const { replace } = useVideoState();
   const [lastSyncedSceneIds, setLastSyncedSceneIds] = useState<string>('');
   const [syncDebounceTimer, setSyncDebounceTimer] = useState<NodeJS.Timeout | null>(null);
-  
+  const activeBrandTarget = useMemo(() => {
+    if (activeBrandTargetId === 'default') {
+      return null;
+    }
+    return readyBrandTargets.find((target: any) => target.id === activeBrandTargetId) ?? null;
+  }, [activeBrandTargetId, readyBrandTargets]);
+
+  const selectedBrandTarget = useMemo(() => {
+    if (selectedBrandTargetId === 'default') {
+      return null;
+    }
+    return readyBrandTargets.find((target: any) => target.id === selectedBrandTargetId) ?? null;
+  }, [selectedBrandTargetId, readyBrandTargets]);
+
+  const activeBrandVariants = useMemo(() => {
+    return (activeBrandTarget?.brandTheme as BrandTheme | null)?.variants ?? {};
+  }, [activeBrandTarget]);
+
+  const activeVariantKey = useMemo(() => {
+    if (!activeBrandTarget) {
+      return 'default';
+    }
+    const keys = Object.keys(activeBrandVariants).sort().join('-');
+    return `${activeBrandTargetId}:${keys}`;
+  }, [activeBrandTarget, activeBrandTargetId, activeBrandVariants]);
+
   useEffect(() => {
     if (dbScenes && currentProps) {
       // 🚨 FIX: Check if scenes have actually changed to prevent redundant syncs
-      const currentSceneIds = dbScenes.map(s => `${s.id}-${s.updatedAt}`).join(',');
+      const currentSceneIds = `${dbScenes.map(s => `${s.id}-${s.updatedAt}`).join(',')}|variant=${activeVariantKey}`;
       
       if (currentSceneIds === lastSyncedSceneIds) {
         // Database scenes unchanged, skipping sync
@@ -241,19 +274,23 @@ useEffect(() => {
         return !(pendingDeleteSet && pendingDeleteSet.has(dbScene.id));
       }).map((dbScene: any) => {
         const sceneDuration = dbScene.duration || 150;
-        if (!dbScene.tsxCode) {
+        const variant = activeBrandVariants?.[dbScene.id];
+        const effectiveTsxCode = variant?.tsxCode ?? dbScene.tsxCode;
+        const effectiveJsCode = variant?.jsCode ?? (dbScene as any).jsCode;
+        if (!effectiveTsxCode) {
           console.warn('[PreviewPanelG] Scene missing tsxCode:', dbScene.id, dbScene.name);
         }
         const localScene = currentProps.scenes?.find((s: any) => s.id === dbScene.id);
         const localName = (localScene as any)?.name || localScene?.data?.name;
-        const hasCompiled = !!(dbScene as any).jsCode;
+        const hasCompiled = !!effectiveJsCode;
         // Per-scene visibility: whether compiled JS will be used
         console.log('[PreviewPanelG] Scene source:', {
           id: dbScene.id,
           name: dbScene.name,
           use: hasCompiled ? 'compiled-js' : 'tsx',
           hasJsCode: hasCompiled,
-          jsCodeLength: hasCompiled ? ((dbScene as any).jsCode?.length || 0) : 0,
+          jsCodeLength: hasCompiled ? (effectiveJsCode?.length || 0) : 0,
+          variantApplied: !!variant,
           duration: sceneDuration,
           order: dbScene.order ?? 0,
         });
@@ -266,9 +303,9 @@ useEffect(() => {
           name: localName || dbScene.name,
           data: {
             // Keep TSX as canonical editing source; expose compiled JS separately
-            code: dbScene.tsxCode,
-            tsxCode: dbScene.tsxCode,
-            jsCode: (dbScene as any).jsCode,
+            code: effectiveTsxCode,
+            tsxCode: effectiveTsxCode,
+            jsCode: effectiveJsCode,
             name: localName || dbScene.name,
             componentId: dbScene.id,
             props: dbScene.props || {}
@@ -329,7 +366,7 @@ useEffect(() => {
         clearTimeout(syncDebounceTimer);
       }
     };
-  }, [dbScenes, projectId, currentProps, lastSyncedSceneIds]);
+  }, [dbScenes, projectId, currentProps, lastSyncedSceneIds, activeVariantKey, activeBrandVariants]);
   
   // Component compilation state
   const [componentImporter, setComponentImporter] = useState<(() => Promise<any>) | null>(null);
@@ -337,20 +374,6 @@ useEffect(() => {
   const [isCompiling, setIsCompiling] = useState(false);
   const [componentError, setComponentError] = useState<Error | null>(null);
   const [refreshToken, setRefreshToken] = useState(`initial-${Date.now()}`);
-
-const activeBrandTarget = useMemo(() => {
-  if (activeBrandTargetId === 'default') {
-    return null;
-  }
-  return readyBrandTargets.find((target: any) => target.id === activeBrandTargetId) ?? null;
-}, [activeBrandTargetId, readyBrandTargets]);
-
-const selectedBrandTarget = useMemo(() => {
-  if (selectedBrandTargetId === 'default') {
-    return null;
-  }
-  return readyBrandTargets.find((target: any) => target.id === selectedBrandTargetId) ?? null;
-}, [selectedBrandTargetId, readyBrandTargets]);
 
   const applyBrandTheme = useCallback((theme: BrandTheme, key: string) => {
     if (typeof window === 'undefined') {
@@ -365,21 +388,41 @@ const selectedBrandTarget = useMemo(() => {
     setRefreshToken(`brand-${key}-${Date.now()}`);
   }, [setRefreshToken]);
 
-  const handleApplyBrandTheme = useCallback((targetId: string) => {
+  const handleApplyBrandTheme = useCallback(async (targetId: string) => {
     setIsApplyingBrandTheme(true);
     try {
-      if (targetId === 'default') {
-        applyBrandTheme(DEFAULT_BRAND_THEME, 'default');
-      } else {
+      if (targetId !== 'default') {
         const target = readyBrandTargets.find((entry: any) => entry.id === targetId);
-        const theme = (target?.brandTheme as BrandTheme | null) ?? DEFAULT_BRAND_THEME;
-        applyBrandTheme(theme, targetId);
+        if (!target) {
+          throw new Error('Selected brand target not found');
+        }
+
+        let themeToApply = sanitizeTheme(target.brandTheme as BrandTheme | null);
+        const hasVariants = Object.keys(themeToApply.variants ?? {}).length > 0;
+
+        if (!hasVariants) {
+          const result = await brandifyScenesMutation.mutateAsync({
+            projectId,
+            targetId,
+          });
+          await utils.personalizationTargets.list.invalidate({ projectId });
+          themeToApply = {
+            ...themeToApply,
+            variants: result.variants ?? {},
+          };
+        }
+
+        applyBrandTheme(sanitizeTheme(themeToApply), targetId);
+      } else {
+        applyBrandTheme(DEFAULT_BRAND_THEME, 'default');
       }
       setActiveBrandTargetId(targetId);
+    } catch (error) {
+      console.error('Failed to apply brand theme', error);
     } finally {
       setIsApplyingBrandTheme(false);
     }
-  }, [applyBrandTheme, readyBrandTargets]);
+  }, [applyBrandTheme, brandifyScenesMutation, projectId, readyBrandTargets, utils.personalizationTargets.list]);
   
   // Playback speed state
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
