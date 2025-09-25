@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { PreviewPanelG } from './panels/PreviewPanelG';
 import ChatPanelG from './panels/ChatPanelG';
 import TemplatesPanelG from './panels/TemplatesPanelG';
@@ -11,13 +11,7 @@ import {
   LayoutTemplateIcon,
   FolderIcon,
   PlusIcon,
-  Smartphone,
-  Monitor,
-  Square,
-  Wand2,
-  Maximize2,
-  Clapperboard,
-  X
+  X,
 } from 'lucide-react';
 import { cn } from '~/lib/cn';
 import { NewProjectButton } from '~/components/client/NewProjectButton';
@@ -31,6 +25,7 @@ const TimelinePanel = dynamic(() => import('./panels/TimelinePanel'), {
     </div>
   )
 });
+
 
 type MobilePanel = 'chat' | 'templates' | 'myprojects' | 'newproject';
 
@@ -52,12 +47,7 @@ export function MobileWorkspaceLayout({
   const storageKey = `bazaar:workspace:${projectId}:mobile-panel`;
   const [activePanel, setActivePanel] = useState<MobilePanel>('chat');
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
-  const [hasGeneratedContent, setHasGeneratedContent] = useState<boolean>(
-    Boolean(initialProps?.scenes?.length)
-  );
   const [isTimelineDrawerOpen, setIsTimelineDrawerOpen] = useState(false);
-  const previewContainerRef = useRef<HTMLDivElement | null>(null);
-
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
@@ -80,9 +70,7 @@ export function MobileWorkspaceLayout({
     setSelectedSceneId(null);
   }, [projectId]);
 
-  useEffect(() => {
-    setHasGeneratedContent(Boolean(initialProps?.scenes?.length));
-  }, [initialProps?.scenes?.length]);
+
 
   const triggerHaptic = useCallback((pattern: number | number[] = 10) => {
     if (typeof window === 'undefined') return;
@@ -99,7 +87,6 @@ export function MobileWorkspaceLayout({
 
   const handleSceneGenerated = useCallback(async (sceneId: string) => {
     setSelectedSceneId(sceneId);
-    setHasGeneratedContent(true);
   }, []);
 
   const handlePanelChange = (panel: MobilePanel) => {
@@ -108,26 +95,6 @@ export function MobileWorkspaceLayout({
       setActivePanel(panel);
     }
   };
-
-  const handleRequestFullscreen = useCallback(() => {
-    triggerHaptic();
-    const container = previewContainerRef.current;
-    if (!container) return;
-
-    try {
-      const anyElement = container as any;
-      if (container.requestFullscreen) {
-        void container.requestFullscreen();
-      } else if (typeof anyElement.webkitRequestFullscreen === 'function') {
-        anyElement.webkitRequestFullscreen();
-      }
-    } catch {}
-  }, [triggerHaptic]);
-
-  const handleOpenTimeline = useCallback(() => {
-    triggerHaptic();
-    setIsTimelineDrawerOpen(true);
-  }, [triggerHaptic]);
 
   const handleCloseTimeline = useCallback(() => {
     triggerHaptic();
@@ -215,78 +182,27 @@ export function MobileWorkspaceLayout({
     return () => window.removeEventListener('resize', calculateHeight);
   }, [videoFormat]);
 
-  // Get format icon and label
-  const getFormatInfo = () => {
-    switch (videoFormat) {
-      case 'portrait':
-        return { icon: <Smartphone className="h-3 w-3" />, label: '9:16' };
-      case 'square':
-        return { icon: <Square className="h-3 w-3" />, label: '1:1' };
-      case 'landscape':
-      default:
-        return { icon: <Monitor className="h-3 w-3" />, label: '16:9' };
-    }
-  };
-
-  const formatInfo = getFormatInfo();
-
   return (
     <div className="flex flex-col h-full bg-gray-50">
       {/* Preview Panel - Dynamic aspect ratio based on format */}
       <div
         className="w-full bg-gray-900 flex items-center justify-center transition-all duration-300 relative overflow-hidden"
         style={previewHeight}
-        ref={previewContainerRef}
       >
         <div className="w-full h-full">
           <PreviewPanelG projectId={projectId} initial={initialProps} selectedSceneId={selectedSceneId} />
         </div>
 
+        {!isTimelineDrawerOpen && (
+          <div className="absolute top-3 right-3 flex flex-col items-end gap-2">
+          </div>
+        )}
       </div>
 
       {/* Active Panel - Remaining space */}
       <div className="flex-1 overflow-hidden bg-white">
         {renderActivePanel()}
       </div>
-
-      {/* Floating quick actions */}
-      {hasGeneratedContent && !isTimelineDrawerOpen && (
-        <div className="fixed bottom-24 right-4 z-40 flex flex-col items-end gap-3">
-          <button
-            type="button"
-            onClick={() => handlePanelChange('chat')}
-            className={cn(
-              'flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-xs font-medium text-gray-700 shadow-lg backdrop-blur-sm transition-colors',
-              activePanel === 'chat' ? 'bg-gray-900 text-white' : 'hover:bg-white'
-            )}
-          >
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-900/10 text-gray-700">
-              <Wand2 className={cn('h-4 w-4', activePanel === 'chat' && 'text-white')} />
-            </span>
-            Generate
-          </button>
-          <button
-            type="button"
-            onClick={handleRequestFullscreen}
-            className="flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-xs font-medium text-gray-700 shadow-lg backdrop-blur-sm transition-colors hover:bg-white"
-          >
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-900/10 text-gray-700">
-              <Maximize2 className="h-4 w-4" />
-            </span>
-            Full preview
-          </button>
-          <button
-            type="button"
-            onClick={handleOpenTimeline}
-            className="flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-xs font-medium text-gray-700 shadow-lg backdrop-blur-sm transition-colors hover:bg-white"
-          >
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-900/10 text-gray-700">
-              <Clapperboard className="h-4 w-4" />
-            </span>
-            Timeline
-          </button>
-        </div>
-      )}
 
       {isTimelineDrawerOpen && (
         <div className="fixed inset-0 z-50 flex flex-col bg-black/40 backdrop-blur-sm">
