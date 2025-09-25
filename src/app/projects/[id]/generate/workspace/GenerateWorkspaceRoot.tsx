@@ -4,6 +4,7 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useSession } from "next-auth/react";
+import { useRouter } from 'next/navigation';
 import { useVideoState } from '~/stores/videoState';
 import { api } from "~/trpc/react";
 import AppHeader from "~/components/AppHeader";
@@ -34,6 +35,7 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
   const [isCreateTemplateModalOpen, setIsCreateTemplateModalOpen] = useState(false);
   const [isTimelineVisible, setIsTimelineVisible] = useState(false);
   const [isTimelineMounted, setIsTimelineMounted] = useState(false);
+  const router = useRouter();
   const TIMELINE_ANIM_MS = 320;
   const [timelineAnim, setTimelineAnim] = useState<'enter' | 'exit' | null>(null);
   useEffect(() => {
@@ -215,9 +217,17 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
     setTitle(newTitle);
     setUserProjects((prev) => prev.map(p => p.id === projectId ? { ...p, name: newTitle } : p));
   }, [projectId]);
-  
+
   // Get tRPC utils for cache invalidation
   const utils = api.useUtils();
+
+  const handleProjectSwitch = useCallback((targetId: string) => {
+    if (!targetId || targetId === projectId) return;
+    try {
+      setIsTimelineVisible(false);
+    } catch {}
+    router.push(`/projects/${targetId}/generate`);
+  }, [projectId, router]);
 
   // Set up rename mutation
   const renameMutation = api.project.rename.useMutation({
@@ -309,6 +319,9 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
               userId={userId}
               onRename={handleRename}
               isRenaming={renameMutation.isPending}
+              projects={userProjects}
+              currentProjectId={projectId}
+              onProjectSwitch={handleProjectSwitch}
             />
           </div>
           <div className="flex-1 overflow-hidden">
@@ -334,6 +347,9 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
           user={user}
           projectId={projectId}
           onCreateTemplate={() => setIsCreateTemplateModalOpen(true)}
+          projects={userProjects}
+          currentProjectId={projectId}
+          onProjectSwitch={handleProjectSwitch}
         />
       </div>
       

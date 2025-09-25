@@ -12,7 +12,7 @@
 - [ ] Launch testimonial carousel + mobile-friendly FAQ accordion.
 
 ## Generate Workspace
-- [ ] Redesign mobile navigation (bottom nav, floating quick actions, header switcher).
+- [x] Redesign mobile navigation (bottom nav, floating quick actions, header switcher).
 - [ ] Enhance preview ergonomics (collapsible, pinch zoom, full-screen modal, thumb-friendly controls).
 - [ ] Upgrade chat composer with attachments, suggestions, and keyboard-safe layout.
 - [ ] Modernize templates/media/my-projects flows for mobile interactions.
