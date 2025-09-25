@@ -354,54 +354,10 @@ export default function AppHeader({
       {/* Center: Project Title - Responsive */}
       <div className="flex-1 flex justify-center px-4 min-w-0">
         {projectTitle ? (
-          <div className="flex w-full max-w-[320px] flex-col items-center gap-1 min-w-0">
-            {canSwitchProjects ? (
-              <nav className="flex items-center gap-1 text-xs text-muted-foreground">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      className="flex items-center gap-1 rounded-full bg-gray-100/80 px-2 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-200"
-                      aria-label="Switch project"
-                    >
-                      <FolderIcon className="h-3 w-3" />
-                      Projects
-                      <ChevronDown className="h-3 w-3" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="center" className="w-56 max-h-64 overflow-y-auto rounded-[12px] border border-gray-100 shadow-lg">
-                    <DropdownMenuLabel className="text-xs font-medium text-gray-500">Switch project</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {projects?.map((project) => (
-                      <DropdownMenuItem
-                        key={project.id}
-                        onClick={() => handleProjectSwitch(project.id)}
-                        className="flex items-center justify-between gap-2 text-xs"
-                      >
-                        <span className="truncate">{project.name}</span>
-                        {project.id === currentProjectId && <CheckIcon className="h-3 w-3 text-green-500" />}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <span>/</span>
-                <span
-                  className="max-w-[180px] truncate font-medium text-gray-700"
-                  title={currentProjectName || projectTitle}
-                >
-                  {currentProjectName || projectTitle}
-                </span>
-              </nav>
-            ) : (
-              <div className="text-xs text-muted-foreground">
-                Projects /
-                <span className="ml-1 font-medium text-gray-700" title={projectTitle}>
-                  {projectTitle}
-                </span>
-              </div>
-            )}
+          <div className="flex w-full max-w-[320px] flex-col items-center gap-2 min-w-0">
             {isEditingName ? (
-              <div className="flex items-center w-full min-w-0">
+              <div className="flex items-center w-full min-w-0 gap-2">
+                
                 <Input
                   value={newTitle}
                   onChange={e => setNewTitle(e.target.value)}
@@ -417,12 +373,12 @@ export default function AppHeader({
                     }
                   }}
                 />
-                <div className="flex items-center ml-2 flex-shrink-0">
+                <div className="flex items-center gap-1 flex-shrink-0">
                   <Button 
                     type="button" 
                     size="icon" 
                     variant="default" 
-                    className="w-6 h-6 bg-green-500 hover:bg-green-600 mr-1 rounded-[8px] shadow-sm"
+                    className="w-6 h-6 bg-green-500 hover:bg-green-600 rounded-[8px] shadow-sm"
                     onClick={handleRenameClick} 
                     disabled={isRenaming}
                   >
@@ -444,25 +400,27 @@ export default function AppHeader({
                 </div>
               </div>
             ) : (
-              <h1
-                className={`text-sm font-medium cursor-pointer hover:text-primary px-2 text-center truncate min-w-0 ${
-                  isRenaming ? 'text-gray-400 pointer-events-none' : ''
-                }`}
-                onClick={() => {
-                  setNewTitle(projectTitle);
-                  setIsEditingName(true);
-                }}
-                title={projectTitle} // Show full title on hover
-              >
-                {isRenaming ? (
-                  <div className="flex items-center justify-center gap-2">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    <span>{newTitle}</span>
-                  </div>
-                ) : (
-                  projectTitle
-                )}
-              </h1>
+              <div className="flex items-center gap-2">
+                <h1
+                  className={`text-sm font-medium cursor-pointer hover:text-primary truncate min-w-0 ${
+                    isRenaming ? 'text-gray-400 pointer-events-none' : ''
+                  }`}
+                  onClick={() => {
+                    setNewTitle(projectTitle);
+                    setIsEditingName(true);
+                  }}
+                  title={currentProjectName || projectTitle}
+                >
+                  {isRenaming ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <span>{newTitle}</span>
+                    </div>
+                  ) : (
+                    projectTitle
+                  )}
+                </h1>
+              </div>
             )}
           </div>
         ) : null}

@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { cn } from "~/lib/cn";
 import { generateCleanFilename } from "~/lib/utils/filename";
 import { useVideoState } from "~/stores/videoState";
+import { useIsTouchDevice } from "~/hooks/use-is-touch";
 
 export type ExportFormat = "mp4" | "webm" | "gif";
 export type ExportQuality = "1080p" | "720p" | "480p";
@@ -46,6 +47,7 @@ export function ExportDropdown({ projectId, projectTitle = "video", className, s
   
   // Get playback speed from Zustand state
   const playbackSpeed = useVideoState(state => state.projects[projectId]?.playbackSpeed ?? 1.0);
+  const isTouchDevice = useIsTouchDevice();
   
   // When format changes to GIF, default to 720p for reasonable file size
   React.useEffect(() => {
@@ -146,7 +148,61 @@ export function ExportDropdown({ projectId, projectTitle = "video", className, s
   const isCompleted = status?.status === 'completed';
   const progress = status?.progress || 0;
 
+  const renderButtonContent = (showChevron: boolean) => {
+    if (isCompleted) {
+      return (
+        <>
+          <Check className="h-4 w-4 text-green-500" />
+          Rendered!
+        </>
+      );
+    }
 
+    if (isRendering) {
+      return (
+        <>
+          <Loader2 className="h-4 w-4 animate-spin" />
+          {`${progress}%`}
+        </>
+      );
+    }
+
+    if (startRender.isPending) {
+      return (
+        <>
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Starting...
+        </>
+      );
+    }
+
+    return (
+      <>
+        <Download className="h-4 w-4" />
+        Download
+        {showChevron && <ChevronDown className="h-3 w-3 opacity-50" />}
+      </>
+    );
+  };
+
+  const handleQuickExport = () => {
+    if (isRendering || startRender.isPending) return;
+    handleExport('mp4', '1080p');
+  };
+
+  if (isTouchDevice) {
+    return (
+      <Button
+        variant="default"
+        size={size}
+        className={cn("gap-2", className)}
+        disabled={isRendering || startRender.isPending}
+        onClick={handleQuickExport}
+      >
+        {renderButtonContent(false)}
+      </Button>
+    );
+  }
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
@@ -157,28 +213,7 @@ export function ExportDropdown({ projectId, projectTitle = "video", className, s
           className={cn("gap-2", className)}
           disabled={isRendering || startRender.isPending}
         >
-          {isCompleted ? (
-            <>
-              <Check className="h-4 w-4 text-green-500" />
-              Rendered!
-            </>
-          ) : isRendering ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              {`${progress}%`}
-            </>
-          ) : startRender.isPending ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Starting...
-            </>
-          ) : (
-            <>
-              <Download className="h-4 w-4" />
-              Download
-              <ChevronDown className="h-3 w-3 opacity-50" />
-            </>
-          )}
+          {renderButtonContent(true)}
         </Button>
       </DropdownMenuTrigger>
       

@@ -13,10 +13,22 @@
 
 ## Generate Workspace
 - [x] Redesign mobile navigation (bottom nav, floating quick actions, header switcher).
-- [ ] Enhance preview ergonomics (collapsible, pinch zoom, full-screen modal, thumb-friendly controls).
-- [ ] Upgrade chat composer with attachments, suggestions, and keyboard-safe layout.
-- [ ] Modernize templates/media/my-projects flows for mobile interactions.
-- [ ] Build mobile timeline drawer with scene reordering + audio summary.
+- [ ] Enhance preview ergonomics
+  - [ ] Drive preview sizing from actual aspect ratio and show orientation guidance for portrait vs landscape scenes.
+  - [ ] Add pinch-to-zoom, double-tap reset, and thumb-friendly scrub bar with scene markers.
+  - [ ] Replace native fullscreen call with custom modal that adds playback controls, captions, and safe-area padding.
+- [ ] Upgrade mobile chat composer
+  - [ ] Design sticky, safe-area aware composer with larger input, labeled attach/voice buttons, and suggestion chips.
+  - [ ] Implement inline upload carousel (progress, retry, swipe-to-remove) plus camera/photo picker shortcuts.
+  - [ ] Remove desktop drag cues, tighten error states, and support inline transcript display from voice input.
+- [ ] Modernize templates / media / projects surfaces
+  - [ ] Convert "Projects" tab into mobile-first list/cards with quick actions (rename, share, delete) and lightweight previews. (Touch-safe preview + controls shipped; follow-up: dedicated rename/share affordances)
+  - [ ] Rework templates into category tabs with horizontal carousels and lazy-loaded previews for performance. (Mobile list & deferred previews landed; next: category surfacing + carousels)
+  - [ ] Surface media library as a bottom sheet accessible from composer + quick actions with large tap targets.
+- [ ] Build mobile timeline drawer
+  - [ ] Replace embedded desktop timeline with stacked scene cards, drag handles, and per-card duration slider.
+  - [ ] Add mute toggle, audio waveform summary, and quick insert controls for gaps.
+  - [ ] Remember drawer state and expose timeline entry point near preview for discoverability.
 - [ ] Create dedicated mobile share/export flow with resilient error handling.
 
 ## Instrumentation & QA

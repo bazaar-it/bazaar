@@ -1,9 +1,19 @@
 # 🏆 Bazaar-Vid Progress Summary
 
+## 📝 Latest Update (Sep 29, 2025)
+- Sprint 140: Refactored `NewProjectButton` to reuse the shared `useIsMobile` hook, fixing the mobile TDZ crash and aligning project creation with the central breakpoint system.【src/components/client/NewProjectButton.tsx:11】【src/components/client/NewProjectButton.tsx:41】
+- Sprint 140: Synced the mobile format picker sheet with breakpoint changes so it auto-closes when dropdowns are disabled or the viewport shifts back to desktop layouts.【src/components/client/NewProjectButton.tsx:108】【memory-bank/sprints/sprint140_mobile/progress.md:39】
+- Sprint 140: Projects panel now renders real scene thumbnails on mobile (frame 15) instead of placeholder initials, bringing parity with desktop cards while keeping previews optional.【src/app/projects/[id]/generate/workspace/panels/MyProjectsPanelG.tsx:197】【src/app/projects/[id]/generate/workspace/panels/MyProjectsPanelG.tsx:298】
+- Sprint 140: Restored `TemplatesPanelG` to the stable main-branch implementation after mobile tweaks regressed desktop behaviour, keeping hover previews and format-aware grid intact for both form factors.【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx:1】
+- Sprint 140: Avoided mobile template crashes by preferring cached thumbnails, compiling on-demand when no image exists, and removing duplicate labels so touch users still see accurate frame-15 previews without hover logic.【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx:52】【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx:624】
+- Sprint 140: Streamlined mobile sharing/export—copy succeeds when possible, otherwise the link is dropped into chat, and the download button now triggers a one-tap MP4 1080p render like desktop auto-export.【src/components/MobileAppHeader.tsx:98】【src/components/export/ExportDropdown.tsx:88】
+
 ## 📝 Latest Update (Sep 27, 2025)
 - Sprint 140: Documented desktop vs mobile UX map for Projects and Generate flows to anchor upcoming mobile-first work.【memory-bank/sprints/sprint140_mobile/desktop-vs-mobile-ux-map.md:1】
 - Sprint 140: Logged sprint progress items detailing priority mobile pain points for planning next iterations.【memory-bank/sprints/sprint140_mobile/progress.md:30】
 - Sprint 140: Delivered mobile chat composer improvements (safe-area sticky bar, compact attachment tray) to stop keyboard overlap on phones.【src/app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx:1828】
+- Sprint 140: Removed mobile timeline access while we work on a touch-first redesign, keeping the workspace focused on chat + preview flows.【src/app/projects/[id]/generate/workspace/MobileWorkspaceLayout.tsx:220】
+- Sprint 140: Flattened template previews to static frames so the mobile Templates panel no longer loads hover video players.【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx:123】
 
 ## 📝 Latest Update (Sep 26, 2025)
 - Sprint 140: Implemented mobile navigation overhaul—bottom nav state persists per project with haptic feedback, quick actions for generate/preview/timeline, and documented approach in the navigation analysis.【F:src/app/projects/[id]/generate/workspace/MobileWorkspaceLayout.tsx†L1-L233】【F:memory-bank/sprints/sprint140_mobile/navigation-wayfinding-analysis.md†L1-L33】

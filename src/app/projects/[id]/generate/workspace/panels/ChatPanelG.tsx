@@ -30,6 +30,7 @@ import { useAutoFix } from "~/hooks/use-auto-fix";
 import { useSSEGeneration } from "~/hooks/use-sse-generation";
 import { PurchaseModal } from "~/components/purchase/PurchaseModal";
 import { extractYouTubeUrl } from "~/brain/tools/youtube-analyzer";
+import { useIsMobile } from "~/hooks/use-breakpoint";
 
 
 // Component message representation for UI display
@@ -84,6 +85,7 @@ export default function ChatPanelG({
   onSceneGenerated,
   userId,
 }: ChatPanelGProps) {
+  const isMobile = useIsMobile();
   // Get draft message and attachments from store to persist across panel changes
   const EMPTY_ATTACHMENTS: DraftAttachment[] = React.useMemo(() => [], []);
   const draftMessage = useVideoState((state) => state.projects[projectId]?.draftMessage || '');
@@ -1813,7 +1815,11 @@ export default function ChatPanelG({
   return (
     <div className="flex flex-col h-full">
       {/* Messages container */}
-      <div ref={chatContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden p-4" onScroll={handleScroll}>
+      <div
+        ref={chatContainerRef}
+        className={cn("flex-1 overflow-y-auto overflow-x-hidden p-4", isMobile && "px-3 pb-6")}
+        onScroll={handleScroll}
+      >
         <div className="space-y-4">
           {messages.map((msg, index) => {
             // Find all scene plan messages
@@ -1866,7 +1872,13 @@ export default function ChatPanelG({
       </div>
 
       {/* Input area */}
-      <div className="p-4">
+      <div
+        className={cn(
+          "p-4",
+          isMobile && "sticky bottom-0 z-10 px-3 pt-3 pb-3 bg-white border-t border-gray-100 shadow-[0_-8px_16px_rgba(15,23,42,0.08)]"
+        )}
+        style={isMobile ? { paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)" } : undefined}
+      >
 
 
         {/* Media upload preview area */}
@@ -1875,18 +1887,24 @@ export default function ChatPanelG({
           onMediaChange={setUploadedImages}
           projectId={projectId}
           onAudioExtract={handleAudioExtract}
+          isCompact={isMobile}
         />
 
         {/* Current operation indicator removed to prevent duplicate "Analyzing your request..." messages */}
         
-        <form onSubmit={handleSubmit} className="flex items-end" autoComplete="off">
+        <form
+          onSubmit={handleSubmit}
+          className={cn("flex items-end", isMobile && "gap-2")}
+          autoComplete="off"
+        >
           <div 
             className={cn(
               "flex-1 relative rounded-2xl border bg-white shadow-sm transition-all",
               message.length > SAFE_CHARACTER_LIMIT 
                 ? "border-red-400 border-2" 
                 : "border-gray-300 focus-within:border-gray-400 focus-within:shadow-md",
-              isDragOver && "border-orange-400 bg-orange-50"
+              isDragOver && "border-orange-400 bg-orange-50",
+              isMobile && "max-h-[45vh]"
             )}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
