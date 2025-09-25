@@ -1,5 +1,10 @@
 # 🏆 Bazaar-Vid Progress Summary
 
+## 📝 Latest Update (Sep 25, 2025)
+- Sprint 140: Opened "Mobile Experience Overhaul" with objectives, success metrics, and workstreams covering marketing funnel, workspace ergonomics, and instrumentation improvements.【F:memory-bank/sprints/sprint140_mobile/README.md†L1-L28】
+- Logged comprehensive mobile opportunity outline spanning foundation, landing page, generate workspace, and rollout plan to guide implementation.【F:memory-bank/sprints/sprint140_mobile/mobile-experience-outline.md†L1-L93】
+- Seeded sprint TODO + progress logs to coordinate planning and upcoming design/engineering tasks.【F:memory-bank/sprints/sprint140_mobile/TODO.md†L1-L32】【F:memory-bank/sprints/sprint140_mobile/progress.md†L1-L10】
+
 ## 📝 Latest Update (Sep 24, 2025)
 - Sprint 110: Stood up UTM attribution sprint docs (`memory-bank/sprints/sprint110_utm/`) detailing client capture, signed cookie + NextAuth persistence, reporting SQL, success metrics (95% coverage), and staging-first rollout plan.
 - Sprint 110: Implemented attribution capture/ingest stack (client capture, signed cookie HMAC helpers, `/api/attribution/{capture,ingest}`, `user_attribution` schema + SQL migration with backfill) without touching auth critical path.
