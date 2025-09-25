@@ -1,5 +1,10 @@
 # 🏆 Bazaar-Vid Progress Summary
 
+## 📝 Latest Update (Sep 26, 2025)
+- Sprint 140: Implemented mobile navigation overhaul—bottom nav state persists per project with haptic feedback, quick actions for generate/preview/timeline, and documented approach in the navigation analysis.【F:src/app/projects/[id]/generate/workspace/MobileWorkspaceLayout.tsx†L1-L233】【F:memory-bank/sprints/sprint140_mobile/navigation-wayfinding-analysis.md†L1-L33】
+- Added floating timeline drawer and fullscreen preview quick action to keep mobile workflows thumb-friendly after the first prompt.【F:src/app/projects/[id]/generate/workspace/MobileWorkspaceLayout.tsx†L134-L210】
+- Delivered breadcrumb-driven project switcher across desktop and mobile headers so projects can be swapped in place without leaving the workspace.【F:src/components/AppHeader.tsx†L1-L239】【F:src/components/MobileAppHeader.tsx†L1-L233】【F:memory-bank/sprints/sprint140_mobile/progress.md†L12-L25】
+
 ## 📝 Latest Update (Sep 25, 2025)
 - Sprint 140: Opened "Mobile Experience Overhaul" with objectives, success metrics, and workstreams covering marketing funnel, workspace ergonomics, and instrumentation improvements.【F:memory-bank/sprints/sprint140_mobile/README.md†L1-L28】
 - Logged comprehensive mobile opportunity outline spanning foundation, landing page, generate workspace, and rollout plan to guide implementation.【F:memory-bank/sprints/sprint140_mobile/mobile-experience-outline.md†L1-L93】

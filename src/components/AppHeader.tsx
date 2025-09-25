@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { DownloadIcon, LogOutIcon, CheckIcon, XIcon, ShareIcon, Copy, Loader2, Layers } from "lucide-react";
+import { DownloadIcon, LogOutIcon, CheckIcon, XIcon, ShareIcon, Copy, Loader2, Layers, ChevronDown, FolderIcon } from "lucide-react";
 import { signOut } from "next-auth/react";
 import {
   DropdownMenu,
@@ -59,6 +59,9 @@ interface AppHeaderProps {
   user?: { name: string; email?: string; isAdmin?: boolean };
   projectId?: string;
   onCreateTemplate?: () => void;
+  projects?: { id: string; name: string }[];
+  currentProjectId?: string;
+  onProjectSwitch?: (projectId: string) => void;
 }
 
 export default function AppHeader({
@@ -70,12 +73,22 @@ export default function AppHeader({
   user,
   projectId,
   onCreateTemplate,
+  projects,
+  currentProjectId,
+  onProjectSwitch,
 }: AppHeaderProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [newTitle, setNewTitle] = useState(projectTitle || "");
   const [isSharing, setIsSharing] = useState(false);
   const [renderId, setRenderId] = useState<string | null>(null);
   const [hasDownloaded, setHasDownloaded] = useState(false);
+  const currentProjectName = projects?.find((p) => p.id === currentProjectId)?.name;
+  const canSwitchProjects = Boolean(onProjectSwitch && projects && projects.length > 0);
+
+  const handleProjectSwitch = React.useCallback((targetId: string) => {
+    if (!onProjectSwitch) return;
+    onProjectSwitch(targetId);
+  }, [onProjectSwitch]);
 
   // Sync newTitle with projectTitle prop when it changes
   React.useEffect(() => {
@@ -341,7 +354,52 @@ export default function AppHeader({
       {/* Center: Project Title - Responsive */}
       <div className="flex-1 flex justify-center px-4 min-w-0">
         {projectTitle ? (
-          <div className="max-w-[280px] w-full flex justify-center min-w-0">
+          <div className="flex w-full max-w-[320px] flex-col items-center gap-1 min-w-0">
+            {canSwitchProjects ? (
+              <nav className="flex items-center gap-1 text-xs text-muted-foreground">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex items-center gap-1 rounded-full bg-gray-100/80 px-2 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-200"
+                      aria-label="Switch project"
+                    >
+                      <FolderIcon className="h-3 w-3" />
+                      Projects
+                      <ChevronDown className="h-3 w-3" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="center" className="w-56 max-h-64 overflow-y-auto rounded-[12px] border border-gray-100 shadow-lg">
+                    <DropdownMenuLabel className="text-xs font-medium text-gray-500">Switch project</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {projects?.map((project) => (
+                      <DropdownMenuItem
+                        key={project.id}
+                        onClick={() => handleProjectSwitch(project.id)}
+                        className="flex items-center justify-between gap-2 text-xs"
+                      >
+                        <span className="truncate">{project.name}</span>
+                        {project.id === currentProjectId && <CheckIcon className="h-3 w-3 text-green-500" />}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <span>/</span>
+                <span
+                  className="max-w-[180px] truncate font-medium text-gray-700"
+                  title={currentProjectName || projectTitle}
+                >
+                  {currentProjectName || projectTitle}
+                </span>
+              </nav>
+            ) : (
+              <div className="text-xs text-muted-foreground">
+                Projects /
+                <span className="ml-1 font-medium text-gray-700" title={projectTitle}>
+                  {projectTitle}
+                </span>
+              </div>
+            )}
             {isEditingName ? (
               <div className="flex items-center w-full min-w-0">
                 <Input

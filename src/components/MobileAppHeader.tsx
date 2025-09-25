@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { ShareIcon, Copy, CheckIcon, XIcon, Download, MoreVertical, Loader2 } from "lucide-react";
+import { ShareIcon, Copy, CheckIcon, XIcon, Download, Loader2, ChevronDown, FolderIcon } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { api } from "~/trpc/react";
@@ -12,6 +12,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
 } from "~/components/ui/dropdown-menu";
 import { ExportDropdown } from "~/components/export/ExportDropdown";
 
@@ -21,6 +23,9 @@ interface MobileAppHeaderProps {
   userId?: string;
   onRename?: (newName: string) => void;
   isRenaming?: boolean;
+  projects?: { id: string; name: string }[];
+  currentProjectId?: string;
+  onProjectSwitch?: (projectId: string) => void;
 }
 
 export default function MobileAppHeader({
@@ -29,10 +34,20 @@ export default function MobileAppHeader({
   userId,
   onRename,
   isRenaming = false,
+  projects,
+  currentProjectId,
+  onProjectSwitch,
 }: MobileAppHeaderProps) {
   const [isSharing, setIsSharing] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [newTitle, setNewTitle] = useState(projectTitle || "");
+  const currentProjectName = projects?.find((project) => project.id === currentProjectId)?.name;
+  const canSwitchProjects = Boolean(onProjectSwitch && projects && projects.length > 0);
+
+  const handleProjectSwitch = (targetId: string) => {
+    if (!onProjectSwitch) return;
+    onProjectSwitch(targetId);
+  };
 
   // Check for existing share
   const { data: existingShare } = api.share.getProjectShare.useQuery(
@@ -152,74 +167,119 @@ export default function MobileAppHeader({
         </a>
       </div>
 
-      {/* Center: Project Title (editable on click) - Flex grow and center */}
-      <div className="flex-1 flex justify-center px-2">
+      {/* Center: Breadcrumb + Project Title */}
+      <div className="flex-1 flex flex-col items-center justify-center px-2">
+        {canSwitchProjects ? (
+          <nav className="mb-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-1 rounded-full bg-gray-100/80 px-2 py-1 text-[11px] font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-200"
+                  aria-label="Switch project"
+                >
+                  <FolderIcon className="h-3 w-3" />
+                  Projects
+                  <ChevronDown className="h-3 w-3" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="center" className="w-52 max-h-64 overflow-y-auto rounded-[12px] border border-gray-100 shadow-lg">
+                <DropdownMenuLabel className="text-[11px] font-medium text-gray-500">Switch project</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {projects?.map((project) => (
+                  <DropdownMenuItem
+                    key={project.id}
+                    onClick={() => handleProjectSwitch(project.id)}
+                    className="flex items-center justify-between gap-2 text-[11px]"
+                  >
+                    <span className="truncate">{project.name}</span>
+                    {project.id === currentProjectId && <CheckIcon className="h-3 w-3 text-green-500" />}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <span>/</span>
+            <span
+              className="max-w-[160px] truncate font-medium text-gray-700"
+              title={currentProjectName || projectTitle}
+            >
+              {currentProjectName || projectTitle}
+            </span>
+          </nav>
+        ) : (
+          <div className="mb-1 text-[11px] text-muted-foreground">
+            Projects /
+            <span className="ml-1 font-medium text-gray-700" title={projectTitle}>
+              {projectTitle}
+            </span>
+          </div>
+        )}
+
         {projectTitle && (
           <div className="max-w-[200px]">
             {isEditingName ? (
               <div className="flex items-center gap-1">
-              <Input
-                value={newTitle}
-                onChange={e => setNewTitle(e.target.value)}
-                className="h-7 text-xs px-2 font-medium"
-                autoFocus
-                disabled={isRenaming}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleRenameClick();
-                  } else if (e.key === 'Escape') {
+                <Input
+                  value={newTitle}
+                  onChange={e => setNewTitle(e.target.value)}
+                  className="h-7 text-xs px-2 font-medium"
+                  autoFocus
+                  disabled={isRenaming}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleRenameClick();
+                    } else if (e.key === 'Escape') {
+                      setNewTitle(projectTitle || "");
+                      setIsEditingName(false);
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="h-6 w-6"
+                  onClick={handleRenameClick}
+                  disabled={isRenaming}
+                >
+                  <CheckIcon className="h-3 w-3 text-green-600" />
+                </Button>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="h-6 w-6"
+                  onClick={() => {
                     setNewTitle(projectTitle || "");
                     setIsEditingName(false);
-                  }
-                }}
-              />
-              <Button 
-                type="button" 
-                size="icon" 
-                variant="ghost" 
-                className="h-6 w-6"
-                onClick={handleRenameClick} 
-                disabled={isRenaming}
-              >
-                <CheckIcon className="h-3 w-3 text-green-600" />
-              </Button>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="h-6 w-6"
+                  }}
+                  disabled={isRenaming}
+                >
+                  <XIcon className="h-3 w-3 text-red-600" />
+                </Button>
+              </div>
+            ) : (
+              <h1
+                className={`text-sm font-medium truncate cursor-pointer hover:text-gray-700 ${
+                  isRenaming ? 'text-gray-400 pointer-events-none' : 'text-gray-900'
+                }`}
                 onClick={() => {
-                  setNewTitle(projectTitle || "");
-                  setIsEditingName(false);
+                  setNewTitle(projectTitle);
+                  setIsEditingName(true);
                 }}
-                disabled={isRenaming}
               >
-                <XIcon className="h-3 w-3 text-red-600" />
-              </Button>
-            </div>
-          ) : (
-            <h1 
-              className={`text-sm font-medium truncate cursor-pointer hover:text-gray-700 ${
-                isRenaming ? 'text-gray-400 pointer-events-none' : 'text-gray-900'
-              }`}
-              onClick={() => {
-                setNewTitle(projectTitle);
-                setIsEditingName(true);
-              }}
-            >
-              {isRenaming ? (
-                <div className="flex items-center justify-center gap-2">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  <span>{newTitle}</span>
-                </div>
-              ) : (
-                projectTitle
-              )}
-            </h1>
-          )}
-        </div>
-      )}
-
+                {isRenaming ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span>{newTitle}</span>
+                  </div>
+                ) : (
+                  projectTitle
+                )}
+              </h1>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Actions dropdown - Fixed width */}
