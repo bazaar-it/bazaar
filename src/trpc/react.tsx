@@ -7,6 +7,7 @@ import { createTRPCReact } from "@trpc/react-query";
 import { type inferRouterInputs, type inferRouterOutputs } from "@trpc/server";
 import { useState } from "react";
 import SuperJSON from "superjson";
+import { toast } from "sonner";
 
 import { type AppRouter } from "~/server/api/root";
 import { createQueryClient } from "./query-client";
@@ -24,6 +25,34 @@ const getQueryClient = () => {
 };
 
 export const api = createTRPCReact<AppRouter>();
+
+const notifyTrafficSpike = (() => {
+  let lastToastAt = 0;
+  const COOLDOWN_MS = 10000;
+
+  return () => {
+    if (typeof window === "undefined") return;
+    const now = Date.now();
+    if (now - lastToastAt < COOLDOWN_MS) return;
+    lastToastAt = now;
+    toast.warning("We’re seeing a traffic spike. Please retry in a few seconds.", {
+      duration: 6000,
+    });
+  };
+})();
+
+const fetchWithTrafficToast: typeof fetch = async (input, init) => {
+  try {
+    const response = await fetch(input, init);
+    if (response.status === 429 || response.status === 503) {
+      notifyTrafficSpike();
+    }
+    return response;
+  } catch (error) {
+    notifyTrafficSpike();
+    throw error;
+  }
+};
 
 /**
  * Inference helper for inputs.
@@ -58,6 +87,7 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
             headers.set("x-trpc-source", "nextjs-react");
             return headers;
           },
+          fetch: fetchWithTrafficToast,
         }),
       ],
     })
