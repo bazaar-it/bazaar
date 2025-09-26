@@ -2,7 +2,8 @@
 
 import React, { useCallback } from 'react';
 import { nanoid } from 'nanoid';
-import { Loader2, CheckCircleIcon, XCircleIcon } from 'lucide-react';
+import { Loader2, XCircleIcon } from 'lucide-react';
+import { cn } from '~/lib/cn';
 
 export interface UploadedMedia {
   id: string;
@@ -22,6 +23,7 @@ interface MediaUploadProps {
   disabled?: boolean;
   onAudioSelect?: (audio: UploadedMedia) => void; // Callback when audio is selected for trimming
   onAudioExtract?: (videoMedia: UploadedMedia) => void; // Callback when audio is extracted from video
+  isCompact?: boolean; // Compact layout for narrow viewports
 }
 
 export function MediaUpload({
@@ -30,7 +32,8 @@ export function MediaUpload({
   projectId,
   disabled = false,
   onAudioSelect,
-  onAudioExtract
+  onAudioExtract,
+  isCompact = false
 }: MediaUploadProps) {
   // Image compression utility
   const compressImage = async (file: File): Promise<File> => {
@@ -160,37 +163,56 @@ export function MediaUpload({
     );
   }, [uploadedMedia, onMediaChange]);
 
+  const tileSizeClass = isCompact ? "h-20 w-20" : "h-24 w-24";
+  const containerClasses = cn(
+    "mb-3 flex gap-2",
+    isCompact ? "-mx-2 px-2 overflow-x-auto flex-nowrap pb-2" : "flex-wrap"
+  );
+
   if (uploadedMedia.length === 0) return null;
 
   return (
-    <div className="mb-3 flex gap-2 flex-wrap">
+    <div className={containerClasses}>
       {uploadedMedia.map((media) => (
-        <div key={media.id} className="relative border bg-gray-50 flex items-center justify-center group" style={{ borderRadius: '15px' }}>
+        <div
+          key={media.id}
+          className={cn(
+            "relative border bg-gray-50 flex items-center justify-center group",
+            tileSizeClass,
+            isCompact && "flex-shrink-0"
+          )}
+          style={{ borderRadius: "15px" }}
+        >
           {/* Show loading spinner until media is fully loaded */}
           {(media.status === 'uploading' || (media.status === 'uploaded' && (!media.url || !media.isLoaded))) && (
-            <div className="w-24 h-24 flex items-center justify-center">
+            <div className={cn(tileSizeClass, "flex items-center justify-center")}>
               <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
             </div>
           )}
           {media.status === 'error' && (
-            <div className="w-24 h-24 flex items-center justify-center">
+            <div className={cn(tileSizeClass, "flex items-center justify-center")}>
               <XCircleIcon className="h-6 w-6 text-red-500" />
             </div>
           )}
           {/* Only show media when fully loaded */}
           {media.url && media.status === 'uploaded' && media.isLoaded && (
             media.type === 'video' ? (
-              <video 
-                src={media.url} 
-                className="max-w-32 max-h-32 w-auto h-auto"
-                style={{ borderRadius: '15px' }}
+              <video
+                src={media.url}
+                className="h-full w-full object-cover"
+                style={{ borderRadius: "15px" }}
                 muted
+                playsInline
               />
             ) : media.type === 'audio' ? (
               <button
                 onClick={() => onAudioSelect?.(media)}
-                className="w-24 h-24 flex flex-col items-center justify-center gap-2 hover:bg-gray-100 transition-colors"
-                style={{ borderRadius: '15px' }}
+                className={cn(
+                  tileSizeClass,
+                  "flex flex-col items-center justify-center gap-2 hover:bg-gray-100 transition-colors",
+                  isCompact && "px-1"
+                )}
+                style={{ borderRadius: "15px" }}
               >
                 <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
@@ -200,11 +222,11 @@ export function MediaUpload({
                 </span>
               </button>
             ) : (
-              <img 
-                src={media.url} 
-                alt="Upload preview" 
-                className="max-w-32 max-h-32 w-auto h-auto"
-                style={{ borderRadius: '15px' }}
+              <img
+                src={media.url}
+                alt="Upload preview"
+                className="h-full w-full object-cover"
+                style={{ borderRadius: "15px" }}
               />
             )
           )}

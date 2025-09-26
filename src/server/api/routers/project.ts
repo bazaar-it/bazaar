@@ -136,16 +136,40 @@ export const projectRouter = createTRPCRouter({
 
   // Delete all empty projects (zero scenes) for current user
   pruneEmpty: protectedProcedure
-    .mutation(async ({ ctx }) => {
+    .input(
+      z
+        .object({
+          excludeProjectId: z.string().uuid().optional(),
+        })
+        .optional(),
+    )
+    .mutation(async ({ ctx, input }) => {
       try {
+        const GRACE_PERIOD_MINUTES = 15;
+        const graceCutoff = new Date(Date.now() - GRACE_PERIOD_MINUTES * 60 * 1000);
+
         const rows = await ctx.db
-          .select({ id: projects.id, c: sql<number>`count(${scenes.id})` })
+          .select({
+            id: projects.id,
+            sceneCount: sql<number>`count(${scenes.id})`,
+            isWelcome: projects.isWelcome,
+            createdAt: projects.createdAt,
+          })
           .from(projects)
           .leftJoin(scenes, eq(scenes.projectId, projects.id))
           .where(eq(projects.userId, ctx.session.user.id))
-          .groupBy(projects.id);
+          .groupBy(projects.id, projects.isWelcome, projects.createdAt);
 
-        const emptyIds = rows.filter((r) => Number(r.c) === 0).map((r) => r.id);
+        const emptyIds = rows
+          .filter((row) => {
+            if (Number(row.sceneCount) > 0) return false;
+            if (row.isWelcome) return false;
+            if (input?.excludeProjectId && row.id === input.excludeProjectId) return false;
+            if (!row.createdAt) return true;
+            return row.createdAt < graceCutoff;
+          })
+          .map((r) => r.id);
+
         if (emptyIds.length === 0) return { deleted: 0 };
 
         const del = await ctx.db

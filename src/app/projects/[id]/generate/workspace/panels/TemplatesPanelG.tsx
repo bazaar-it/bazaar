@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Card } from "~/components/ui/card";
 import { SearchIcon, Loader2 } from "lucide-react";
@@ -11,6 +10,12 @@ import { TEMPLATES, type TemplateDefinition } from "~/templates/registry";
 import { Player } from "@remotion/player";
 import { useVideoState } from "~/stores/videoState";
 import { transform } from 'sucrase';
+import { useIsTouchDevice } from "~/hooks/use-is-touch";
+
+type ExtendedTemplateDefinition = TemplateDefinition & {
+  previewImage?: string | null;
+  tags?: string[];
+};
 
 interface TemplatesPanelGProps {
   projectId: string;
@@ -44,8 +49,27 @@ const getAspectRatioClass = (format: string) => {
 };
 
 // Template thumbnail showing frame 15 by default
-const TemplateThumbnail = ({ template, format }: { template: TemplateDefinition; format: string }) => {
-  const { component, isCompiling, compilationError, playerProps } = useCompiledTemplate(template, format);
+const TemplateThumbnail = ({ template, format, isTouchDevice = false }: { template: ExtendedTemplateDefinition; format: string; isTouchDevice?: boolean }) => {
+  const shouldCompile = !template.isFromDatabase || !template.previewImage;
+  const { component, isCompiling, compilationError, playerProps } = useCompiledTemplate(template, format, { enableCompilation: shouldCompile });
+
+  if (!shouldCompile) {
+    if (template.previewImage) {
+      return (
+        <div className="w-full h-full bg-black">
+          <img
+            src={template.previewImage}
+            alt={`${template.name} preview`}
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
+        </div>
+      );
+    }
+
+    // Should not happen because shouldCompile would be true when previewImage missing
+    return null;
+  }
 
   if (compilationError) {
     return (
@@ -69,7 +93,6 @@ const TemplateThumbnail = ({ template, format }: { template: TemplateDefinition;
     );
   }
 
-  // Calculate safe initial frame (frame 15 or halfway through if template is shorter)
   const safeInitialFrame = Math.min(15, Math.floor(template.duration / 2));
 
   return (
@@ -91,11 +114,10 @@ const TemplateThumbnail = ({ template, format }: { template: TemplateDefinition;
 };
 
 // Template video player for hover state
-const TemplateVideoPlayer = ({ template, format }: { template: TemplateDefinition; format: string }) => {
+const TemplateVideoPlayer = ({ template, format }: { template: ExtendedTemplateDefinition; format: string }) => {
   const { component, isCompiling, compilationError, playerProps } = useCompiledTemplate(template, format);
 
   if (compilationError || isCompiling || !component) {
-    // Fall back to thumbnail on error/loading
     return <TemplateThumbnail template={template} format={format} />;
   }
 
@@ -118,66 +140,88 @@ const TemplateVideoPlayer = ({ template, format }: { template: TemplateDefinitio
 };
 
 // Template preview component with thumbnail/video toggle
-const TemplatePreview = ({ template, onClick, isLoading, format }: { 
-  template: TemplateDefinition; 
+const TemplatePreview = ({ template, onClick, isLoading, format, isTouchDevice }: { 
+  template: ExtendedTemplateDefinition; 
   onClick: () => void;
   isLoading: boolean;
   format: string;
+  isTouchDevice: boolean;
 }) => {
   const [isHovered, setIsHovered] = useState(false);
 
   const handleMouseEnter = useCallback(() => {
-    setIsHovered(true);
-  }, []);
+    if (!isTouchDevice) {
+      setIsHovered(true);
+    }
+  }, [isTouchDevice]);
 
   const handleMouseLeave = useCallback(() => {
-    setIsHovered(false);
-  }, []);
+    if (!isTouchDevice) {
+      setIsHovered(false);
+    }
+  }, [isTouchDevice]);
 
-  // Get the correct aspect ratio class based on format
-  const aspectRatioClass = getAspectRatioClass(format);
+  const className = `relative w-full ${getAspectRatioClass(format)} bg-black rounded-lg overflow-hidden cursor-pointer transition-all duration-200 group${isTouchDevice ? '' : ' hover:scale-[1.01]'}`;
+  const showVideo = !isTouchDevice && isHovered;
+  const showInfo = false;
+  const showFooter = true;
+  const formattedDuration = `${Math.round((template.duration / 30) * 10) / 10}s`;
 
   return (
     <div 
-      className={`relative w-full ${aspectRatioClass} bg-black rounded overflow-hidden cursor-pointer transition-all duration-200 group`}
+      className={className}
       onClick={onClick}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
+      onMouseEnter={!isTouchDevice ? handleMouseEnter : undefined}
+      onMouseLeave={!isTouchDevice ? handleMouseLeave : undefined}
     >
-      {/* Show static frame 15 by default, playing video on hover */}
-      {isHovered ? (
-        <TemplateVideoPlayer template={template} format={format} />
-      ) : (
-        <TemplateThumbnail template={template} format={format} />
-      )}
-      
-      {/* Loading overlay - only shows when loading, covers full card */}
-      {isLoading && (
-        <div className="absolute inset-0 bg-black/50 flex items-center justify-center transition-opacity duration-200 z-10">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-            <span className="text-white text-sm font-medium">Adding...</span>
+      {showInfo && (
+        <div className="absolute top-2 left-2 right-2 z-10 flex items-center justify-between gap-2">
+          <div className="bg-white/90 text-gray-900 text-[10px] sm:text-xs px-2 py-1 rounded-full font-medium shadow-sm max-w-[70%] truncate">
+            {template.name}
+          </div>
+          <div className="bg-gray-900/80 text-white text-[10px] sm:text-xs px-2 py-1 rounded-full font-medium">
+            {formattedDuration}
           </div>
         </div>
       )}
 
-      {/* Template name overlay - only visible on hover when not loading */}
-      {isHovered && !isLoading && (
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2 sm:p-3 z-10">
-          <div className="text-white text-xs sm:text-sm font-medium truncate">
-            {template.name}
+      <div className="absolute inset-0">
+        {showVideo ? (
+          <TemplateVideoPlayer template={template} format={format} />
+        ) : (
+          <TemplateThumbnail template={template} format={format} isTouchDevice={isTouchDevice} />
+        )}
+      </div>
+
+      {isLoading && (
+        <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-white/90 rounded-full p-3 shadow-lg">
+            <Loader2 className="h-6 w-6 animate-spin text-gray-600" />
           </div>
         </div>
       )}
+
+      {showFooter && !isLoading && (
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-2 sm:p-3 z-10 space-y-1">
+          <div className="text-white/70 text-[10px] sm:text-xs font-medium">
+            {formattedDuration}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
 
 // Real template compilation component  
-const useCompiledTemplate = (template: TemplateDefinition, format: string = 'landscape') => {
+const useCompiledTemplate = (
+  template: ExtendedTemplateDefinition,
+  format: string = 'landscape',
+  options?: { enableCompilation?: boolean }
+) => {
+  const { enableCompilation = true } = options ?? {};
   const dimensions = getFormatDimensions(format);
-  
-  // For hardcoded templates, just return the component directly
+
   if (!template.isFromDatabase && template.component) {
     return {
       component: template.component,
@@ -192,83 +236,100 @@ const useCompiledTemplate = (template: TemplateDefinition, format: string = 'lan
       }
     };
   }
-  
-  // For database templates, we need to compile them
+
   const [component, setComponent] = useState<React.ComponentType | null>(null);
-  const [isCompiling, setIsCompiling] = useState(true);
+  const [isCompiling, setIsCompiling] = useState(enableCompilation);
   const [compilationError, setCompilationError] = useState<Error | null>(null);
 
   useEffect(() => {
-    // Only compile database templates
-    if (template.isFromDatabase) {
+    if (!template.isFromDatabase) {
+      setIsCompiling(false);
+      return;
+    }
+
+    if (!enableCompilation) {
+      setComponent(null);
+      setIsCompiling(false);
+      setCompilationError(null);
+      return;
+    }
+
+    let isCancelled = false;
+    let blobUrl: string | null = null;
+
+    const compileTemplate = async () => {
       setIsCompiling(true);
-      
-      const compileTemplate = async () => {
-        let blobUrl: string | null = null;
-        try {
-          const code = template.getCode();
-          
-          // Basic security validation for template code
-          // Check for potentially dangerous patterns
-          const dangerousPatterns = [
-            /eval\s*\(/,
-            /Function\s*\(/,
-            /\.innerHTML\s*=/,
-            /document\.write/,
-            /window\.location/,
-            /__proto__/,
-            /constructor\s*\[/,
-          ];
-          
-          for (const pattern of dangerousPatterns) {
-            if (pattern.test(code)) {
-              throw new Error(`Security: Template contains potentially dangerous code pattern: ${pattern}`);
-            }
+      try {
+        const code = template.getCode?.();
+        if (!code) {
+          throw new Error('Template code unavailable');
+        }
+
+        const dangerousPatterns = [
+          /eval\s*\(/,
+          /Function\s*\(/,
+          /\.innerHTML\s*=/,
+          /document\.write/,
+          /window\.location/,
+          /__proto__/,
+          /constructor\s*\[/,
+        ];
+
+        for (const pattern of dangerousPatterns) {
+          if (pattern.test(code)) {
+            throw new Error(`Security: Template contains potentially dangerous code pattern: ${pattern}`);
           }
-          
-          // Transform TypeScript/JSX to JavaScript using sucrase
-          const { code: transformed } = transform(code, {
-            transforms: ['typescript', 'jsx'],
-            jsxRuntime: 'classic',
-            production: false,
-          });
-          
-          // Create a blob URL for the module with strict CSP
-          // Note: In production, add CSP headers to prevent XSS
-          const blob = new Blob([transformed], { 
-            type: 'application/javascript'
-          });
-          blobUrl = URL.createObjectURL(blob);
-          
-          // Import the module dynamically
-          const module = await import(/* webpackIgnore: true */ blobUrl);
-          
+        }
+
+        const { code: transformed } = transform(code, {
+          transforms: ['typescript', 'jsx'],
+          jsxRuntime: 'classic',
+          production: false,
+        });
+
+        const blob = new Blob([transformed], {
+          type: 'application/javascript'
+        });
+        blobUrl = URL.createObjectURL(blob);
+
+        const module = await import(/* webpackIgnore: true */ blobUrl);
+
+        if (!isCancelled) {
           if (module.default && typeof module.default === 'function') {
             setComponent(() => module.default);
             setCompilationError(null);
           } else {
             throw new Error('No default export found in template code');
           }
-          
-        } catch (error) {
+        }
+      } catch (error) {
+        if (!isCancelled) {
           console.error('Failed to compile database template:', error);
           setCompilationError(error as Error);
-        } finally {
-          // Always clean up the blob URL, even if there was an error
-          if (blobUrl) {
-            URL.revokeObjectURL(blobUrl);
-          }
+        }
+      } finally {
+        if (blobUrl) {
+          URL.revokeObjectURL(blobUrl);
+        }
+        if (!isCancelled) {
           setIsCompiling(false);
         }
-      };
-      
-      compileTemplate();
-    }
-  }, [template]);
+      }
+    };
 
-  return { 
-    component, 
-    isCompiling, 
+    compileTemplate();
+
+    return () => {
+      isCancelled = true;
+      if (blobUrl) {
+        URL.revokeObjectURL(blobUrl);
+      }
+    };
+  }, [template, enableCompilation]);
+
+  return {
+    component,
+    isCompiling,
     compilationError,
     playerProps: component ? {
       component,
@@ -284,12 +345,13 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'colors' | 'ui' | 'text' | 'other'>("all");
   const [loadingTemplateId, setLoadingTemplateId] = useState<string | null>(null);
+  const isTouchDevice = useIsTouchDevice();
   
   // Get tRPC utils for cache invalidation
   const utils = api.useUtils();
   
   // Get video state methods
-  const { addScene, addAssistantMessage, getCurrentProps } = useVideoState();
+  const { addScene, getCurrentProps } = useVideoState();
   
   // Get current project format
   const currentFormat = getCurrentProps()?.meta?.format ?? 'landscape';
@@ -338,7 +400,7 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
   }, [databaseTemplates, cacheKey]);
 
   // Classify a template into coarse categories for filtering
-  const classifyCategory = useCallback((t: TemplateDefinition): 'colors' | 'ui' | 'text' | 'other' => {
+  const classifyCategory = useCallback((t: ExtendedTemplateDefinition): 'colors' | 'ui' | 'text' | 'other' => {
     const raw = (t.category || '').toLowerCase();
     const name = (t.name || '').toLowerCase();
     const hay = `${raw} ${name}`;
@@ -397,10 +459,18 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
   const trackUsageMutation = api.templates.trackUsage.useMutation();
   
   // Handle template addition
-  const handleAddTemplate = useCallback(async (template: TemplateDefinition) => {
+  const handleAddTemplate = useCallback(async (template: ExtendedTemplateDefinition) => {
     console.log('[TemplatesPanelG] Adding template:', template.name);
     console.log('[TemplatesPanelG] Template object:', template);
-    console.log('[TemplatesPanelG] Template code preview:', template.getCode().substring(0, 200) + '...');
+    const templateCode = template.getCode?.() ?? '';
+    if (!templateCode) {
+      console.warn('[TemplatesPanelG] Template has no code, aborting add.');
+      setLoadingTemplateId(null);
+      toast.error('Template preview unavailable right now. Please try again later.');
+      return;
+    }
+
+    console.log('[TemplatesPanelG] Template code preview:', templateCode.substring(0, 200) + '...');
     
     setLoadingTemplateId(template.id);
     
@@ -413,7 +483,7 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
       projectId,
       templateId: template.id,
       templateName: template.name,
-      templateCode: template.getCode(), // Get the code string for database storage
+      templateCode,
       templateDuration: template.duration,
     };
     
@@ -423,7 +493,7 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
   }, [projectId, addTemplateMutation, trackUsageMutation]);
 
   // Combine hardcoded and database templates (DB sorted by newest first)
-  const combinedTemplates = useMemo(() => {
+  const combinedTemplates = useMemo<ExtendedTemplateDefinition[]>(() => {
     // Prefer freshly fetched DB templates; fall back to cached when loading
     const sourceDb = (databaseTemplates && databaseTemplates.length) ? databaseTemplates : cachedDbTemplates;
     // Sort DB templates by createdAt desc if present
@@ -432,7 +502,7 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
       const bd = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
       return bd - ad;
     });
-    const dbTemplatesFormatted: TemplateDefinition[] = dbSorted.map((dbTemplate: any) => ({
+    const dbTemplatesFormatted: ExtendedTemplateDefinition[] = dbSorted.map((dbTemplate: any) => ({
       id: dbTemplate.id,
       name: dbTemplate.name,
       duration: dbTemplate.duration,
@@ -444,9 +514,11 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
       isOfficial: dbTemplate.isOfficial,
       category: dbTemplate.category,
       creator: dbTemplate.creator,
+      previewImage: dbTemplate.thumbnailUrl ?? null,
+      tags: dbTemplate.tags ?? [],
     }));
     // DB templates first (newest first), then hardcoded
-    return [...dbTemplatesFormatted, ...TEMPLATES];
+    return [...dbTemplatesFormatted, ...TEMPLATES] as ExtendedTemplateDefinition[];
   }, [databaseTemplates, cachedDbTemplates]);
 
   // Optional: simple skeleton to avoid jarring reorder on first open without cache
@@ -549,6 +621,7 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
                   onClick={() => handleAddTemplate(template)}
                   isLoading={loadingTemplateId === template.id}
                   format={currentFormat}
+                  isTouchDevice={isTouchDevice}
                 />
               </Card>
             ))}
