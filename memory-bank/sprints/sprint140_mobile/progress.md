@@ -56,3 +56,10 @@ Next:
 
 Next:
 - Sweep other project creation entry points to adopt the shared breakpoint + touch hooks and retire bespoke device detection code.
+
+## 2025-09-30
+- Mobile templates panel now renders frame-15 stills using cached precompiled JS when available and defers TSX compilation until the user taps to preview, so scrolling no longer spins up Remotion for every card.【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelMobile.tsx:47】【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelMobile.tsx:352】
+- Added `template-code-utils` to sanitize compiled bundles and cache the loaded component so a template only compiles once per session before reuse.【src/app/projects/[id]/generate/workspace/panels/template-code-utils.ts:1】【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelMobile.tsx:108】
+- Replaced infinite scroll with a clear “Load more” button that appends six templates per tap, keeping the list responsive on phones while still offering access to the full catalog.【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelMobile.tsx:499】【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelMobile.tsx:512】
+- Overlay preview sits on a dedicated fixed layer, locks body scroll, and reuses the cached component so videos play instantly without the PreviewPanel FPS badge leaking through.【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelMobile.tsx:473】【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelMobile.tsx:550】
+- Ensured the mobile preview overlay respects template aspect ratios, auto-plays from the intended frame, and removed extraneous frame labels so tapping a card now shows a full-bleed playback experience. 【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelMobile.tsx:137】【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelMobile.tsx:520】

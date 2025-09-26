@@ -1,141 +1,56 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { api } from "~/trpc/react";
 import { useLastUsedFormat } from "~/hooks/use-last-used-format";
+import { analytics } from "~/lib/utils/analytics";
+
+const VALID_FORMATS = new Set(["landscape", "portrait", "square"]);
+
+const resolveFormat = (candidate?: string | null) => {
+  if (candidate && VALID_FORMATS.has(candidate)) {
+    return candidate as "landscape" | "portrait" | "square";
+  }
+  return "landscape" as const;
+};
 
 export default function QuickCreatePage() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const { lastFormat } = useLastUsedFormat({ enableRemoteFallback: false });
-  const hasRedirectedRef = useRef(false);
-  const redirectTargetRef = useRef<string | null>(null);
-  const pruneScheduledRef = useRef(false);
-  const [cachedProjectId, setCachedProjectId] = useState<string | null>(null);
-  const [isCacheLoaded, setIsCacheLoaded] = useState(false);
-  
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      setIsCacheLoaded(true);
-      return;
-    }
-    try {
-      const stored = window.localStorage.getItem("lastProjectId");
-      setCachedProjectId(stored && stored.length > 0 ? stored : null);
-    } catch (error) {
-      console.warn('[QuickCreate] Failed to read lastProjectId from localStorage:', error);
-      setCachedProjectId(null);
-    } finally {
-      setIsCacheLoaded(true);
-    }
-  }, []);
+  const hasNavigatedRef = useRef(false);
 
-  // Create project mutation
-  const createProjectMutation = api.project.create.useMutation({
-    onSuccess: (result) => {
-      console.log(`[QuickCreate] Project created, redirecting to: /projects/${result.projectId}/generate`);
-      redirectTo(result.projectId, 'created');
-    },
-    onError: (error) => {
-      console.error("[QuickCreate] Failed to create project:", error);
-      // Fallback to home page on error
-      router.push("/");
-    }
-  });
-  const pruneMutation = api.project.pruneEmpty.useMutation();
-  const latestIdQuery = api.project.getLatestId.useQuery(undefined, {
-    enabled: status === 'authenticated',
-    staleTime: 0,
-    refetchOnWindowFocus: false,
-  });
-
-  const redirectTo = useCallback((projectId: string, reason: 'cached' | 'latest' | 'created') => {
-    if (!projectId) return;
-    if (hasRedirectedRef.current && redirectTargetRef.current === projectId) return;
-
-    hasRedirectedRef.current = true;
-    redirectTargetRef.current = projectId;
-
-    const path = `/projects/${projectId}/generate`;
-    const method = reason === 'created' ? router.push : router.replace;
-    console.log(`[QuickCreate] Redirecting (${reason}) to: ${path}`);
-    method(path);
-
-    if (!pruneScheduledRef.current && reason !== 'created') {
-      pruneScheduledRef.current = true;
-      queueMicrotask(() => {
-        // Run prune in background after navigation is triggered
-        pruneMutation.mutate(
-          { excludeProjectId: projectId },
-          { onError: (err) => console.warn('[QuickCreate] pruneEmpty failed:', err) },
-        );
-      });
-    }
-  }, [router, pruneMutation]);
-
-  // (Optional) We no longer rely on lastProjectId for speed — prefer latestId fast path.
+  const displayFormat = resolveFormat(typeof lastFormat === "string" ? lastFormat : undefined);
 
   useEffect(() => {
-    // Simple, direct logic - no complex dependencies
-
-    // 1. Wait for auth to load
     if (status === "loading") {
-      console.log('[QuickCreate] Waiting for auth...');
       return;
     }
-    
-    // 2. If not authenticated, redirect to login
+
     if (!session?.user) {
-      console.log('[QuickCreate] No user session, redirecting to login');
       router.push("/login?redirect=/projects/quick-create");
       return;
     }
 
-    if (!isCacheLoaded) {
+    if (hasNavigatedRef.current) {
       return;
     }
 
-    // 3. If we already redirected (cached or mutation), nothing else to do
-    if (hasRedirectedRef.current) {
-      return;
-    }
+    hasNavigatedRef.current = true;
 
-    // 4. Cached project wins for instant redirect
-    if (cachedProjectId) {
-      redirectTo(cachedProjectId, 'cached');
-      return;
-    }
+    const formatParam = resolveFormat(typeof lastFormat === "string" ? lastFormat : undefined);
+    analytics.featureUsed("quick_create_redirect", {
+      format: formatParam,
+    });
 
-    // 5. If server responded with a latest project, redirect there
-    if (latestIdQuery.data) {
-      redirectTo(latestIdQuery.data, 'latest');
-      return;
-    }
+    const params = new URLSearchParams({
+      intent: "auto",
+      format: formatParam,
+    });
 
-    // 6. If the query finished and there is no existing project, create one now
-    if (latestIdQuery.status === 'success' && !latestIdQuery.data && !createProjectMutation.isPending) {
-      console.log('[QuickCreate] No existing project found, creating new with format:', lastFormat);
-      createProjectMutation.mutate({ format: lastFormat });
-      return;
-    }
-
-    // 7. Handle query errors by creating a new project (best effort)
-    if (latestIdQuery.status === 'error' && !createProjectMutation.isPending) {
-      console.warn('[QuickCreate] Failed to load latest project, creating new. Error:', latestIdQuery.error);
-      createProjectMutation.mutate({ format: lastFormat });
-    }
-  }, [status, session, cachedProjectId, isCacheLoaded, latestIdQuery.data, latestIdQuery.status, createProjectMutation.isPending, lastFormat, redirectTo]);
-
-  // If we redirected based on cache and later receive a different latest ID, swap targets
-  useEffect(() => {
-    if (!latestIdQuery.data) return;
-    if (!hasRedirectedRef.current) return;
-    if (redirectTargetRef.current === latestIdQuery.data) return;
-
-    redirectTo(latestIdQuery.data, 'latest');
-  }, [latestIdQuery.data]);
+    router.replace(`/projects/new?${params.toString()}`);
+  }, [status, session?.user, lastFormat, router]);
 
   // Loading state
   return (
@@ -213,7 +128,7 @@ export default function QuickCreatePage() {
             <div className="flex items-center justify-center gap-2">
               <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/20 rounded text-xs font-mono">
                 <span className="text-white/60">FORMAT:</span>
-                <span className="text-white uppercase">{lastFormat}</span>
+                <span className="text-white uppercase">{displayFormat}</span>
               </div>
             </div>
             
