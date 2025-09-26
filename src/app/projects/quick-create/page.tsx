@@ -128,7 +128,7 @@ export default function QuickCreatePage() {
             <div className="flex items-center justify-center gap-2">
               <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/20 rounded text-xs font-mono">
                 <span className="text-white/60">FORMAT:</span>
-                <span className="text-white uppercase">{lastFormat}</span>
+                <span className="text-white uppercase">{displayFormat}</span>
               </div>
             </div>
             

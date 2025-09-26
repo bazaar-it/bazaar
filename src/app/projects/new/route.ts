@@ -52,7 +52,8 @@ export async function GET(req: NextRequest) {
       const url = new URL(req.url);
       return NextResponse.redirect(new URL('/projects/quick-create', url.origin));
     } catch {
-      return NextResponse.redirect('https://bazaar.it');
+      const fallback = process.env.NEXTAUTH_URL ?? req.nextUrl.origin ?? 'https://bazaar.it';
+      return NextResponse.redirect(fallback);
     }
   }
 }
