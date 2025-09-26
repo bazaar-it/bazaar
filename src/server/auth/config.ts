@@ -132,20 +132,19 @@ export const authConfig = {
 
       // Send email notification to admin about new user
       try {
-        // Import the notification function
         const { sendNewUserNotification } = await import('~/server/services/email/notifications');
-        
-        // Try to determine the provider from recent account entries (no createdAt column)
+
         const userId = String(user.id);
         const recentAccount = await db.query.accounts.findFirst({
           where: eq(accounts.userId, userId),
         });
         const provider = recentAccount?.provider || 'Unknown';
-        
-        // Send notification email
-        await sendNewUserNotification(user, provider);
+
+        void sendNewUserNotification(user, provider).catch((notifyError) => {
+          console.error(`[Auth] Failed to send new user notification:`, notifyError);
+        });
       } catch (error) {
-        console.error(`[Auth] Failed to send new user notification:`, error);
+        console.error(`[Auth] Failed to queue new user notification:`, error);
         // Don't throw - notifications should not break signup
       }
     }
