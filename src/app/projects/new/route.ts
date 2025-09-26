@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createTRPCContext } from '~/server/api/trpc';
 import { createCaller } from '~/server/api/root';
+import { projects } from '~/server/db/schema';
+import { desc, eq } from 'drizzle-orm';
 
 const VALID_FORMATS = new Set(['landscape', 'portrait', 'square']);
 
@@ -10,6 +12,7 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const fmt = url.searchParams.get('format') || 'landscape';
     const format = VALID_FORMATS.has(fmt) ? (fmt as 'landscape' | 'portrait' | 'square') : 'landscape';
+    const intent = (url.searchParams.get('intent') || 'auto').toLowerCase();
 
     // Create a TRPC server-side caller with the current request headers (includes cookies/session)
     const ctx = await createTRPCContext({ headers: req.headers });
@@ -21,6 +24,20 @@ export async function GET(req: NextRequest) {
     }
 
     const caller = createCaller(ctx);
+
+    if (intent !== 'create') {
+      const [latest] = await ctx.db
+        .select({ id: projects.id })
+        .from(projects)
+        .where(eq(projects.userId, ctx.session.user.id))
+        .orderBy(desc(projects.updatedAt))
+        .limit(1);
+
+      if (latest?.id) {
+        return NextResponse.redirect(new URL(`/projects/${latest.id}/generate`, url.origin));
+      }
+    }
+
     const res = await caller.project.create({ format });
 
     if (!res?.projectId) {
@@ -39,4 +56,3 @@ export async function GET(req: NextRequest) {
     }
   }
 }
-
