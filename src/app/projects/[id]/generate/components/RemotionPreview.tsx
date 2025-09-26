@@ -5,7 +5,6 @@
 import React, { useEffect, useMemo, Suspense, useState, useRef, useCallback } from 'react';
 import { Player, type PlayerRef } from '@remotion/player';
 import { ErrorBoundary } from 'react-error-boundary';
-import { createPortal } from 'react-dom';
 import { enableAudioWithGesture } from '~/lib/utils/audioContext';
 
 // Error fallback component to display when component loading fails
@@ -20,6 +19,120 @@ function ErrorFallback({ error }: { error: Error }) {
     </div>
   );
 }
+
+const fullscreenIconSize = 16;
+
+const FullscreenIcon = ({ isFullscreen }: { isFullscreen: boolean }) => {
+  const strokeWidth = 6;
+  const viewSize = 32;
+  const outerOffset = isFullscreen ? 0 : strokeWidth / 2;
+  const middleInset = isFullscreen ? strokeWidth * 1.6 : strokeWidth / 2;
+  const innerInset = isFullscreen ? strokeWidth * 1.6 : strokeWidth * 2;
+
+  return (
+    <svg
+      viewBox={`0 0 ${viewSize} ${viewSize}`}
+      height={fullscreenIconSize}
+      width={fullscreenIconSize}
+    >
+      <path
+        d={`
+          M ${outerOffset} ${innerInset}
+          L ${middleInset} ${middleInset}
+          L ${innerInset} ${outerOffset}
+        `}
+        stroke="#fff"
+        strokeWidth={strokeWidth}
+        fill="none"
+      />
+      <path
+        d={`
+          M ${viewSize - outerOffset} ${innerInset}
+          L ${viewSize - middleInset} ${middleInset}
+          L ${viewSize - innerInset} ${outerOffset}
+        `}
+        stroke="#fff"
+        strokeWidth={strokeWidth}
+        fill="none"
+      />
+      <path
+        d={`
+          M ${outerOffset} ${viewSize - innerInset}
+          L ${middleInset} ${viewSize - middleInset}
+          L ${innerInset} ${viewSize - outerOffset}
+        `}
+        stroke="#fff"
+        strokeWidth={strokeWidth}
+        fill="none"
+      />
+      <path
+        d={`
+          M ${viewSize - outerOffset} ${viewSize - innerInset}
+          L ${viewSize - middleInset} ${viewSize - middleInset}
+          L ${viewSize - innerInset} ${viewSize - outerOffset}
+        `}
+        stroke="#fff"
+        strokeWidth={strokeWidth}
+        fill="none"
+      />
+    </svg>
+  );
+};
+
+const frameCounterContainerStyle: React.CSSProperties = {
+  position: 'absolute',
+  right: 'calc(100% + 12px)',
+  top: '50%',
+  transform: 'translateY(-50%)',
+  zIndex: 1,
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: '1px',
+  pointerEvents: 'none',
+  userSelect: 'none',
+};
+
+const frameNumberStyle: React.CSSProperties = {
+  color: '#ffffff',
+  fontSize: '14px',
+  lineHeight: 1,
+  fontFamily:
+    '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+  fontWeight: 600,
+  letterSpacing: '-0.01em',
+};
+
+const fpsLabelStyle: React.CSSProperties = {
+  color: 'rgba(255, 255, 255, 0.8)',
+  fontSize: '8px',
+  lineHeight: 1,
+  fontFamily:
+    '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+  fontWeight: 500,
+  letterSpacing: '0.3px',
+  textTransform: 'uppercase',
+};
+
+const fullscreenButtonContentStyle: React.CSSProperties = {
+  position: 'relative',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '100%',
+  height: '100%',
+};
+
+const FrameCounter = React.memo(({ frame }: { frame: number }) => {
+  return (
+    <div className="remotion-frame-counter" style={frameCounterContainerStyle}>
+      <div style={frameNumberStyle}>{frame}</div>
+      <div style={fpsLabelStyle}>FPS</div>
+    </div>
+  );
+});
+
+FrameCounter.displayName = 'FrameCounter';
 
 // Props interface for the RemotionPreview component
 export interface RemotionPreviewProps {
@@ -67,7 +180,6 @@ export default function RemotionPreview({
   // Simple state for current frame display
   const [currentFrame, setCurrentFrame] = useState<number>(0);
   const playerContainerRef = useRef<HTMLDivElement>(null);
-  const [playerElement, setPlayerElement] = useState<HTMLElement | null>(null);
   const hasAudio = !!(inputProps?.audio?.url);
   const audioUnlockRef = useRef<boolean>(false);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
@@ -163,31 +275,14 @@ export default function RemotionPreview({
     return () => window.removeEventListener('preview-frame-update' as any, onFrame);
   }, []);
 
-  // Find the player element for portal injection
-  useEffect(() => {
-    if (!playerContainerRef.current) return;
-    
-    const findPlayer = () => {
-      const player = playerContainerRef.current?.querySelector('.remotion-player') as HTMLElement | null;
-      if (player) {
-        setPlayerElement(player);
-        // Ensure player has position relative for absolute children
-        if (getComputedStyle(player).position === 'static') {
-          player.style.position = 'relative';
-        }
-      }
-    };
-    
-    // Try multiple times to catch dynamically rendered player
-    findPlayer();
-    const t1 = setTimeout(findPlayer, 100);
-    const t2 = setTimeout(findPlayer, 500);
-    
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
-  }, [refreshToken]);
+  const renderFullscreenButton = useCallback(({ isFullscreen }: { isFullscreen: boolean }) => {
+    return (
+      <div style={fullscreenButtonContentStyle}>
+        <FrameCounter frame={currentFrame} />
+        <FullscreenIcon isFullscreen={isFullscreen} />
+      </div>
+    );
+  }, [currentFrame]);
 
   // Recompute render size on container resize and when composition size changes
   useEffect(() => {
@@ -295,61 +390,9 @@ export default function RemotionPreview({
               key={refreshToken} // Force remount when refreshToken changes
               acknowledgeRemotionLicense
               className="remotion-player"
+              renderFullscreenButton={renderFullscreenButton}
             />
           </div>
-          {playerElement && createPortal(
-            <>
-              {/* Frame counter with FPS label - synced with Remotion controls */}
-              <div
-                className="pointer-events-none select-none remotion-frame-counter"
-                style={{
-                  position: 'absolute',
-                  right: 60, // Position to the left of fullscreen button
-                  bottom: 26, // Vertically center with control buttons
-                  zIndex: 2147483647, // Maximum z-index for fullscreen
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '1px',
-                  transform: 'translateY(-50%)', // Center vertically
-                  opacity: 1, // Always visible
-                  transition: 'opacity 0.2s ease-in-out',
-                }}
-              >
-                {/* Frame number */}
-                <div
-                  style={{
-                    color: '#ffffff',
-                    fontSize: '14px',
-                    lineHeight: 1,
-                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-                    fontWeight: 600,
-                    letterSpacing: '-0.01em',
-                  }}
-                >
-                  {currentFrame}
-                </div>
-                {/* FPS label */}
-                <div
-                  style={{
-                    color: 'rgba(255, 255, 255, 0.8)',
-                    fontSize: '8px',
-                    lineHeight: 1,
-                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-                    fontWeight: 500,
-                    letterSpacing: '0.3px',
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  FPS
-                </div>
-              </div>
-              
-
-              
-            </>,
-            playerElement
-          )}
         </div>
       </Suspense>
     </ErrorBoundary>
