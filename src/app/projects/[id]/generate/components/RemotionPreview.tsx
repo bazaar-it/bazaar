@@ -6,6 +6,7 @@ import React, { useEffect, useMemo, Suspense, useState, useRef, useCallback } fr
 import { Player, type PlayerRef } from '@remotion/player';
 import { ErrorBoundary } from 'react-error-boundary';
 import { enableAudioWithGesture } from '~/lib/utils/audioContext';
+import { useIsTouchDevice } from '~/hooks/use-is-touch';
 
 // Error fallback component to display when component loading fails
 function ErrorFallback({ error }: { error: Error }) {
@@ -184,6 +185,7 @@ export default function RemotionPreview({
   const audioUnlockRef = useRef<boolean>(false);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const [renderSize, setRenderSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
+  const isTouchDevice = useIsTouchDevice();
   
   const computeRenderSize = useCallback(() => {
     const el = playerContainerRef.current;
@@ -278,11 +280,11 @@ export default function RemotionPreview({
   const renderFullscreenButton = useCallback(({ isFullscreen }: { isFullscreen: boolean }) => {
     return (
       <div style={fullscreenButtonContentStyle}>
-        <FrameCounter frame={currentFrame} />
+        {!isTouchDevice && <FrameCounter frame={currentFrame} />}
         <FullscreenIcon isFullscreen={isFullscreen} />
       </div>
     );
-  }, [currentFrame]);
+  }, [currentFrame, isTouchDevice]);
 
   // Recompute render size on container resize and when composition size changes
   useEffect(() => {
