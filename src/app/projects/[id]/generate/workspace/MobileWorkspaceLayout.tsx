@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { PreviewPanelG } from './panels/PreviewPanelG';
 import ChatPanelG from './panels/ChatPanelG';
-import TemplatesPanelG from './panels/TemplatesPanelG';
+import TemplatesPanelMobile from './panels/TemplatesPanelMobile';
 import MyProjectsPanelG from './panels/MyProjectsPanelG';
 import type { InputProps } from '~/lib/types/video/input-props';
 import {
@@ -114,9 +114,9 @@ export function MobileWorkspaceLayout({
         );
       case 'templates':
         return (
-          <TemplatesPanelG 
-            projectId={projectId} 
-            onSceneGenerated={handleSceneGenerated} 
+          <TemplatesPanelMobile
+            projectId={projectId}
+            onSceneGenerated={handleSceneGenerated}
           />
         );
       case 'myprojects':
