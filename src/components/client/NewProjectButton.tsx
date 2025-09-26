@@ -201,7 +201,9 @@ export function NewProjectButton({
       return;
     }
     
-    const formatParam = typeof lastFormat === 'string' ? lastFormat : 'landscape';
+    const formatParam = (typeof lastFormat === 'string' && ['landscape', 'portrait', 'square'].includes(lastFormat))
+      ? (lastFormat as VideoFormat)
+      : 'landscape';
 
     if (isMobile) {
       try {
@@ -209,7 +211,7 @@ export function NewProjectButton({
       } catch {}
     }
 
-    router.push(`/projects/new?format=${formatParam}`);
+    router.push(`/projects/new?format=${formatParam}&intent=create`);
   }, [onStart, session?.user, router, isMobile, lastFormat]);
 
   // Auto-close mobile format sheet when not applicable

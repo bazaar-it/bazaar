@@ -57,83 +57,152 @@ export default function AdminDashboard() {
     );
   }
 
-  // Calculate percentage changes
-  const calculateChange = (current: number, previous: number) => {
-    if (previous === 0) return current > 0 ? 100 : 0;
-    return Math.round(((current - previous) / previous) * 100);
+  const timeframeMeta: Record<Exclude<Timeframe, 'all'>, { label: string; days: number }> = {
+    '30d': { label: timeframeLabels['30d'], days: 30 },
+    '7d': { label: timeframeLabels['7d'], days: 7 },
+    '24h': { label: timeframeLabels['24h'], days: 1 },
   };
 
-  const getUserChange = () => {
-    const current = selectedTimeframe === 'all' ? dashboardData?.users?.all || 0 :
-                   selectedTimeframe === '30d' ? dashboardData?.users?.last30Days || 0 :
-                   selectedTimeframe === '7d' ? dashboardData?.users?.last7Days || 0 :
-                   dashboardData?.users?.last24Hours || 0;
-    
-    // Get the equivalent previous period for proper comparison
-    const previous = selectedTimeframe === 'all' ? 0 : // No change calculation for "all time"
-                    selectedTimeframe === '30d' ? dashboardData?.users?.prev30Days || 0 :
-                    selectedTimeframe === '7d' ? dashboardData?.users?.prev7Days || 0 :
-                    dashboardData?.users?.prev24Hours || 0;
-    
-    // Debug logging
-    if (selectedTimeframe === '30d') {
-      console.log('Users 30d Debug:', {
-        current,
-        previous,
-        dashboardData: dashboardData?.users
-      });
+  const SMALL_BASELINE_THRESHOLD = 10;
+
+  type MetricSummary = {
+    totalAllTime: number;
+    currentPeriod: number;
+    previousPeriod: number;
+    absoluteChange: number;
+    percentChange: number | null;
+    averagePerDay: number | null;
+  };
+
+  type MetricApiShape = {
+    all?: number;
+    last30Days?: number;
+    last7Days?: number;
+    last24Hours?: number;
+    prev30Days?: number;
+    prev7Days?: number;
+    prev24Hours?: number;
+    timeframes?: Partial<Record<Exclude<Timeframe, 'all'>, MetricSummary>>;
+  } | undefined;
+
+  const formatSignedNumber = (value: number) => {
+    if (value > 0) return `+${value.toLocaleString()}`;
+    if (value < 0) return `-${Math.abs(value).toLocaleString()}`;
+    return '0';
+  };
+
+  const formatSignedPercent = (value: number | null) => {
+    if (value === null) return null;
+    const rounded = Math.round(Math.abs(value));
+    if (rounded === 0) return null;
+    return `${value >= 0 ? '+' : '-'}${rounded}%`;
+  };
+
+  const formatAveragePerDay = (value: number | null) => {
+    if (value === null) return null;
+    const rounded = value >= 10
+      ? Math.round(value)
+      : value >= 1
+        ? Number(value.toFixed(1))
+        : Number(value.toFixed(2));
+    return rounded.toLocaleString();
+  };
+
+  const buildSummaryFromLegacy = (
+    metric: MetricApiShape,
+    timeframe: Exclude<Timeframe, 'all'>,
+    totalAllTime: number,
+  ): MetricSummary => {
+    if (metric?.timeframes?.[timeframe]) {
+      return metric.timeframes[timeframe]!;
     }
-    
-    return selectedTimeframe === 'all' ? 0 : calculateChange(current, previous);
+
+    const current = timeframe === '30d'
+      ? metric?.last30Days ?? 0
+      : timeframe === '7d'
+        ? metric?.last7Days ?? 0
+        : metric?.last24Hours ?? 0;
+
+    const previous = timeframe === '30d'
+      ? metric?.prev30Days ?? 0
+      : timeframe === '7d'
+        ? metric?.prev7Days ?? 0
+        : metric?.prev24Hours ?? 0;
+
+    const absoluteChange = current - previous;
+    const percentChange = previous > 0 ? (absoluteChange / previous) * 100 : null;
+    const averagePerDay = timeframeMeta[timeframe].days > 0
+      ? current / timeframeMeta[timeframe].days
+      : null;
+
+    return {
+      totalAllTime,
+      currentPeriod: current,
+      previousPeriod: previous,
+      absoluteChange,
+      percentChange,
+      averagePerDay,
+    };
   };
 
-  const getScenesChange = () => {
-    const current = selectedTimeframe === 'all' ? dashboardData?.scenes?.all || 0 :
-                   selectedTimeframe === '30d' ? dashboardData?.scenes?.last30Days || 0 :
-                   selectedTimeframe === '7d' ? dashboardData?.scenes?.last7Days || 0 :
-                   dashboardData?.scenes?.last24Hours || 0;
-    
-    // Get the equivalent previous period for proper comparison
-    const previous = selectedTimeframe === 'all' ? 0 : // No change calculation for "all time"
-                    selectedTimeframe === '30d' ? dashboardData?.scenes?.prev30Days || 0 :
-                    selectedTimeframe === '7d' ? dashboardData?.scenes?.prev7Days || 0 :
-                    dashboardData?.scenes?.prev24Hours || 0;
-    
-    return selectedTimeframe === 'all' ? 0 : calculateChange(current, previous);
+  const getMetricData = (metricKey: 'users' | 'prompts' | 'scenes') => {
+    const metric = dashboardData?.[metricKey] as MetricApiShape;
+    const total = metric?.all ?? 0;
+
+    if (selectedTimeframe === 'all') {
+      return { total, summary: undefined, timeframeKey: undefined as undefined };
+    }
+
+    const timeframeKey = selectedTimeframe as Exclude<Timeframe, 'all'>;
+    const summary = buildSummaryFromLegacy(metric, timeframeKey, total);
+
+    return { total, summary, timeframeKey };
   };
 
-  const getPromptsValue = () => {
-    return selectedTimeframe === 'all' ? dashboardData?.prompts?.all || 0 :
-           selectedTimeframe === '30d' ? dashboardData?.prompts?.last30Days || 0 :
-           selectedTimeframe === '7d' ? dashboardData?.prompts?.last7Days || 0 :
-           dashboardData?.prompts?.last24Hours || 0;
+  const buildBadgeInfo = (summary?: MetricSummary) => {
+    if (!summary) return null;
+
+    const { previousPeriod, absoluteChange, percentChange, currentPeriod } = summary;
+
+    if (previousPeriod <= SMALL_BASELINE_THRESHOLD) {
+      if (absoluteChange !== 0) {
+        return { text: formatSignedNumber(absoluteChange), isPositive: absoluteChange >= 0 };
+      }
+      if (currentPeriod === 0) {
+        return null;
+      }
+      return { text: formatSignedNumber(currentPeriod), isPositive: currentPeriod >= 0 };
+    }
+
+    const percentText = formatSignedPercent(percentChange);
+    if (percentText) {
+      const isPositive = (percentChange ?? 0) >= 0;
+      const magnitude = percentText.replace(/^[+-]/, '');
+      return { text: `${isPositive ? '↑' : '↓'} ${magnitude}`, isPositive };
+    }
+
+    if (absoluteChange === 0) {
+      return null;
+    }
+
+    return { text: formatSignedNumber(absoluteChange), isPositive: absoluteChange >= 0 };
   };
 
-  const getPromptsChange = () => {
-    const current = getPromptsValue();
-    
-    // Get the equivalent previous period for proper comparison
-    const previous = selectedTimeframe === 'all' ? 0 : // No change calculation for "all time"
-                    selectedTimeframe === '30d' ? dashboardData?.prompts?.prev30Days || 0 :
-                    selectedTimeframe === '7d' ? dashboardData?.prompts?.prev7Days || 0 :
-                    dashboardData?.prompts?.prev24Hours || 0;
-    
-    return selectedTimeframe === 'all' ? 0 : calculateChange(current, previous);
-  };
-
-  const MetricCard = ({ 
-    title, 
-    value, 
-    description, 
-    change, 
+  const MetricCard = ({
+    title,
+    totalValue,
+    totalLabel,
+    summary,
+    timeframe,
     color = "blue",
     href,
-    icon
+    icon,
   }: {
     title: string;
-    value: number;
-    description: string;
-    change?: number;
+    totalValue: number;
+    totalLabel: string;
+    summary?: MetricSummary;
+    timeframe?: { key: Exclude<Timeframe, 'all'>; label: string };
     color?: "blue" | "green" | "purple" | "orange";
     href?: string;
     icon?: React.ReactNode;
@@ -144,6 +213,19 @@ export default function AdminDashboard() {
       purple: "from-purple-500 to-pink-600",
       orange: "from-orange-500 to-red-600"
     };
+
+    const badge = buildBadgeInfo(summary);
+    const totalLocale = totalValue.toLocaleString();
+    const primaryValue = summary && timeframe ? summary.currentPeriod : totalValue;
+    const primaryLocale = primaryValue.toLocaleString();
+
+    const absoluteText = summary ? formatSignedNumber(summary.absoluteChange) : null;
+    const percentText = summary && summary.percentChange !== null && Math.abs(summary.percentChange) >= 1
+      ? formatSignedPercent(summary.percentChange)
+      : null;
+    const averageText = summary?.averagePerDay !== null && summary?.averagePerDay !== undefined
+      ? formatAveragePerDay(summary.averagePerDay)
+      : null;
 
     const CardContent = () => (
       <div className="relative bg-gradient-to-br from-gray-800 to-gray-900 p-6 rounded-xl shadow-xl hover:shadow-2xl transition-all duration-300 border border-gray-700 overflow-hidden group">
@@ -165,20 +247,47 @@ export default function AdminDashboard() {
               )}
               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{title}</h3>
             </div>
-            {change !== undefined && change !== 0 && (
+            {badge && (
               <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-                change >= 0 
-                  ? 'bg-gradient-to-r from-emerald-500/20 to-green-500/20 text-emerald-400 border border-emerald-500/30' 
+                badge.isPositive
+                  ? 'bg-gradient-to-r from-emerald-500/20 to-green-500/20 text-emerald-400 border border-emerald-500/30'
                   : 'bg-gradient-to-r from-red-500/20 to-pink-500/20 text-red-400 border border-red-500/30'
               }`}>
-                {change >= 0 ? '↑' : '↓'} {Math.abs(change)}%
+                {badge.text}
               </span>
             )}
           </div>
-          <p className={`text-3xl font-bold bg-gradient-to-r ${colorClasses[color]} bg-clip-text text-transparent mb-2`}>
-            {value.toLocaleString()}
+          <p className={`text-4xl font-bold text-white tracking-tight mb-1`}>
+            {primaryLocale}
           </p>
-          <p className="text-sm text-gray-500">{description}</p>
+          {summary && timeframe ? (
+            <div className="space-y-1.5">
+              <p className="text-sm text-gray-300">
+                <span className="text-gray-400">Total:</span> <span className="text-gray-100 font-medium">{totalLocale}</span>
+              </p>
+              <p className="text-sm text-gray-400">
+                <span className="text-gray-400">Previous {timeframe.label.toLowerCase()}:</span> {summary.previousPeriod.toLocaleString()}
+              </p>
+              <p className="text-sm text-gray-400 flex items-center gap-2">
+                <span className="text-gray-400">Change:</span>
+                {absoluteText && (
+                  <span className={summary.absoluteChange >= 0 ? 'text-emerald-400 font-medium' : 'text-red-400 font-medium'}>
+                    {absoluteText}
+                  </span>
+                )}
+                {percentText && (
+                  <span className={summary.percentChange && summary.percentChange >= 0 ? 'text-emerald-400 font-medium' : 'text-red-400 font-medium'}>
+                    {percentText}
+                  </span>
+                )}
+              </p>
+              {averageText && (
+                <p className="text-xs text-gray-500">≈ {averageText} per day</p>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">{totalLocale} total • {totalLabel}</p>
+          )}
         </div>
       </div>
     );
@@ -212,10 +321,32 @@ export default function AdminDashboard() {
     </div>
   );
 
+  const usersMetric = getMetricData('users');
+  const promptsMetric = getMetricData('prompts');
+  const scenesMetric = getMetricData('scenes');
+
+  const usersTimeframe = usersMetric.timeframeKey ? { key: usersMetric.timeframeKey, label: timeframeMeta[usersMetric.timeframeKey].label } : undefined;
+  const promptsTimeframe = promptsMetric.timeframeKey ? { key: promptsMetric.timeframeKey, label: timeframeMeta[promptsMetric.timeframeKey].label } : undefined;
+  const scenesTimeframe = scenesMetric.timeframeKey ? { key: scenesMetric.timeframeKey, label: timeframeMeta[scenesMetric.timeframeKey].label } : undefined;
+
+  const effectivePayingTimeframe = (selectedTimeframe === 'all' ? '30d' : selectedTimeframe) as Exclude<Timeframe, 'all'>;
+
+  const payingSummary = payingStats
+    ? {
+        totalAllTime: payingStats.payingUsers || 0,
+        currentPeriod: payingStats.payingUsers || 0,
+        previousPeriod: payingStats.previousPayingUsers || 0,
+        absoluteChange: (payingStats.payingUsers || 0) - (payingStats.previousPayingUsers || 0),
+        percentChange: typeof payingStats.usersChangePct === 'number' ? payingStats.usersChangePct : null,
+        averagePerDay: timeframeMeta[effectivePayingTimeframe].days > 0
+          ? (payingStats.payingUsers || 0) / timeframeMeta[effectivePayingTimeframe].days
+          : null,
+      }
+    : undefined;
+
   const formatPayingUsersDescription = () => {
-    const periodLabel = selectedTimeframe === 'all' ? timeframeLabels['30d'] : timeframeLabels[selectedTimeframe];
     const euros = ((payingStats?.revenueCents || 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return `${periodLabel} revenue • €${euros}`;
+    return `${timeframeLabels[effectivePayingTimeframe]} revenue • €${euros}`;
   };
 
   return (
@@ -242,15 +373,11 @@ export default function AdminDashboard() {
         {/* Enhanced Metrics Grid */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <MetricCard
-            title="Total Users"
-            value={
-              selectedTimeframe === 'all' ? dashboardData?.users?.all || 0 :
-              selectedTimeframe === '30d' ? dashboardData?.users?.last30Days || 0 :
-              selectedTimeframe === '7d' ? dashboardData?.users?.last7Days || 0 :
-              dashboardData?.users?.last24Hours || 0
-            }
-            description="Registered users"
-            change={getUserChange()}
+            title={selectedTimeframe === 'all' ? 'Total Users' : 'New Users'}
+            totalValue={usersMetric.total}
+            totalLabel="Registered users"
+            summary={usersMetric.summary}
+            timeframe={usersTimeframe}
             color="blue"
             href="/admin/users"
             icon={
@@ -261,10 +388,11 @@ export default function AdminDashboard() {
           />
 
           <MetricCard
-            title="Total Prompts"
-            value={getPromptsValue()}
-            description="Prompts submitted"
-            change={getPromptsChange()}
+            title={selectedTimeframe === 'all' ? 'Total Prompts' : 'Prompts this period'}
+            totalValue={promptsMetric.total}
+            totalLabel="Prompts submitted"
+            summary={promptsMetric.summary}
+            timeframe={promptsTimeframe}
             color="green"
             href="/admin/analytics"
             icon={
@@ -275,15 +403,11 @@ export default function AdminDashboard() {
           />
 
           <MetricCard
-            title="Scenes Generated"
-            value={
-              selectedTimeframe === 'all' ? dashboardData?.scenes?.all || 0 :
-              selectedTimeframe === '30d' ? dashboardData?.scenes?.last30Days || 0 :
-              selectedTimeframe === '7d' ? dashboardData?.scenes?.last7Days || 0 :
-              dashboardData?.scenes?.last24Hours || 0
-            }
-            description="AI-generated scenes"
-            change={getScenesChange()}
+            title={selectedTimeframe === 'all' ? 'Scenes Generated' : 'Scenes this period'}
+            totalValue={scenesMetric.total}
+            totalLabel="AI-generated scenes"
+            summary={scenesMetric.summary}
+            timeframe={scenesTimeframe}
             color="purple"
             icon={
               <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -292,12 +416,12 @@ export default function AdminDashboard() {
             }
           />
 
-          {/* Paying users card */}
           <MetricCard
             title="Paying Users"
-            value={payingStats?.payingUsers || 0}
-            description={formatPayingUsersDescription()}
-            change={payingStats?.usersChangePct}
+            totalValue={payingStats?.payingUsers || 0}
+            totalLabel={formatPayingUsersDescription()}
+            summary={payingSummary}
+            timeframe={{ key: effectivePayingTimeframe, label: timeframeMeta[effectivePayingTimeframe].label }}
             color="orange"
             href="/admin/paywall-analytics"
             icon={
@@ -370,4 +494,4 @@ export default function AdminDashboard() {
       </div>
     </div>
   );
-} 
+}

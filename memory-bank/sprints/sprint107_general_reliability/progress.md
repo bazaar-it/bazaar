@@ -320,3 +320,15 @@ Date: 2025-09-24 (markdown fence strip)
 - Investigated 404 on `/projects/quick-create` for brand-new users; traced to client calling `pruneEmpty` right after creating the first workspace.
 - Documented root cause + remediation options in `analysis/2025-09-25-quick-create-404.md` so onboarding fix can ship without breaking returning users.
 - Shipped mitigation: skip prune-after-create, exclude the active workspace from pruning, and add grace-period guard inside `project.pruneEmpty`, unblocking new-user onboarding.
+
+## 2025-09-26 - New user redirect regression ahead of signup surge
+- Analysed prod metrics ahead of the 500-user campaign: 657 total users, 7-day avg 12 signups/day (max 108), expecting 40x spike.
+- Identified 37 recent signups without projects; daily breakdown shows ~30–40% of new accounts never reach the workspace.
+- Root cause traced to marketing homepage referer guard (`src/app/(marketing)/page.tsx:20`): `referer.includes('/')` flags every OAuth callback as "internal" and skips the `/projects/quick-create` redirect.
+- Logged remediation plan in `analysis/2025-09-26-new-user-influx-readiness.md`: fix redirect heuristic, backfill welcome projects, and decouple Resend notifications from the critical path.
+
+## 2025-09-26 - Admin dashboard metric review
+- Audited `getDashboardMetrics` SQL vs UI cards; confirmed period counts are correct but we only surface percent deltas, leading to confusing "Total users ↑179%" badges.
+- Documented redesign plan (`analysis/2025-09-26-admin-dashboard-metrics.md`) covering richer payload, absolute deltas, avg/day figures, and clearer labeling when timeframe filters are active.
+- Flagged noisy console logging and 100% fallback behaviour for zero baselines as follow-up fixes.
+- 2025-09-26: Implemented richer admin metrics payload (per-timeframe totals + deltas) and refreshed dashboard cards to surface total-versus-period messaging with avg/day and small-baseline handling.

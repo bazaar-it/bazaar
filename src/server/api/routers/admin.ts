@@ -36,6 +36,49 @@ const adminOnlyProcedure = protectedProcedure.use(async ({ ctx, next }) => {
   return next();
 });
 
+const timeframeWindows = {
+  '30d': 30,
+  '7d': 7,
+  '24h': 1,
+} as const;
+
+type TimeframeKey = keyof typeof timeframeWindows;
+
+type MetricSummary = {
+  totalAllTime: number;
+  currentPeriod: number;
+  previousPeriod: number;
+  absoluteChange: number;
+  percentChange: number | null;
+  averagePerDay: number | null;
+};
+
+const buildTimeframeSummary = (
+  totalAllTime: number,
+  current: number,
+  previous: number,
+  windowDays: number,
+): MetricSummary => {
+  const absoluteChange = current - previous;
+  const percentChange = previous > 0 ? (absoluteChange / previous) * 100 : null;
+  const averagePerDay = windowDays > 0 ? current / windowDays : null;
+
+  return {
+    totalAllTime,
+    currentPeriod: current,
+    previousPeriod: previous,
+    absoluteChange,
+    percentChange,
+    averagePerDay,
+  };
+};
+
+const extractCount = (rows: Array<{ count: number | string | null | undefined }> | undefined): number => {
+  if (!rows || rows.length === 0) return 0;
+  const raw = rows[0]?.count ?? 0;
+  return typeof raw === 'number' ? raw : Number(raw);
+};
+
 export const adminRouter = createTRPCRouter({
   // List projects with filters - admin only
   listProjects: adminOnlyProcedure
@@ -453,48 +496,114 @@ export const adminRouter = createTRPCRouter({
           .limit(5)
       ]);
 
+      const usersAllCount = extractCount(totalUsersAll);
+      const users30Count = extractCount(totalUsers30d);
+      const users7Count = extractCount(totalUsers7d);
+      const users24Count = extractCount(totalUsers24h);
+      const prevUsers30Count = extractCount(prevUsers30d);
+      const prevUsers7Count = extractCount(prevUsers7d);
+      const prevUsers24Count = extractCount(prevUsers24h);
+
+      const projectsAllCount = extractCount(projectsAll);
+      const projects30Count = extractCount(projects30d);
+      const projects7Count = extractCount(projects7d);
+      const projects24Count = extractCount(projects24h);
+      const prevProjects30Count = extractCount(prevProjects30d);
+      const prevProjects7Count = extractCount(prevProjects7d);
+      const prevProjects24Count = extractCount(prevProjects24h);
+
+      const scenesAllCount = extractCount(scenesAll);
+      const scenes30Count = extractCount(scenes30d);
+      const scenes7Count = extractCount(scenes7d);
+      const scenes24Count = extractCount(scenes24h);
+      const prevScenes30Count = extractCount(prevScenes30d);
+      const prevScenes7Count = extractCount(prevScenes7d);
+      const prevScenes24Count = extractCount(prevScenes24h);
+
+      const promptsAllCount = extractCount(promptsAll);
+      const prompts30Count = extractCount(prompts30d);
+      const prompts7Count = extractCount(prompts7d);
+      const prompts24Count = extractCount(prompts24h);
+      const prevPrompts30Count = extractCount(prevPrompts30d);
+      const prevPrompts7Count = extractCount(prevPrompts7d);
+      const prevPrompts24Count = extractCount(prevPrompts24h);
+
+      const buildMetricTimeframes = (
+        totalAllTime: number,
+        current: Record<TimeframeKey, number>,
+        previous: Record<TimeframeKey, number>,
+      ): Record<TimeframeKey, MetricSummary> => ({
+        '30d': buildTimeframeSummary(totalAllTime, current['30d'], previous['30d'], timeframeWindows['30d']),
+        '7d': buildTimeframeSummary(totalAllTime, current['7d'], previous['7d'], timeframeWindows['7d']),
+        '24h': buildTimeframeSummary(totalAllTime, current['24h'], previous['24h'], timeframeWindows['24h']),
+      });
+
+      const userTimeframes = buildMetricTimeframes(
+        usersAllCount,
+        { '30d': users30Count, '7d': users7Count, '24h': users24Count },
+        { '30d': prevUsers30Count, '7d': prevUsers7Count, '24h': prevUsers24Count },
+      );
+
+      const projectTimeframes = buildMetricTimeframes(
+        projectsAllCount,
+        { '30d': projects30Count, '7d': projects7Count, '24h': projects24Count },
+        { '30d': prevProjects30Count, '7d': prevProjects7Count, '24h': prevProjects24Count },
+      );
+
+      const sceneTimeframes = buildMetricTimeframes(
+        scenesAllCount,
+        { '30d': scenes30Count, '7d': scenes7Count, '24h': scenes24Count },
+        { '30d': prevScenes30Count, '7d': prevScenes7Count, '24h': prevScenes24Count },
+      );
+
+      const promptTimeframes = buildMetricTimeframes(
+        promptsAllCount,
+        { '30d': prompts30Count, '7d': prompts7Count, '24h': prompts24Count },
+        { '30d': prevPrompts30Count, '7d': prevPrompts7Count, '24h': prevPrompts24Count },
+      );
+
       return {
         users: {
-          all: totalUsersAll[0]?.count || 0,
-          last30Days: totalUsers30d[0]?.count || 0,
-          last7Days: totalUsers7d[0]?.count || 0,
-          last24Hours: totalUsers24h[0]?.count || 0,
-          // Previous periods for change calculation
-          prev30Days: prevUsers30d[0]?.count || 0,
-          prev7Days: prevUsers7d[0]?.count || 0,
-          prev24Hours: prevUsers24h[0]?.count || 0,
+          all: usersAllCount,
+          last30Days: users30Count,
+          last7Days: users7Count,
+          last24Hours: users24Count,
+          prev30Days: prevUsers30Count,
+          prev7Days: prevUsers7Count,
+          prev24Hours: prevUsers24Count,
+          timeframes: userTimeframes,
         },
         projects: {
-          all: projectsAll[0]?.count || 0,
-          last30Days: projects30d[0]?.count || 0,
-          last7Days: projects7d[0]?.count || 0,
-          last24Hours: projects24h[0]?.count || 0,
-          // Previous periods for change calculation
-          prev30Days: prevProjects30d[0]?.count || 0,
-          prev7Days: prevProjects7d[0]?.count || 0,
-          prev24Hours: prevProjects24h[0]?.count || 0,
+          all: projectsAllCount,
+          last30Days: projects30Count,
+          last7Days: projects7Count,
+          last24Hours: projects24Count,
+          prev30Days: prevProjects30Count,
+          prev7Days: prevProjects7Count,
+          prev24Hours: prevProjects24Count,
+          timeframes: projectTimeframes,
         },
         scenes: {
-          all: scenesAll[0]?.count || 0,
-          last30Days: scenes30d[0]?.count || 0,
-          last7Days: scenes7d[0]?.count || 0,
-          last24Hours: scenes24h[0]?.count || 0,
-          // Previous periods for change calculation
-          prev30Days: prevScenes30d[0]?.count || 0,
-          prev7Days: prevScenes7d[0]?.count || 0,
-          prev24Hours: prevScenes24h[0]?.count || 0,
+          all: scenesAllCount,
+          last30Days: scenes30Count,
+          last7Days: scenes7Count,
+          last24Hours: scenes24Count,
+          prev30Days: prevScenes30Count,
+          prev7Days: prevScenes7Count,
+          prev24Hours: prevScenes24Count,
+          timeframes: sceneTimeframes,
         },
         prompts: {
-          all: promptsAll[0]?.count || 0,
-          last30Days: prompts30d[0]?.count || 0,
-          last7Days: prompts7d[0]?.count || 0,
-          last24Hours: prompts24h[0]?.count || 0,
-          // Previous periods for change calculation
-          prev30Days: prevPrompts30d[0]?.count || 0,
-          prev7Days: prevPrompts7d[0]?.count || 0,
-          prev24Hours: prevPrompts24h[0]?.count || 0,
+          all: promptsAllCount,
+          last30Days: prompts30Count,
+          last7Days: prompts7Count,
+          last24Hours: prompts24Count,
+          prev30Days: prevPrompts30Count,
+          prev7Days: prevPrompts7Count,
+          prev24Hours: prevPrompts24Count,
+          timeframes: promptTimeframes,
         },
-        recentFeedback
+        recentFeedback,
       };
     }),
 
@@ -2537,6 +2646,8 @@ export default function GeneratedScene() {
 
       let usersChangePct: number | undefined;
       let revenueChangePct: number | undefined;
+      let previousUsersCount = previousPeriod?.users ?? 0;
+      let previousRevenueCents = previousPeriod?.revenueCents ?? 0;
       if (previousPeriod) {
         usersChangePct = previousPeriod.users === 0 ? (payingUsers > 0 ? 100 : 0) : Math.round(((payingUsers - previousPeriod.users) / previousPeriod.users) * 100);
         revenueChangePct = previousPeriod.revenueCents === 0 ? (revenueCents > 0 ? 100 : 0) : Math.round(((revenueCents - previousPeriod.revenueCents) / previousPeriod.revenueCents) * 100);
@@ -2548,6 +2659,8 @@ export default function GeneratedScene() {
         revenueCents,
         usersChangePct,
         revenueChangePct,
+        previousPayingUsers: previousUsersCount,
+        previousRevenueCents,
       };
     }),
 
