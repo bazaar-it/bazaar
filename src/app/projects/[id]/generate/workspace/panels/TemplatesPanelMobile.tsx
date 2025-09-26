@@ -567,24 +567,26 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
       </div>
 
       {previewedTemplate && (
-        <div className="fixed inset-0 z-[1200] flex flex-col bg-black backdrop-blur-sm">
+        <div className="fixed inset-0 z-[1200] flex flex-col bg-black/90 backdrop-blur-sm">
           <div className="flex justify-end p-4">
             <Button variant="ghost" size="icon" className="text-white" onClick={closePreview}>
               <XIcon className="h-5 w-5" />
             </Button>
           </div>
-          <div className="flex-1 flex flex-col items-center justify-center gap-4 px-4 pb-8">
-            <div className={`w-full max-w-md overflow-hidden rounded-xl bg-black shadow-lg ${getAspectRatioClass(currentFormat)} relative`}>
-              <TemplateVideoPlayer template={previewedTemplate} format={currentFormat} />
+          <div className="flex-1 overflow-y-auto px-4 pb-[calc(24px+env(safe-area-inset-bottom,0))]">
+            <div className="mx-auto flex w-full max-w-md flex-col gap-4">
+              <div className={`relative w-full overflow-hidden rounded-xl bg-black shadow-lg ${getAspectRatioClass(currentFormat)}`}>
+                <TemplateVideoPlayer template={previewedTemplate} format={currentFormat} />
+              </div>
+              <Button
+                className="w-full"
+                size="lg"
+                onClick={() => handleAddTemplate(previewedTemplate)}
+                disabled={loadingTemplateId === previewedTemplate.id}
+              >
+                {loadingTemplateId === previewedTemplate.id ? 'Adding…' : 'Add to project'}
+              </Button>
             </div>
-            <Button
-              className="w-full max-w-md"
-              size="lg"
-              onClick={() => handleAddTemplate(previewedTemplate)}
-              disabled={loadingTemplateId === previewedTemplate.id}
-            >
-              {loadingTemplateId === previewedTemplate.id ? 'Adding…' : 'Add to project'}
-            </Button>
           </div>
         </div>
       )}
