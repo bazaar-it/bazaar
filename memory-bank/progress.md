@@ -1246,7 +1246,7 @@ The core video generation pipeline is **production-ready** with:
 - 2025-09-27: Converted the admin overview cards into sparkline charts powered by `admin.getAnalyticsData`, so users/prompts/scenes show recent trends instead of static counts; documented in `sprints/sprint107_general_reliability/analysis/2025-09-27-admin-dashboard-graphs.md` and noted lint run blocked on Node 16 ➝ needs rerun post toolchain upgrade.
 - 2025-09-27: Stabilised the dashboard hook order by moving auth guards after the new sparkline hooks, and added a first-touch UTM source filter on `/admin/users` (`getAttributionSources` + `utmSource` param) to slice cohorts by campaign/direct traffic.
 - 2025-09-27: Added a Growth tab beside the overview cards; reuses `getAnalyticsData` cumulative rollups so admins can chart total users/prompts/scenes across the selected window without losing the existing summary view.
-- 2025-09-27: Upgraded the Growth tab with a true "All Time" window (new API timeframe), wheel/pinch zoom inside the chart, and responsive hover tooltips so admins can inspect any point without being stuck on the previous highlight.
+- 2025-09-27: Upgraded the Growth tab with a true "All Time" window (new API timeframe), wheel/pinch zoom plus horizontal pan inside each chart, and responsive hover tooltips so admins can inspect any point without being stuck on the previous highlight.
 
 2025-09-30 – Mobile templates stability pass
 - Mobile template cards now render real frame-15 stills by preferring database thumbnails or the precompiled JS bundle; TSX compilation is deferred to the tap-to-preview overlay so scrolling no longer spins up dozens of Remotion compiles.【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelMobile.tsx:47】【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelMobile.tsx:198】
@@ -1266,3 +1266,10 @@ The core video generation pipeline is **production-ready** with:
 - Drafted and wired the fifth batch (Shazam animation, Testimonials, UI Data Visualisation, 50+ Integrations, Bar Chart) into the canonical metadata workflow.
 - Added `template-metadata-coverage.md` in Sprint 119 to track IDs, formats, and completion status for all production templates.
 - Documented Toggle, Banking App, Blur, portrait Gradient Globe, and I want to break free in canonical metadata and refreshed the coverage checklist.
+- Added portrait Log-In, Message notification toast, Scale down text effect, Screenshot intro, Text & UI Animation, and Text Shimmer to canonical metadata with updated coverage.
+- Documented Word Replace, Yellow Bar Chart, Animated UI (portrait), Credit Card Expenses, and Customer Testimonials (portrait) and refreshed canonical coverage.
+- Added portrait Google AI Search Box, Growth Graph, Homescreen Notifications, Message, and Pill Chart to canonical metadata and marked them complete in the coverage tracker.
+2025-10-01 – Code generator fine-tune scaffolding
+- Authored `sprints/sprint119_template_routing/analysis/2025-10-01-template-code-generator-finetune-sft.md` capturing dataset shape, prompt synthesis, and validation for a code-generation SFT model.
+- Created `data/fine-tuning/template-code-generator/` with override hooks, README, and output staging for JSONL splits.
+- Implemented `scripts/generate-template-code-sft.ts` plus npm script `data:code-sft` so canonical metadata + DB TSX export to train/validation/test JSONL (deterministic seed, dry-run support).

@@ -71,7 +71,7 @@ export default function AnalyticsPage() {
   const isAdmin = adminCheck?.isAdmin === true;
 
   const metricsEnabled = isAdmin;
-  const timeframeForSeries = selectedTimeframe === "all" ? "30d" : selectedTimeframe;
+  const timeframeForSeries = selectedTimeframe;
   const templatesTimeframe = selectedTimeframe === "all" ? "all" : selectedTimeframe;
 
   const { data: dashboardMetrics } = api.admin.getDashboardMetrics.useQuery(undefined, {
@@ -500,8 +500,12 @@ export default function AnalyticsPage() {
                   />
                   <EngagementTile
                     label="Never Used Templates"
-                    value={`${engagementStats.engagement.usersNoTemplatesPercentage ?? "0"}%`}
-                    description={`${engagementStats.engagement.usersNoTemplates?.toLocaleString() ?? 0} users`}
+                    value={templateUsageAvailable
+                      ? `${engagementStats.engagement.usersNoTemplatesPercentage ?? "0"}%`
+                      : "—"}
+                    description={templateUsageAvailable
+                      ? `${engagementStats.engagement.usersNoTemplates?.toLocaleString() ?? 0} users`
+                      : "Template usage tracking not enabled"}
                     tone="info"
                   />
                   <EngagementTile
@@ -564,6 +568,7 @@ const promptDistributionRanges: Array<{ key: keyof EngagementBreakdown; label: s
 ];
 
 type EngagementBreakdown = {
+  templateUsageAvailable?: boolean;
   usersNeverReturned?: number;
   usersNeverReturnedPercentage?: string;
   usersNoPrompts?: number;
@@ -611,3 +616,4 @@ function EngagementTile({ label, value, description, tone }: EngagementTileProps
     </div>
   );
 }
+  const templateUsageAvailable = engagementStats?.engagement?.templateUsageAvailable ?? false;

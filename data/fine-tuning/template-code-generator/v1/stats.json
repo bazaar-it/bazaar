@@ -1,0 +1,16 @@
+{
+  "generatedAt": "2025-09-27T13:20:31.502Z",
+  "tag": "v1",
+  "seed": "119",
+  "totals": {
+    "all": 150,
+    "train": 120,
+    "validation": 15,
+    "test": 15
+  },
+  "templatesProcessed": 51,
+  "uniqueTemplatesCovered": 50,
+  "missingTemplates": [
+    "pill-shaped-bar-chart (895a221e-d4cd-4567-a757-9e3a1ed6d35f)"
+  ]
+}

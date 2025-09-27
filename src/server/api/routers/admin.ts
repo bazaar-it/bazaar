@@ -3639,10 +3639,9 @@ export default function GeneratedScene() {
         .leftJoin(messages, eq(messages.projectId, projects.id))
         .groupBy(projects.userId);
 
-      // Template usage tracking - temporarily disabled until table is created
-      // To enable: Run migration 0013_create_template_usage.sql then uncomment below
+      let templateUsageAvailable = false;
       let templateUsers: { userId: string; hasUsedTemplate: boolean }[] = [];
-      
+
       // Check if template_usage table exists
       const tableExists = await db.execute(sql`
         SELECT EXISTS (
@@ -3653,14 +3652,15 @@ export default function GeneratedScene() {
       `);
       
       if (tableExists.rows[0]?.exists) {
-        // Table exists, get template usage data
+        templateUsageAvailable = true;
         templateUsers = await db.select({
-          userId: projects.userId,
-          hasUsedTemplate: sql<boolean>`CASE WHEN COUNT(DISTINCT tu.id) > 0 THEN true ELSE false END`,
+          userId: templateUsages.userId,
+          hasUsedTemplate: sql<boolean>`COUNT(*) > 0`,
         })
-          .from(projects)
-          .leftJoin(sql`"bazaar-vid_template_usage" tu`, sql`tu.project_id = ${projects.id}`)
-          .groupBy(projects.userId);
+          .from(templateUsages)
+          .where(sql`${templateUsages.userId} IS NOT NULL`)
+          .groupBy(templateUsages.userId);
+        templateUsers = templateUsers.filter((row): row is { userId: string; hasUsedTemplate: boolean } => !!row.userId);
       }
 
       // Get users who never came back (only signed up, no projects)
@@ -3730,7 +3730,9 @@ export default function GeneratedScene() {
 
       for (const user of allUsers) {
         const messageCount = messageMap.get(user.userId) || 0;
-        const hasUsedTemplate = templateMap.get(user.userId) || false;
+        const hasUsedTemplate = templateUsageAvailable
+          ? templateMap.get(user.userId) ?? false
+          : null;
         const projectCount = projectMap.get(user.userId) || 0;
         const activeDays = activeDaysMap.get(user.userId) || 0;
         const userInfo = userDetailsMap.get(user.userId) || { name: null, email: null };
@@ -3744,7 +3746,9 @@ export default function GeneratedScene() {
         if (projectCount === 0) {
           usersNeverReturned++;
           usersNoPrompts++;
-          usersNoTemplates++;
+          if (templateUsageAvailable) {
+            usersNoTemplates++;
+          }
           usersByBracket.noPrompts.push({ 
             id: user.userId, 
             name: userInfo.name, 
@@ -3838,7 +3842,7 @@ export default function GeneratedScene() {
           }
 
           // Users who never used templates
-          if (!hasUsedTemplate) {
+          if (templateUsageAvailable && hasUsedTemplate === false) {
             usersNoTemplates++;
           }
         }
@@ -3932,8 +3936,9 @@ export default function GeneratedScene() {
           usersNoPromptsPercentage: totalUsers > 0 ? ((usersNoPrompts / totalUsers) * 100).toFixed(1) : '0',
           usersNeverReturned,
           usersNeverReturnedPercentage: totalUsers > 0 ? ((usersNeverReturned / totalUsers) * 100).toFixed(1) : '0',
+          templateUsageAvailable,
           usersNoTemplates,
-          usersNoTemplatesPercentage: totalUsers > 0 ? ((usersNoTemplates / totalUsers) * 100).toFixed(1) : '0',
+          usersNoTemplatesPercentage: templateUsageAvailable && totalUsers > 0 ? ((usersNoTemplates / totalUsers) * 100).toFixed(1) : '0',
           usersUnder5Prompts,
           usersUnder5PromptsPercentage: totalUsers > 0 ? ((usersUnder5Prompts / totalUsers) * 100).toFixed(1) : '0',
           users5To10Prompts,

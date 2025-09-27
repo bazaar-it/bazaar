@@ -1,0 +1,64 @@
+# Template Metadata Coverage
+
+Legend: `L`=landscape, `P`=portrait, `S`=square
+
+- [x] documented
+- [ ] pending
+
+- [x] Google AI Search (`4cf2f12b-f0ce-4666-b0a2-09a9a9525488`) — formats: L
+- [x] Build a' word slide (`1aa932e9-981b-44f3-b8e5-fa403c98a65f`) — formats: L
+- [x] Revolut App (`bec6cc24-b737-4440-9441-f05b77b84fc9`) — formats: L
+- [x] Airbnb Demo (`6282bf4f-c46c-4bc4-8138-790c8b898f56`) — formats: L
+- [x] Generating (`54c159d6-7f53-4a10-b5f5-3c6f13d60c3c`) — formats: L
+- [x] Home screen notifications (`1ca6d5d1-71b4-4e9a-a842-3426432d042f`) — formats: L
+- [x] Rainbow stroke text effect (`59719468-662c-485b-9279-c94626d014d9`) — formats: L
+- [x] Shooting Star (`1a318e05-4a26-4da3-92f5-7890e699b3de`) — formats: L
+- [x] Welcome to Bazaar (`7174c9ea-4240-479a-a0f9-36e65f64681a`) — formats: L
+- [x] Blue Gradient Text (`fb80e68b-a7e9-44ea-9eea-fa57893ef075`) — formats: L
+- [x] Corporate Credit Card (`f83feab4-9ef2-425d-8c63-ed0d38c150b0`) — formats: L
+- [x] Gradient Globe (`430a7d2b-cda2-4507-b0c0-e6d9ea8fbf04`) — formats: L
+- [x] Pill Shaped Bar Chart (`895a221e-d4cd-4567-a757-9e3a1ed6d35f`) — formats: L
+- [x] Text Sparkles (`f6444a90-fbcf-4c97-9b6c-fb43c506de6e`) — formats: L
+- [x] Airbnb Demo (`9cbfb640-545a-4880-8c3a-62887e5249cf`) — formats: P
+- [x] TBPN intro (`ff873eb3-3423-4da3-94e1-1973591a2dfb`) — formats: P
+- [x] Text animation (`00404900-c51c-401a-a36e-ae3234deb4d4`) — formats: LPS
+- [x] Vibe-Coded finance app (`7305f6c3-a0af-4125-a511-a14afe955bf3`) — formats: L
+- [x] Hello Circles (`31bcdb78-9dfa-49ac-af34-1de889fc2e08`) — formats: P
+- [x] Log-in (`2e6be68a-d83a-4ddb-a1ff-0be7ce9a9347`) — formats: L
+- [x] Shazam animatioin (`4bba2499-ee30-4e0f-af7f-75572fcc1ee8`) — formats: L
+- [x] Testimonials (`c6f94642-c762-40ef-88e0-434ba0294f80`) — formats: L
+- [x] UI Data Visualisation (`20880f1b-f72f-442b-a416-c368e9b640ff`) — formats: L
+- [x] 50+ Integrations (`2ebb8f74-3a48-4bf1-afd6-9e3a1ed6d35f`) — formats: L
+- [x] Bar Chart (`9ccb415b-0396-4a57-b649-169a90b5d83f`) — formats: L
+- [x] Line Chart (`c2bac307-3ae3-44f5-ba5f-6109ac8abe24`) — formats: L
+- [x] Make something Lovable (`5003e635-fc3e-4e60-b259-2c85354804fa`) — formats: LPS
+- [x] Pricing Card (`ee38aedd-0343-4727-8941-a40ca63b6819`) — formats: PS
+- [x] Pricing Card (`77f40aac-001b-49b7-8104-209a2300d184`) — formats: L
+- [x] Profile/ Message screens (`0256d007-70e7-4104-9c16-0dd8bd70a6b1`) — formats: L
+- [x] Toggle (`a54cb1aa-8663-4825-a08e-ebc14558fa8c`) — formats: LPS
+- [x] Banking App (`1bc2d1b0-f8dc-415d-bd39-528f44fb5ce2`) — formats: PS
+- [x] Blur (`4fefddd4-f509-423a-953c-fc066d25d009`) — formats: LPS
+- [x] Gradient globe (`3a164c8d-cad8-481c-ad1f-f8aac11c8c5c`) — formats: P
+- [x] I want to break free (`c9952351-3c87-4942-9edb-fee7effc5a5b`) — formats: L
+- [x] Log in (`96f88e7e-cc41-457c-82dc-c152cf0f90bd`) — formats: P
+- [x] Message notification (`ed3ff0bf-6e54-4d98-b2c4-b923797071bc`) — formats: L
+- [x] Scale down text effect (`d907e3e5-1c99-4f70-8454-9573156cea08`) — formats: L
+- [x] Screenshot (`009b717a-dd89-4757-8321-bf06b391c7ad`) — formats: L
+- [x] Text & UI Animation (`7acf1a10-e0c1-485c-bf15-d8a32ab9bf82`) — formats: L
+- [x] Text Shimmer (`d7b894d9-0043-4e72-a62a-69434776ffe4`) — formats: P
+- [x] Word Replace (`157c4c8a-9961-4a04-90a6-a3107bb5787d`) — formats: L
+- [x] Yellow Bar Chart (`7720e8bb-47e1-423f-b085-99ed3ccc2543`) — formats: PS
+- [x] Animated UI (`c999b0df-b6e4-4bb4-8387-7a88475fcb2f`) — formats: P
+- [x] Credit Card Expenses (`24b90c46-49a5-4bc6-a045-3ecb94ff2e47`) — formats: P
+- [x] Customer Testimonials (`a0ac9af6-cfde-4111-a185-d4a911d3ff65`) — formats: PS
+- [x] Google AI Search Box (`3d6036f4-2f1f-4e43-99ef-371d6f456c3e`) — formats: PS
+- [x] Growth Graph (`22816869-0648-4306-99aa-af79b9c7ba4d`) — formats: PS
+- [x] Homescreen notifications (`ea9d3b6f-f681-4224-92c1-ace15afb989f`) — formats: PS
+- [x] Message (`b901a314-b5fb-46f7-98c7-9a50b26e5e37`) — formats: P
+- [x] Pill Chart (`2e7cf71c-0d4d-47f1-8255-23d439b24269`) — formats: PS
+- [ ] Sign in with Apple (`e87a6f79-96f8-495a-8f04-e2fa25290e2a`) — formats: L
+- [ ] Sign in with GitHub (`17eb7881-2558-4b94-bd13-ae1e4a84dda5`) — formats: L
+- [ ] Sign in with Google (`2dc3771d-c753-440c-a36c-de810b3ed730`) — formats: L
+- [ ] Sparkles (`7da38cf9-8422-4b26-956a-ff4dc85f26e4`) — formats: PS
+- [ ] Text box animation (`272d19ee-4ac2-4b31-9736-62d64f07b1e8`) — formats: P
+- [ ] Work Replace (`c9975624-898f-45bf-9e7a-3ac9b3d909fa`) — formats: S

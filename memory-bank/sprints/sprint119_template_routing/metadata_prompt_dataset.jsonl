@@ -1,0 +1,204 @@
+{"prompt": "format:landscape google ai search demo", "expected_template_id": "google-ai-search", "expected_template_name": "Google AI Search", "db_id": "4cf2f12b-f0ce-4666-b0a2-09a9a9525488"}
+{"prompt": "desktop layout search results animation", "expected_template_id": "google-ai-search", "expected_template_name": "Google AI Search", "db_id": "4cf2f12b-f0ce-4666-b0a2-09a9a9525488"}
+{"prompt": "wide hero show ai search interface", "expected_template_id": "google-ai-search", "expected_template_name": "Google AI Search", "db_id": "4cf2f12b-f0ce-4666-b0a2-09a9a9525488"}
+{"prompt": "google-style ui", "expected_template_id": "google-ai-search", "expected_template_name": "Google AI Search", "db_id": "4cf2f12b-f0ce-4666-b0a2-09a9a9525488"}
+{"prompt": "format:landscape sliding headline animation", "expected_template_id": "build-a-word-slide", "expected_template_name": "Build a' word slide", "db_id": "1aa932e9-981b-44f3-b8e5-fa403c98a65f"}
+{"prompt": "desktop layout text that rotates through features", "expected_template_id": "build-a-word-slide", "expected_template_name": "Build a' word slide", "db_id": "1aa932e9-981b-44f3-b8e5-fa403c98a65f"}
+{"prompt": "wide hero word carousel", "expected_template_id": "build-a-word-slide", "expected_template_name": "Build a' word slide", "db_id": "1aa932e9-981b-44f3-b8e5-fa403c98a65f"}
+{"prompt": "animated text slider", "expected_template_id": "build-a-word-slide", "expected_template_name": "Build a' word slide", "db_id": "1aa932e9-981b-44f3-b8e5-fa403c98a65f"}
+{"prompt": "format:landscape fintech app demo", "expected_template_id": "revolut-app", "expected_template_name": "Revolut App", "db_id": "bec6cc24-b737-4440-9441-f05b77b84fc9"}
+{"prompt": "desktop layout show a banking dashboard", "expected_template_id": "revolut-app", "expected_template_name": "Revolut App", "db_id": "bec6cc24-b737-4440-9441-f05b77b84fc9"}
+{"prompt": "wide hero mobile wallet animation", "expected_template_id": "revolut-app", "expected_template_name": "Revolut App", "db_id": "bec6cc24-b737-4440-9441-f05b77b84fc9"}
+{"prompt": "financial app walkthrough", "expected_template_id": "revolut-app", "expected_template_name": "Revolut App", "db_id": "bec6cc24-b737-4440-9441-f05b77b84fc9"}
+{"prompt": "format:landscape airbnb style hero", "expected_template_id": "airbnb-demo", "expected_template_name": "Airbnb Demo", "db_id": "6282bf4f-c46c-4bc4-8138-790c8b898f56"}
+{"prompt": "desktop layout travel marketplace animation", "expected_template_id": "airbnb-demo", "expected_template_name": "Airbnb Demo", "db_id": "6282bf4f-c46c-4bc4-8138-790c8b898f56"}
+{"prompt": "wide hero property listing cards", "expected_template_id": "airbnb-demo", "expected_template_name": "Airbnb Demo", "db_id": "6282bf4f-c46c-4bc4-8138-790c8b898f56"}
+{"prompt": "vacation rental ui", "expected_template_id": "airbnb-demo", "expected_template_name": "Airbnb Demo", "db_id": "6282bf4f-c46c-4bc4-8138-790c8b898f56"}
+{"prompt": "format:landscape generating animation", "expected_template_id": "generating-loader", "expected_template_name": "Generating", "db_id": "54c159d6-7f53-4a10-b5f5-3c6f13d60c3c"}
+{"prompt": "desktop layout ai loading state", "expected_template_id": "generating-loader", "expected_template_name": "Generating", "db_id": "54c159d6-7f53-4a10-b5f5-3c6f13d60c3c"}
+{"prompt": "wide hero shimmer loading text", "expected_template_id": "generating-loader", "expected_template_name": "Generating", "db_id": "54c159d6-7f53-4a10-b5f5-3c6f13d60c3c"}
+{"prompt": "show generating status", "expected_template_id": "generating-loader", "expected_template_name": "Generating", "db_id": "54c159d6-7f53-4a10-b5f5-3c6f13d60c3c"}
+{"prompt": "format:landscape mobile notification animation", "expected_template_id": "home-screen-notifications", "expected_template_name": "Home screen notifications", "db_id": "1ca6d5d1-71b4-4e9a-a842-3426432d042f"}
+{"prompt": "desktop layout phone lock screen alerts", "expected_template_id": "home-screen-notifications", "expected_template_name": "Home screen notifications", "db_id": "1ca6d5d1-71b4-4e9a-a842-3426432d042f"}
+{"prompt": "wide hero show app notifications", "expected_template_id": "home-screen-notifications", "expected_template_name": "Home screen notifications", "db_id": "1ca6d5d1-71b4-4e9a-a842-3426432d042f"}
+{"prompt": "push notification stack", "expected_template_id": "home-screen-notifications", "expected_template_name": "Home screen notifications", "db_id": "1ca6d5d1-71b4-4e9a-a842-3426432d042f"}
+{"prompt": "format:landscape rainbow text animation", "expected_template_id": "rainbow-stroke-text-effect", "expected_template_name": "Rainbow stroke text effect", "db_id": "59719468-662c-485b-9279-c94626d014d9"}
+{"prompt": "desktop layout gradient stroke headline", "expected_template_id": "rainbow-stroke-text-effect", "expected_template_name": "Rainbow stroke text effect", "db_id": "59719468-662c-485b-9279-c94626d014d9"}
+{"prompt": "wide hero neon outline text", "expected_template_id": "rainbow-stroke-text-effect", "expected_template_name": "Rainbow stroke text effect", "db_id": "59719468-662c-485b-9279-c94626d014d9"}
+{"prompt": "colorful text effect", "expected_template_id": "rainbow-stroke-text-effect", "expected_template_name": "Rainbow stroke text effect", "db_id": "59719468-662c-485b-9279-c94626d014d9"}
+{"prompt": "format:landscape shooting star animation", "expected_template_id": "shooting-star", "expected_template_name": "Shooting Star", "db_id": "1a318e05-4a26-4da3-92f5-7890e699b3de"}
+{"prompt": "desktop layout sparkle intro text", "expected_template_id": "shooting-star", "expected_template_name": "Shooting Star", "db_id": "1a318e05-4a26-4da3-92f5-7890e699b3de"}
+{"prompt": "wide hero night sky title", "expected_template_id": "shooting-star", "expected_template_name": "Shooting Star", "db_id": "1a318e05-4a26-4da3-92f5-7890e699b3de"}
+{"prompt": "quick celestial intro", "expected_template_id": "shooting-star", "expected_template_name": "Shooting Star", "db_id": "1a318e05-4a26-4da3-92f5-7890e699b3de"}
+{"prompt": "format:landscape welcome to bazaar animation", "expected_template_id": "welcome-to-bazaar", "expected_template_name": "Welcome to Bazaar", "db_id": "7174c9ea-4240-479a-a0f9-36e65f64681a"}
+{"prompt": "desktop layout brand intro scene", "expected_template_id": "welcome-to-bazaar", "expected_template_name": "Welcome to Bazaar", "db_id": "7174c9ea-4240-479a-a0f9-36e65f64681a"}
+{"prompt": "wide hero company welcome title", "expected_template_id": "welcome-to-bazaar", "expected_template_name": "Welcome to Bazaar", "db_id": "7174c9ea-4240-479a-a0f9-36e65f64681a"}
+{"prompt": "bazaar hero text", "expected_template_id": "welcome-to-bazaar", "expected_template_name": "Welcome to Bazaar", "db_id": "7174c9ea-4240-479a-a0f9-36e65f64681a"}
+{"prompt": "format:landscape blue gradient text animation", "expected_template_id": "blue-gradient-text-db", "expected_template_name": "Blue Gradient Text", "db_id": "fb80e68b-a7e9-44ea-9eea-fa57893ef075"}
+{"prompt": "desktop layout shimmer headline", "expected_template_id": "blue-gradient-text-db", "expected_template_name": "Blue Gradient Text", "db_id": "fb80e68b-a7e9-44ea-9eea-fa57893ef075"}
+{"prompt": "wide hero cool tone text effect", "expected_template_id": "blue-gradient-text-db", "expected_template_name": "Blue Gradient Text", "db_id": "fb80e68b-a7e9-44ea-9eea-fa57893ef075"}
+{"prompt": "gradient typography", "expected_template_id": "blue-gradient-text-db", "expected_template_name": "Blue Gradient Text", "db_id": "fb80e68b-a7e9-44ea-9eea-fa57893ef075"}
+{"prompt": "format:landscape corporate card animation", "expected_template_id": "corporate-credit-card", "expected_template_name": "Corporate Credit Card", "db_id": "f83feab4-9ef2-425d-8c63-ed0d38c150b0"}
+{"prompt": "desktop layout show a finance card hero", "expected_template_id": "corporate-credit-card", "expected_template_name": "Corporate Credit Card", "db_id": "f83feab4-9ef2-425d-8c63-ed0d38c150b0"}
+{"prompt": "wide hero expense management demo", "expected_template_id": "corporate-credit-card", "expected_template_name": "Corporate Credit Card", "db_id": "f83feab4-9ef2-425d-8c63-ed0d38c150b0"}
+{"prompt": "animated credit card", "expected_template_id": "corporate-credit-card", "expected_template_name": "Corporate Credit Card", "db_id": "f83feab4-9ef2-425d-8c63-ed0d38c150b0"}
+{"prompt": "format:landscape gradient globe background", "expected_template_id": "gradient-globe", "expected_template_name": "Gradient Globe", "db_id": "430a7d2b-cda2-4507-b0c0-e6d9ea8fbf04"}
+{"prompt": "desktop layout tech sphere animation", "expected_template_id": "gradient-globe", "expected_template_name": "Gradient Globe", "db_id": "430a7d2b-cda2-4507-b0c0-e6d9ea8fbf04"}
+{"prompt": "wide hero global background", "expected_template_id": "gradient-globe", "expected_template_name": "Gradient Globe", "db_id": "430a7d2b-cda2-4507-b0c0-e6d9ea8fbf04"}
+{"prompt": "orbiting rings animation", "expected_template_id": "gradient-globe", "expected_template_name": "Gradient Globe", "db_id": "430a7d2b-cda2-4507-b0c0-e6d9ea8fbf04"}
+{"prompt": "format:landscape pill bar chart animation", "expected_template_id": "pill-shaped-bar-chart", "expected_template_name": "Pill Shaped Bar Chart", "db_id": "895a221e-d4cd-4567-a757-9e3a1ed6d35f"}
+{"prompt": "desktop layout rounded analytics chart", "expected_template_id": "pill-shaped-bar-chart", "expected_template_name": "Pill Shaped Bar Chart", "db_id": "895a221e-d4cd-4567-a757-9e3a1ed6d35f"}
+{"prompt": "wide hero modern data viz", "expected_template_id": "pill-shaped-bar-chart", "expected_template_name": "Pill Shaped Bar Chart", "db_id": "895a221e-d4cd-4567-a757-9e3a1ed6d35f"}
+{"prompt": "animated metrics bars", "expected_template_id": "pill-shaped-bar-chart", "expected_template_name": "Pill Shaped Bar Chart", "db_id": "895a221e-d4cd-4567-a757-9e3a1ed6d35f"}
+{"prompt": "format:landscape sparkle text animation", "expected_template_id": "text-sparkles", "expected_template_name": "Text Sparkles", "db_id": "f6444a90-fbcf-4c97-9b6c-fb43c506de6e"}
+{"prompt": "desktop layout glitter headline", "expected_template_id": "text-sparkles", "expected_template_name": "Text Sparkles", "db_id": "f6444a90-fbcf-4c97-9b6c-fb43c506de6e"}
+{"prompt": "wide hero magical text effect", "expected_template_id": "text-sparkles", "expected_template_name": "Text Sparkles", "db_id": "f6444a90-fbcf-4c97-9b6c-fb43c506de6e"}
+{"prompt": "shimmering typography", "expected_template_id": "text-sparkles", "expected_template_name": "Text Sparkles", "db_id": "f6444a90-fbcf-4c97-9b6c-fb43c506de6e"}
+{"prompt": "format:portrait airbnb mobile demo", "expected_template_id": "airbnb-demo-portrait", "expected_template_name": "Airbnb Demo (Portrait)", "db_id": "9cbfb640-545a-4880-8c3a-62887e5249cf"}
+{"prompt": "mobile layout vertical travel animation", "expected_template_id": "airbnb-demo-portrait", "expected_template_name": "Airbnb Demo (Portrait)", "db_id": "9cbfb640-545a-4880-8c3a-62887e5249cf"}
+{"prompt": "vertical video portrait listings animation", "expected_template_id": "airbnb-demo-portrait", "expected_template_name": "Airbnb Demo (Portrait)", "db_id": "9cbfb640-545a-4880-8c3a-62887e5249cf"}
+{"prompt": "vacation rental mobile ui", "expected_template_id": "airbnb-demo-portrait", "expected_template_name": "Airbnb Demo (Portrait)", "db_id": "9cbfb640-545a-4880-8c3a-62887e5249cf"}
+{"prompt": "format:portrait tbpn intro animation", "expected_template_id": "tbpn-intro", "expected_template_name": "TBPN intro", "db_id": "ff873eb3-3423-4da3-94e1-1973591a2dfb"}
+{"prompt": "mobile layout portrait brand reveal", "expected_template_id": "tbpn-intro", "expected_template_name": "TBPN intro", "db_id": "ff873eb3-3423-4da3-94e1-1973591a2dfb"}
+{"prompt": "vertical video vertical intro sequence", "expected_template_id": "tbpn-intro", "expected_template_name": "TBPN intro", "db_id": "ff873eb3-3423-4da3-94e1-1973591a2dfb"}
+{"prompt": "tbpn motion graphics", "expected_template_id": "tbpn-intro", "expected_template_name": "TBPN intro", "db_id": "ff873eb3-3423-4da3-94e1-1973591a2dfb"}
+{"prompt": "format:landscape responsive text animation", "expected_template_id": "text-animation-db", "expected_template_name": "Text animation", "db_id": "00404900-c51c-401a-a36e-ae3234deb4d4"}
+{"prompt": "desktop layout simple kinetic typography", "expected_template_id": "text-animation-db", "expected_template_name": "Text animation", "db_id": "00404900-c51c-401a-a36e-ae3234deb4d4"}
+{"prompt": "wide hero quick text intro", "expected_template_id": "text-animation-db", "expected_template_name": "Text animation", "db_id": "00404900-c51c-401a-a36e-ae3234deb4d4"}
+{"prompt": "format:portrait multi-format text animation", "expected_template_id": "text-animation-db", "expected_template_name": "Text animation", "db_id": "00404900-c51c-401a-a36e-ae3234deb4d4"}
+{"prompt": "format:landscape vibe coded finance animation", "expected_template_id": "vibe-coded-finance-app", "expected_template_name": "Vibe-Coded finance app", "db_id": "7305f6c3-a0af-4125-a511-a14afe955bf3"}
+{"prompt": "desktop layout neon fintech dashboard", "expected_template_id": "vibe-coded-finance-app", "expected_template_name": "Vibe-Coded finance app", "db_id": "7305f6c3-a0af-4125-a511-a14afe955bf3"}
+{"prompt": "wide hero stylized finance ui", "expected_template_id": "vibe-coded-finance-app", "expected_template_name": "Vibe-Coded finance app", "db_id": "7305f6c3-a0af-4125-a511-a14afe955bf3"}
+{"prompt": "animated finance metrics", "expected_template_id": "vibe-coded-finance-app", "expected_template_name": "Vibe-Coded finance app", "db_id": "7305f6c3-a0af-4125-a511-a14afe955bf3"}
+{"prompt": "format:portrait circle animation", "expected_template_id": "hello-circles", "expected_template_name": "Hello Circles", "db_id": "31bcdb78-9dfa-49ac-af34-1de889fc2e08"}
+{"prompt": "mobile layout ambient hello intro", "expected_template_id": "hello-circles", "expected_template_name": "Hello Circles", "db_id": "31bcdb78-9dfa-49ac-af34-1de889fc2e08"}
+{"prompt": "vertical video portrait circles background", "expected_template_id": "hello-circles", "expected_template_name": "Hello Circles", "db_id": "31bcdb78-9dfa-49ac-af34-1de889fc2e08"}
+{"prompt": "soft gradient circles", "expected_template_id": "hello-circles", "expected_template_name": "Hello Circles", "db_id": "31bcdb78-9dfa-49ac-af34-1de889fc2e08"}
+{"prompt": "format:landscape login form animation", "expected_template_id": "log-in-db", "expected_template_name": "Log-in", "db_id": "2e6be68a-d83a-4ddb-a1ff-0be7ce9a9347"}
+{"prompt": "desktop layout sign-in ui demo", "expected_template_id": "log-in-db", "expected_template_name": "Log-in", "db_id": "2e6be68a-d83a-4ddb-a1ff-0be7ce9a9347"}
+{"prompt": "wide hero authentication screen", "expected_template_id": "log-in-db", "expected_template_name": "Log-in", "db_id": "2e6be68a-d83a-4ddb-a1ff-0be7ce9a9347"}
+{"prompt": "animated login inputs", "expected_template_id": "log-in-db", "expected_template_name": "Log-in", "db_id": "2e6be68a-d83a-4ddb-a1ff-0be7ce9a9347"}
+{"prompt": "format:landscape shazam style animation", "expected_template_id": "shazam-animation", "expected_template_name": "Shazam animation", "db_id": "4bba2499-ee30-4e0f-af7f-75572fcc1ee8"}
+{"prompt": "desktop layout listening screen demo", "expected_template_id": "shazam-animation", "expected_template_name": "Shazam animation", "db_id": "4bba2499-ee30-4e0f-af7f-75572fcc1ee8"}
+{"prompt": "wide hero music detection hero", "expected_template_id": "shazam-animation", "expected_template_name": "Shazam animation", "db_id": "4bba2499-ee30-4e0f-af7f-75572fcc1ee8"}
+{"prompt": "audio pulse animation", "expected_template_id": "shazam-animation", "expected_template_name": "Shazam animation", "db_id": "4bba2499-ee30-4e0f-af7f-75572fcc1ee8"}
+{"prompt": "format:landscape testimonial animation", "expected_template_id": "testimonials-db", "expected_template_name": "Testimonials", "db_id": "c6f94642-c762-40ef-88e0-434ba0294f80"}
+{"prompt": "desktop layout quote carousel", "expected_template_id": "testimonials-db", "expected_template_name": "Testimonials", "db_id": "c6f94642-c762-40ef-88e0-434ba0294f80"}
+{"prompt": "wide hero customer feedback slider", "expected_template_id": "testimonials-db", "expected_template_name": "Testimonials", "db_id": "c6f94642-c762-40ef-88e0-434ba0294f80"}
+{"prompt": "avatar testimonial ui", "expected_template_id": "testimonials-db", "expected_template_name": "Testimonials", "db_id": "c6f94642-c762-40ef-88e0-434ba0294f80"}
+{"prompt": "format:landscape analytics card animation", "expected_template_id": "ui-data-visualisation", "expected_template_name": "UI Data Visualisation", "db_id": "20880f1b-f72f-442b-a416-c368e9b640ff"}
+{"prompt": "desktop layout data visualization ui", "expected_template_id": "ui-data-visualisation", "expected_template_name": "UI Data Visualisation", "db_id": "20880f1b-f72f-442b-a416-c368e9b640ff"}
+{"prompt": "wide hero stats card intro", "expected_template_id": "ui-data-visualisation", "expected_template_name": "UI Data Visualisation", "db_id": "20880f1b-f72f-442b-a416-c368e9b640ff"}
+{"prompt": "revenue dashboard animation", "expected_template_id": "ui-data-visualisation", "expected_template_name": "UI Data Visualisation", "db_id": "20880f1b-f72f-442b-a416-c368e9b640ff"}
+{"prompt": "format:landscape integrations animation", "expected_template_id": "fifty-plus-integrations", "expected_template_name": "50+ Integrations", "db_id": "2ebb8f74-3a48-4bf1-afd6-9e3a1ed6d35f"}
+{"prompt": "desktop layout show partner logos", "expected_template_id": "fifty-plus-integrations", "expected_template_name": "50+ Integrations", "db_id": "2ebb8f74-3a48-4bf1-afd6-9e3a1ed6d35f"}
+{"prompt": "wide hero integration grid hero", "expected_template_id": "fifty-plus-integrations", "expected_template_name": "50+ Integrations", "db_id": "2ebb8f74-3a48-4bf1-afd6-9e3a1ed6d35f"}
+{"prompt": "tool ecosystem animation", "expected_template_id": "fifty-plus-integrations", "expected_template_name": "50+ Integrations", "db_id": "2ebb8f74-3a48-4bf1-afd6-9e3a1ed6d35f"}
+{"prompt": "format:landscape bar chart card", "expected_template_id": "bar-chart-db", "expected_template_name": "Bar Chart", "db_id": "9ccb415b-0396-4a57-b649-169a90b5d83f"}
+{"prompt": "desktop layout dashboard bar animation", "expected_template_id": "bar-chart-db", "expected_template_name": "Bar Chart", "db_id": "9ccb415b-0396-4a57-b649-169a90b5d83f"}
+{"prompt": "wide hero metric card animation", "expected_template_id": "bar-chart-db", "expected_template_name": "Bar Chart", "db_id": "9ccb415b-0396-4a57-b649-169a90b5d83f"}
+{"prompt": "growth analytics tile", "expected_template_id": "bar-chart-db", "expected_template_name": "Bar Chart", "db_id": "9ccb415b-0396-4a57-b649-169a90b5d83f"}
+{"prompt": "format:landscape line chart animation", "expected_template_id": "line-chart-db", "expected_template_name": "Line Chart", "db_id": "c2bac307-3ae3-44f5-ba5f-6109ac8abe24"}
+{"prompt": "desktop layout dashboard growth card", "expected_template_id": "line-chart-db", "expected_template_name": "Line Chart", "db_id": "c2bac307-3ae3-44f5-ba5f-6109ac8abe24"}
+{"prompt": "wide hero analytics line graph", "expected_template_id": "line-chart-db", "expected_template_name": "Line Chart", "db_id": "c2bac307-3ae3-44f5-ba5f-6109ac8abe24"}
+{"prompt": "trend line visualization", "expected_template_id": "line-chart-db", "expected_template_name": "Line Chart", "db_id": "c2bac307-3ae3-44f5-ba5f-6109ac8abe24"}
+{"prompt": "format:landscape typewriter hero animation", "expected_template_id": "make-something-lovable", "expected_template_name": "Make something Lovable", "db_id": "5003e635-fc3e-4e60-b259-2c85354804fa"}
+{"prompt": "desktop layout ai search prompt", "expected_template_id": "make-something-lovable", "expected_template_name": "Make something Lovable", "db_id": "5003e635-fc3e-4e60-b259-2c85354804fa"}
+{"prompt": "wide hero multi-format intro", "expected_template_id": "make-something-lovable", "expected_template_name": "Make something Lovable", "db_id": "5003e635-fc3e-4e60-b259-2c85354804fa"}
+{"prompt": "format:portrait lovable app hero", "expected_template_id": "make-something-lovable", "expected_template_name": "Make something Lovable", "db_id": "5003e635-fc3e-4e60-b259-2c85354804fa"}
+{"prompt": "format:portrait pricing card animation", "expected_template_id": "pricing-card-portrait", "expected_template_name": "Pricing Card (Portrait)", "db_id": "ee38aedd-0343-4727-8941-a40ca63b6819"}
+{"prompt": "mobile layout subscription plan portrait", "expected_template_id": "pricing-card-portrait", "expected_template_name": "Pricing Card (Portrait)", "db_id": "ee38aedd-0343-4727-8941-a40ca63b6819"}
+{"prompt": "vertical video vertical pricing intro", "expected_template_id": "pricing-card-portrait", "expected_template_name": "Pricing Card (Portrait)", "db_id": "ee38aedd-0343-4727-8941-a40ca63b6819"}
+{"prompt": "format:square plan comparison card", "expected_template_id": "pricing-card-portrait", "expected_template_name": "Pricing Card (Portrait)", "db_id": "ee38aedd-0343-4727-8941-a40ca63b6819"}
+{"prompt": "format:landscape pricing section animation", "expected_template_id": "pricing-card-landscape", "expected_template_name": "Pricing Card (Landscape)", "db_id": "77f40aac-001b-49b7-8104-209a2300d184"}
+{"prompt": "desktop layout landscape pricing card", "expected_template_id": "pricing-card-landscape", "expected_template_name": "Pricing Card (Landscape)", "db_id": "77f40aac-001b-49b7-8104-209a2300d184"}
+{"prompt": "wide hero plan highlight hero", "expected_template_id": "pricing-card-landscape", "expected_template_name": "Pricing Card (Landscape)", "db_id": "77f40aac-001b-49b7-8104-209a2300d184"}
+{"prompt": "pricing table intro", "expected_template_id": "pricing-card-landscape", "expected_template_name": "Pricing Card (Landscape)", "db_id": "77f40aac-001b-49b7-8104-209a2300d184"}
+{"prompt": "format:landscape profile screen animation", "expected_template_id": "profile-message-screens", "expected_template_name": "Profile / Message screens", "db_id": "0256d007-70e7-4104-9c16-0dd8bd70a6b1"}
+{"prompt": "desktop layout messaging app demo", "expected_template_id": "profile-message-screens", "expected_template_name": "Profile / Message screens", "db_id": "0256d007-70e7-4104-9c16-0dd8bd70a6b1"}
+{"prompt": "wide hero dual phone presentation", "expected_template_id": "profile-message-screens", "expected_template_name": "Profile / Message screens", "db_id": "0256d007-70e7-4104-9c16-0dd8bd70a6b1"}
+{"prompt": "chat app showcase", "expected_template_id": "profile-message-screens", "expected_template_name": "Profile / Message screens", "db_id": "0256d007-70e7-4104-9c16-0dd8bd70a6b1"}
+{"prompt": "format:portrait auth modal animation", "expected_template_id": "log-in-portrait", "expected_template_name": "Log in (Portrait)", "db_id": "96f88e7e-cc41-457c-82dc-c152cf0f90bd"}
+{"prompt": "mobile layout portrait login screen", "expected_template_id": "log-in-portrait", "expected_template_name": "Log in (Portrait)", "db_id": "96f88e7e-cc41-457c-82dc-c152cf0f90bd"}
+{"prompt": "vertical video glassmorphism sign in", "expected_template_id": "log-in-portrait", "expected_template_name": "Log in (Portrait)", "db_id": "96f88e7e-cc41-457c-82dc-c152cf0f90bd"}
+{"prompt": "animated login form", "expected_template_id": "log-in-portrait", "expected_template_name": "Log in (Portrait)", "db_id": "96f88e7e-cc41-457c-82dc-c152cf0f90bd"}
+{"prompt": "format:landscape message notification animation", "expected_template_id": "message-notification-db", "expected_template_name": "Message notification", "db_id": "ed3ff0bf-6e54-4d98-b2c4-b923797071bc"}
+{"prompt": "desktop layout product toast demo", "expected_template_id": "message-notification-db", "expected_template_name": "Message notification", "db_id": "ed3ff0bf-6e54-4d98-b2c4-b923797071bc"}
+{"prompt": "wide hero chat notification ui", "expected_template_id": "message-notification-db", "expected_template_name": "Message notification", "db_id": "ed3ff0bf-6e54-4d98-b2c4-b923797071bc"}
+{"prompt": "in-app message card", "expected_template_id": "message-notification-db", "expected_template_name": "Message notification", "db_id": "ed3ff0bf-6e54-4d98-b2c4-b923797071bc"}
+{"prompt": "format:landscape scale down text animation", "expected_template_id": "scale-down-text-effect", "expected_template_name": "Scale down text effect", "db_id": "d907e3e5-1c99-4f70-8454-9573156cea08"}
+{"prompt": "desktop layout gradient headline effect", "expected_template_id": "scale-down-text-effect", "expected_template_name": "Scale down text effect", "db_id": "d907e3e5-1c99-4f70-8454-9573156cea08"}
+{"prompt": "wide hero text zoom hero", "expected_template_id": "scale-down-text-effect", "expected_template_name": "Scale down text effect", "db_id": "d907e3e5-1c99-4f70-8454-9573156cea08"}
+{"prompt": "bold typography intro", "expected_template_id": "scale-down-text-effect", "expected_template_name": "Scale down text effect", "db_id": "d907e3e5-1c99-4f70-8454-9573156cea08"}
+{"prompt": "format:landscape screenshot hero animation", "expected_template_id": "screenshot-intro", "expected_template_name": "Screenshot intro", "db_id": "009b717a-dd89-4757-8321-bf06b391c7ad"}
+{"prompt": "desktop layout typewriter headline demo", "expected_template_id": "screenshot-intro", "expected_template_name": "Screenshot intro", "db_id": "009b717a-dd89-4757-8321-bf06b391c7ad"}
+{"prompt": "wide hero product screenshot intro", "expected_template_id": "screenshot-intro", "expected_template_name": "Screenshot intro", "db_id": "009b717a-dd89-4757-8321-bf06b391c7ad"}
+{"prompt": "app screenshot highlight", "expected_template_id": "screenshot-intro", "expected_template_name": "Screenshot intro", "db_id": "009b717a-dd89-4757-8321-bf06b391c7ad"}
+{"prompt": "format:landscape text and ui animation", "expected_template_id": "text-ui-animation-db", "expected_template_name": "Text & UI Animation", "db_id": "7acf1a10-e0c1-485c-bf15-d8a32ab9bf82"}
+{"prompt": "desktop layout kinetic hero with ui", "expected_template_id": "text-ui-animation-db", "expected_template_name": "Text & UI Animation", "db_id": "7acf1a10-e0c1-485c-bf15-d8a32ab9bf82"}
+{"prompt": "wide hero ui transformation animation", "expected_template_id": "text-ui-animation-db", "expected_template_name": "Text & UI Animation", "db_id": "7acf1a10-e0c1-485c-bf15-d8a32ab9bf82"}
+{"prompt": "animated product narrative", "expected_template_id": "text-ui-animation-db", "expected_template_name": "Text & UI Animation", "db_id": "7acf1a10-e0c1-485c-bf15-d8a32ab9bf82"}
+{"prompt": "format:portrait text shimmer animation", "expected_template_id": "text-shimmer-portrait", "expected_template_name": "Text Shimmer (Portrait)", "db_id": "d7b894d9-0043-4e72-a62a-69434776ffe4"}
+{"prompt": "mobile layout generating loading portrait", "expected_template_id": "text-shimmer-portrait", "expected_template_name": "Text Shimmer (Portrait)", "db_id": "d7b894d9-0043-4e72-a62a-69434776ffe4"}
+{"prompt": "vertical video shimmer headline status", "expected_template_id": "text-shimmer-portrait", "expected_template_name": "Text Shimmer (Portrait)", "db_id": "d7b894d9-0043-4e72-a62a-69434776ffe4"}
+{"prompt": "ai generating indicator", "expected_template_id": "text-shimmer-portrait", "expected_template_name": "Text Shimmer (Portrait)", "db_id": "d7b894d9-0043-4e72-a62a-69434776ffe4"}
+{"prompt": "format:landscape typewriter headline loop", "expected_template_id": "word-replace-db", "expected_template_name": "Word Replace", "db_id": "157c4c8a-9961-4a04-90a6-a3107bb5787d"}
+{"prompt": "desktop layout word replace animation", "expected_template_id": "word-replace-db", "expected_template_name": "Word Replace", "db_id": "157c4c8a-9961-4a04-90a6-a3107bb5787d"}
+{"prompt": "wide hero hero copy typewriter", "expected_template_id": "word-replace-db", "expected_template_name": "Word Replace", "db_id": "157c4c8a-9961-4a04-90a6-a3107bb5787d"}
+{"prompt": "text that cycles verbs", "expected_template_id": "word-replace-db", "expected_template_name": "Word Replace", "db_id": "157c4c8a-9961-4a04-90a6-a3107bb5787d"}
+{"prompt": "format:portrait yellow bar chart animation", "expected_template_id": "yellow-bar-chart-db", "expected_template_name": "Yellow Bar Chart", "db_id": "7720e8bb-47e1-423f-b085-99ed3ccc2543"}
+{"prompt": "mobile layout portrait metrics card", "expected_template_id": "yellow-bar-chart-db", "expected_template_name": "Yellow Bar Chart", "db_id": "7720e8bb-47e1-423f-b085-99ed3ccc2543"}
+{"prompt": "vertical video rounded bar analytics", "expected_template_id": "yellow-bar-chart-db", "expected_template_name": "Yellow Bar Chart", "db_id": "7720e8bb-47e1-423f-b085-99ed3ccc2543"}
+{"prompt": "format:square mobile kpi visualization", "expected_template_id": "yellow-bar-chart-db", "expected_template_name": "Yellow Bar Chart", "db_id": "7720e8bb-47e1-423f-b085-99ed3ccc2543"}
+{"prompt": "format:portrait animated ui card", "expected_template_id": "animated-ui-portrait", "expected_template_name": "Animated UI", "db_id": "c999b0df-b6e4-4bb4-8387-7a88475fcb2f"}
+{"prompt": "mobile layout portrait dashboard animation", "expected_template_id": "animated-ui-portrait", "expected_template_name": "Animated UI", "db_id": "c999b0df-b6e4-4bb4-8387-7a88475fcb2f"}
+{"prompt": "vertical video mobile analytics ui", "expected_template_id": "animated-ui-portrait", "expected_template_name": "Animated UI", "db_id": "c999b0df-b6e4-4bb4-8387-7a88475fcb2f"}
+{"prompt": "profile card animation", "expected_template_id": "animated-ui-portrait", "expected_template_name": "Animated UI", "db_id": "c999b0df-b6e4-4bb4-8387-7a88475fcb2f"}
+{"prompt": "format:portrait credit card feature list", "expected_template_id": "credit-card-expenses", "expected_template_name": "Credit Card Expenses", "db_id": "24b90c46-49a5-4bc6-a045-3ecb94ff2e47"}
+{"prompt": "mobile layout expenses animation", "expected_template_id": "credit-card-expenses", "expected_template_name": "Credit Card Expenses", "db_id": "24b90c46-49a5-4bc6-a045-3ecb94ff2e47"}
+{"prompt": "vertical video portrait fintech feature card", "expected_template_id": "credit-card-expenses", "expected_template_name": "Credit Card Expenses", "db_id": "24b90c46-49a5-4bc6-a045-3ecb94ff2e47"}
+{"prompt": "benefits slide animation", "expected_template_id": "credit-card-expenses", "expected_template_name": "Credit Card Expenses", "db_id": "24b90c46-49a5-4bc6-a045-3ecb94ff2e47"}
+{"prompt": "format:portrait portrait testimonials animation", "expected_template_id": "customer-testimonials-portrait", "expected_template_name": "Customer Testimonials (Portrait)", "db_id": "a0ac9af6-cfde-4111-a185-d4a911d3ff65"}
+{"prompt": "mobile layout vertical quote carousel", "expected_template_id": "customer-testimonials-portrait", "expected_template_name": "Customer Testimonials (Portrait)", "db_id": "a0ac9af6-cfde-4111-a185-d4a911d3ff65"}
+{"prompt": "vertical video customer success portrait", "expected_template_id": "customer-testimonials-portrait", "expected_template_name": "Customer Testimonials (Portrait)", "db_id": "a0ac9af6-cfde-4111-a185-d4a911d3ff65"}
+{"prompt": "format:square mobile testimonial slider", "expected_template_id": "customer-testimonials-portrait", "expected_template_name": "Customer Testimonials (Portrait)", "db_id": "a0ac9af6-cfde-4111-a185-d4a911d3ff65"}
+{"prompt": "format:portrait portrait google search animation", "expected_template_id": "google-ai-search-box-portrait", "expected_template_name": "Google AI Search Box (Portrait)", "db_id": "3d6036f4-2f1f-4e43-99ef-371d6f456c3e"}
+{"prompt": "mobile layout ai search box portrait", "expected_template_id": "google-ai-search-box-portrait", "expected_template_name": "Google AI Search Box (Portrait)", "db_id": "3d6036f4-2f1f-4e43-99ef-371d6f456c3e"}
+{"prompt": "vertical video vertical search ui demo", "expected_template_id": "google-ai-search-box-portrait", "expected_template_name": "Google AI Search Box (Portrait)", "db_id": "3d6036f4-2f1f-4e43-99ef-371d6f456c3e"}
+{"prompt": "format:square google ai answer cards", "expected_template_id": "google-ai-search-box-portrait", "expected_template_name": "Google AI Search Box (Portrait)", "db_id": "3d6036f4-2f1f-4e43-99ef-371d6f456c3e"}
+{"prompt": "format:portrait growth graph portrait", "expected_template_id": "growth-graph-portrait", "expected_template_name": "Growth Graph (Portrait)", "db_id": "22816869-0648-4306-99aa-af79b9c7ba4d"}
+{"prompt": "mobile layout mobile analytics line chart", "expected_template_id": "growth-graph-portrait", "expected_template_name": "Growth Graph (Portrait)", "db_id": "22816869-0648-4306-99aa-af79b9c7ba4d"}
+{"prompt": "vertical video kpi trend animation", "expected_template_id": "growth-graph-portrait", "expected_template_name": "Growth Graph (Portrait)", "db_id": "22816869-0648-4306-99aa-af79b9c7ba4d"}
+{"prompt": "format:square portrait analytics card", "expected_template_id": "growth-graph-portrait", "expected_template_name": "Growth Graph (Portrait)", "db_id": "22816869-0648-4306-99aa-af79b9c7ba4d"}
+{"prompt": "format:portrait portrait notification stack", "expected_template_id": "homescreen-notifications-portrait", "expected_template_name": "Homescreen notifications (Portrait)", "db_id": "ea9d3b6f-f681-4224-92c1-ace15afb989f"}
+{"prompt": "mobile layout mobile homescreen alerts", "expected_template_id": "homescreen-notifications-portrait", "expected_template_name": "Homescreen notifications (Portrait)", "db_id": "ea9d3b6f-f681-4224-92c1-ace15afb989f"}
+{"prompt": "vertical video lock screen notification animation", "expected_template_id": "homescreen-notifications-portrait", "expected_template_name": "Homescreen notifications (Portrait)", "db_id": "ea9d3b6f-f681-4224-92c1-ace15afb989f"}
+{"prompt": "format:square multiple push notifications", "expected_template_id": "homescreen-notifications-portrait", "expected_template_name": "Homescreen notifications (Portrait)", "db_id": "ea9d3b6f-f681-4224-92c1-ace15afb989f"}
+{"prompt": "format:portrait message toast portrait", "expected_template_id": "message-portrait", "expected_template_name": "Message (Portrait)", "db_id": "b901a314-b5fb-46f7-98c7-9a50b26e5e37"}
+{"prompt": "mobile layout mobile notification card", "expected_template_id": "message-portrait", "expected_template_name": "Message (Portrait)", "db_id": "b901a314-b5fb-46f7-98c7-9a50b26e5e37"}
+{"prompt": "vertical video portrait message notification", "expected_template_id": "message-portrait", "expected_template_name": "Message (Portrait)", "db_id": "b901a314-b5fb-46f7-98c7-9a50b26e5e37"}
+{"prompt": "chat toast animation", "expected_template_id": "message-portrait", "expected_template_name": "Message (Portrait)", "db_id": "b901a314-b5fb-46f7-98c7-9a50b26e5e37"}
+{"prompt": "format:portrait pill chart portrait", "expected_template_id": "pill-chart-portrait", "expected_template_name": "Pill Chart (Portrait)", "db_id": "2e7cf71c-0d4d-47f1-8255-23d439b24269"}
+{"prompt": "mobile layout vertical histogram animation", "expected_template_id": "pill-chart-portrait", "expected_template_name": "Pill Chart (Portrait)", "db_id": "2e7cf71c-0d4d-47f1-8255-23d439b24269"}
+{"prompt": "vertical video rounded pill chart ui", "expected_template_id": "pill-chart-portrait", "expected_template_name": "Pill Chart (Portrait)", "db_id": "2e7cf71c-0d4d-47f1-8255-23d439b24269"}
+{"prompt": "format:square mobile analytics histogram", "expected_template_id": "pill-chart-portrait", "expected_template_name": "Pill Chart (Portrait)", "db_id": "2e7cf71c-0d4d-47f1-8255-23d439b24269"}
+{"prompt": "format:landscape toggle animation", "expected_template_id": "toggle-db", "expected_template_name": "Toggle", "db_id": "a54cb1aa-8663-4825-a08e-ebc14558fa8c"}
+{"prompt": "desktop layout switch ui demo", "expected_template_id": "toggle-db", "expected_template_name": "Toggle", "db_id": "a54cb1aa-8663-4825-a08e-ebc14558fa8c"}
+{"prompt": "wide hero on off toggle", "expected_template_id": "toggle-db", "expected_template_name": "Toggle", "db_id": "a54cb1aa-8663-4825-a08e-ebc14558fa8c"}
+{"prompt": "format:portrait animated pill toggle", "expected_template_id": "toggle-db", "expected_template_name": "Toggle", "db_id": "a54cb1aa-8663-4825-a08e-ebc14558fa8c"}
+{"prompt": "format:portrait banking app animation", "expected_template_id": "banking-app-db", "expected_template_name": "Banking App", "db_id": "1bc2d1b0-f8dc-415d-bd39-528f44fb5ce2"}
+{"prompt": "mobile layout finance dashboard mobile", "expected_template_id": "banking-app-db", "expected_template_name": "Banking App", "db_id": "1bc2d1b0-f8dc-415d-bd39-528f44fb5ce2"}
+{"prompt": "vertical video spending summary ui", "expected_template_id": "banking-app-db", "expected_template_name": "Banking App", "db_id": "1bc2d1b0-f8dc-415d-bd39-528f44fb5ce2"}
+{"prompt": "format:square transactions card animation", "expected_template_id": "banking-app-db", "expected_template_name": "Banking App", "db_id": "1bc2d1b0-f8dc-415d-bd39-528f44fb5ce2"}
+{"prompt": "format:landscape blur to focus text", "expected_template_id": "blur-db", "expected_template_name": "Blur", "db_id": "4fefddd4-f509-423a-953c-fc066d25d009"}
+{"prompt": "desktop layout defocus intro animation", "expected_template_id": "blur-db", "expected_template_name": "Blur", "db_id": "4fefddd4-f509-423a-953c-fc066d25d009"}
+{"prompt": "wide hero text reveal blur", "expected_template_id": "blur-db", "expected_template_name": "Blur", "db_id": "4fefddd4-f509-423a-953c-fc066d25d009"}
+{"prompt": "format:portrait focus transition", "expected_template_id": "blur-db", "expected_template_name": "Blur", "db_id": "4fefddd4-f509-423a-953c-fc066d25d009"}
+{"prompt": "format:portrait portrait gradient globe", "expected_template_id": "gradient-globe-portrait", "expected_template_name": "Gradient globe (Portrait)", "db_id": "3a164c8d-cad8-481c-ad1f-f8aac11c8c5c"}
+{"prompt": "mobile layout vertical ambient background", "expected_template_id": "gradient-globe-portrait", "expected_template_name": "Gradient globe (Portrait)", "db_id": "3a164c8d-cad8-481c-ad1f-f8aac11c8c5c"}
+{"prompt": "vertical video glowing sphere animation", "expected_template_id": "gradient-globe-portrait", "expected_template_name": "Gradient globe (Portrait)", "db_id": "3a164c8d-cad8-481c-ad1f-f8aac11c8c5c"}
+{"prompt": "portrait orbiting rings", "expected_template_id": "gradient-globe-portrait", "expected_template_name": "Gradient globe (Portrait)", "db_id": "3a164c8d-cad8-481c-ad1f-f8aac11c8c5c"}
+{"prompt": "format:landscape rainbow lyric animation", "expected_template_id": "i-want-to-break-free", "expected_template_name": "I want to break free", "db_id": "c9952351-3c87-4942-9edb-fee7effc5a5b"}
+{"prompt": "desktop layout gradient text stroke", "expected_template_id": "i-want-to-break-free", "expected_template_name": "I want to break free", "db_id": "c9952351-3c87-4942-9edb-fee7effc5a5b"}
+{"prompt": "wide hero bold headline color cycle", "expected_template_id": "i-want-to-break-free", "expected_template_name": "I want to break free", "db_id": "c9952351-3c87-4942-9edb-fee7effc5a5b"}
+{"prompt": "music lyric intro", "expected_template_id": "i-want-to-break-free", "expected_template_name": "I want to break free", "db_id": "c9952351-3c87-4942-9edb-fee7effc5a5b"}
