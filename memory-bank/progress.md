@@ -7,6 +7,9 @@
 - Sprint 140: Restored `TemplatesPanelG` to the stable main-branch implementation after mobile tweaks regressed desktop behaviour, keeping hover previews and format-aware grid intact for both form factors.【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx:1】
 - Sprint 140: Avoided mobile template crashes by preferring cached thumbnails, compiling on-demand when no image exists, and removing duplicate labels so touch users still see accurate frame-15 previews without hover logic.【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx:52】【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx:624】
 - Sprint 140: Streamlined mobile sharing/export—copy succeeds when possible, otherwise the link is dropped into chat, and the download button now triggers a one-tap MP4 1080p render like desktop auto-export.【src/components/MobileAppHeader.tsx:98】【src/components/export/ExportDropdown.tsx:88】
+- Sprint 107: Admin user metrics now pull unique image uploads from the asset registry and surface image-prompt counts in the timeline for clarity.【src/server/api/routers/admin.ts:1749】【src/app/admin/users/[userId]/page.tsx:208】
+- Sprint 107: Dashboard overview drops the paying-user vanity card, and feedback now lives in a dedicated inbox route with sidebar navigation.【src/app/admin/page.tsx:615】【src/app/admin/feedback/page.tsx:10】【src/components/AdminSidebar.tsx:24】
+- Sprint 107: Rebuilt the admin analytics page to rely on real metrics (cards, growth chart, template usage, engagement) and removed all mock data sections.【src/app/admin/analytics/page.tsx:1】
 
 ## 📝 Latest Update (Sep 27, 2025)
 - Sprint 140: Documented desktop vs mobile UX map for Projects and Generate flows to anchor upcoming mobile-first work.【memory-bank/sprints/sprint140_mobile/desktop-vs-mobile-ux-map.md:1】
@@ -1237,13 +1240,29 @@ The core video generation pipeline is **production-ready** with:
 - Reproduced fresh-signup 404 and traced it to `QuickCreatePage` running `pruneEmpty` microtask immediately after `project.create`, deleting the just-created welcome project.
 - Logged detailed RCA + fix plan in `sprints/sprint107_general_reliability/analysis/2025-09-25-quick-create-404.md` to unblock onboarding repair.
 - Applied fix: guard the client redirect from pruning on create, exclude the active workspace, and added a 15-minute/isWelcome safety net in `project.pruneEmpty` so new workspaces persist long enough for users to send their first prompt.
-<<<<<<< HEAD
 - 2025-09-26: Pre-launch audit for upcoming 500-signup spike uncovered a homepage redirect bug sending new OAuth logins back to marketing (`src/app/(marketing)/page.tsx:20`) — 37 users currently lack projects; documented fix + mitigation plan in `sprints/sprint107_general_reliability/analysis/2025-09-26-new-user-influx-readiness.md`.
 - 2025-09-26: Reviewed admin overview metrics—confirmed SQL windows are correct but cards show only percentage swings; captured redesign plan (absolute deltas, avg/day, clarified labels) in `sprints/sprint107_general_reliability/analysis/2025-09-26-admin-dashboard-metrics.md`.
 - 2025-09-26: Extended admin metrics API with per-timeframe summaries and updated dashboard cards to show total vs. period deltas (avg/day, small-baseline badge fallback); see `sprints/sprint107_general_reliability/analysis/2025-09-26-admin-dashboard-metrics.md`.
+- 2025-09-27: Converted the admin overview cards into sparkline charts powered by `admin.getAnalyticsData`, so users/prompts/scenes show recent trends instead of static counts; documented in `sprints/sprint107_general_reliability/analysis/2025-09-27-admin-dashboard-graphs.md` and noted lint run blocked on Node 16 ➝ needs rerun post toolchain upgrade.
+- 2025-09-27: Stabilised the dashboard hook order by moving auth guards after the new sparkline hooks, and added a first-touch UTM source filter on `/admin/users` (`getAttributionSources` + `utmSource` param) to slice cohorts by campaign/direct traffic.
+- 2025-09-27: Added a Growth tab beside the overview cards; reuses `getAnalyticsData` cumulative rollups so admins can chart total users/prompts/scenes across the selected window without losing the existing summary view.
+- 2025-09-27: Upgraded the Growth tab with a true "All Time" window (new API timeframe), wheel/pinch zoom inside the chart, and responsive hover tooltips so admins can inspect any point without being stuck on the previous highlight.
 
 2025-09-30 – Mobile templates stability pass
 - Mobile template cards now render real frame-15 stills by preferring database thumbnails or the precompiled JS bundle; TSX compilation is deferred to the tap-to-preview overlay so scrolling no longer spins up dozens of Remotion compiles.【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelMobile.tsx:47】【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelMobile.tsx:198】
 - Introduced `template-code-utils` with shared sanitisation helpers, guaranteeing compiled modules export a safe default without leaking `eval`/`Function` patterns before we dynamically import them on the client.【src/app/projects/[id]/generate/workspace/panels/template-code-utils.ts:1】【src/app/projects/[id]/generate/workspace/panels/template-code-utils.ts:40】
 - The mobile preview overlay now disables body scroll, sits on a higher z-layer, and acknowledges the Remotion license flag so the workspace FPS badge no longer shows through while the single template playback runs.【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelMobile.tsx:473】【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelMobile.tsx:550】
 - Replaced infinite scroll with an explicit “Load more” button that reveals six additional templates per tap, keeping the mobile list predictable while still batching the work.【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelMobile.tsx:499】【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelMobile.tsx:512】
+
+2025-09-30 – Template routing audit
+- Reviewed brain context builder & add tool flow; documented gating + copy behaviour in `sprints/sprint119_template_routing/analysis/2025-09-30-template-routing-deep-dive.md`.
+- Mapped website pipeline beat routing and confirmed the first-match selection regression from Sprint 99 still exists.
+- Logged gaps between rich `templateMetadata` and server `TEMPLATE_METADATA`, plus lack of telemetry to learn from template usage.
+- Drafted canonical metadata pilot ticket for top 5 production templates, outlining schema + rollout plan in `sprints/sprint119_template_routing/analysis/2025-09-30-canonical-metadata-pilot.md`.
+- Wired the canonical metadata module with pilot DB templates and updated matcher/server metadata consumers to use the new projections (`src/templates/metadata/canonical.ts`).
+- Added the next five high-usage DB templates (notifications + text effects) to the canonical plan with detailed descriptors before wiring them into the module.
+- Documented and wired a third batch of DB templates (credit card, gradient globe, bar chart, sparkles, portrait Airbnb) into the canonical metadata.
+- Added the fourth batch of DB templates (TBPN intro, responsive text animation, vibe-coded finance app, Hello Circles, Log-in) to both the sprint doc and canonical module.
+- Drafted and wired the fifth batch (Shazam animation, Testimonials, UI Data Visualisation, 50+ Integrations, Bar Chart) into the canonical metadata workflow.
+- Added `template-metadata-coverage.md` in Sprint 119 to track IDs, formats, and completion status for all production templates.
+- Documented Toggle, Banking App, Blur, portrait Gradient Globe, and I want to break free in canonical metadata and refreshed the coverage checklist.

@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
-import { Search, Filter, X, ChevronDown, ChevronUp, Users, Activity, Calendar, Folder, Shield } from "lucide-react";
+import { Search, Filter, X, ChevronDown, ChevronUp, Users, Activity, Calendar, Folder, Shield, Target } from "lucide-react";
 
 // Enhanced filter state type
 interface FilterState {
@@ -24,6 +24,7 @@ interface FilterState {
   adminFilter: 'all' | 'admin' | 'user';
   sortBy: 'signup_date' | 'last_activity' | 'total_projects' | 'total_prompts';
   sortOrder: 'asc' | 'desc';
+  utmSource: string;
 }
 
 const defaultFilters: FilterState = {
@@ -35,6 +36,7 @@ const defaultFilters: FilterState = {
   adminFilter: 'all',
   sortBy: 'signup_date',
   sortOrder: 'desc',
+  utmSource: 'all',
 };
 
 export default function UsersAnalytics() {
@@ -81,7 +83,10 @@ export default function UsersAnalytics() {
     signupDateFilter: filters.signupDateFilter,
     projectsFilter: filters.projectsFilter,
     adminFilter: filters.adminFilter,
+    utmSource: filters.utmSource,
   });
+
+  const { data: utmSources } = api.admin.getAttributionSources.useQuery();
 
   const updateFilter = (key: keyof FilterState, value: any) => {
     setFilters(prev => ({ ...prev, [key]: value }));
@@ -314,6 +319,28 @@ export default function UsersAnalytics() {
                       <SelectItem value="all">All Users</SelectItem>
                       <SelectItem value="admin">Admins Only</SelectItem>
                       <SelectItem value="user">Regular Users</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* UTM Source Filter */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center">
+                    <Target className="h-4 w-4 mr-1" />
+                    UTM Source
+                  </label>
+                  <Select value={filters.utmSource} onValueChange={(value: any) => updateFilter('utmSource', value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Sources" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Sources</SelectItem>
+                      <SelectItem value="none">No Source (direct)</SelectItem>
+                      {(utmSources || []).map((source) => (
+                        <SelectItem key={source} value={source}>
+                          {source}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

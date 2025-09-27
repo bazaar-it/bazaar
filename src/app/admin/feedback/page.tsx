@@ -1,238 +1,151 @@
-//src/app/admin/feedback/page.tsx
 "use client";
 
 import { useState } from "react";
 import { api } from "~/trpc/react";
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
-import Link from "next/link";
-import { Badge } from "~/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
-import { Button } from "~/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
-import { ArrowLeft, MessageSquare, User, Calendar, Filter, X } from "lucide-react";
 
-type StatusFilter = 'all' | 'pending' | 'resolved' | 'archived';
+const PAGE_SIZE = 20;
 
 export default function AdminFeedbackPage() {
   const { data: session, status } = useSession();
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [limit, setLimit] = useState(PAGE_SIZE);
 
-  // Check admin access
   const { data: adminCheck, isLoading: adminCheckLoading } = api.admin.checkAdminAccess.useQuery();
-  
-  // Get feedback data
-  const { data: feedbackData, isLoading, refetch } = api.admin.getRecentFeedback.useQuery(
-    { limit: 50 },
-    {
-      enabled: adminCheck?.isAdmin === true,
-    }
-  );
+  const { data: feedbackEntries, isLoading, isFetching } = api.admin.getRecentFeedback.useQuery({ limit }, {
+    enabled: adminCheck?.isAdmin === true,
+  });
 
-  // Handle authentication and admin access
-  if (status === "loading" || adminCheckLoading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
-  }
+  const authLoading = status === "loading" || adminCheckLoading;
+  const isAuthenticated = Boolean(session?.user);
+  const isAdmin = adminCheck?.isAdmin === true;
 
-  if (!session?.user) {
-    redirect('/login');
-  }
-
-  if (!adminCheck?.isAdmin) {
+  if (authLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-6xl mb-4">🚫</div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
-          <p className="text-gray-600 mb-4">You don't have permission to access the admin dashboard.</p>
-          <Link
-            href="/"
-            className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition"
-          >
-            Return to Homepage
-          </Link>
+      <div className="flex min-h-screen items-center justify-center bg-gray-950">
+        <div className="text-lg text-gray-300">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    redirect("/login");
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-950">
+        <div className="max-w-md text-center">
+          <div className="mb-4 text-6xl">🙅‍♀️</div>
+          <h1 className="mb-2 text-2xl font-bold text-white">Admin access required</h1>
+          <p className="text-gray-400">You need admin privileges to view customer feedback.</p>
         </div>
       </div>
     );
   }
 
-  const clearFilters = () => {
-    setStatusFilter('all');
-    refetch();
+  const handleLoadMore = () => {
+    setLimit((current) => current + PAGE_SIZE);
   };
-
-  const getStatusBadgeVariant = (status: string) => {
-    switch (status) {
-      case 'resolved': return 'default';
-      case 'pending': return 'secondary';
-      case 'archived': return 'outline';
-      default: return 'secondary';
-    }
-  };
-
-  const filteredFeedback = feedbackData?.filter(feedback => {
-    if (statusFilter !== 'all' && feedback.status !== statusFilter) {
-      return false;
-    }
-    return true;
-  }) || [];
-
-  const activeFiltersCount = statusFilter !== 'all' ? 1 : 0;
-
-  if (isLoading) {
-    return (
-      <div className="container mx-auto p-6">
-        <div className="space-y-6">
-          <div className="h-8 w-64 bg-gray-200 rounded animate-pulse" />
-          <div className="grid gap-4">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-32 bg-gray-200 rounded animate-pulse" />
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="container mx-auto p-6">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center space-x-4 mb-4">
-          <Link
-            href="/admin"
-            className="inline-flex items-center text-sm text-gray-500 hover:text-gray-700 transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            Back to Dashboard
-          </Link>
-        </div>
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center space-x-3">
-              <MessageSquare className="h-8 w-8 text-indigo-600" />
-              <span>User Feedback</span>
-            </h1>
-            <p className="text-gray-600 mt-2">Monitor and manage user feedback and support requests</p>
-          </div>
-          <div className="flex items-center space-x-4">
-            <Badge variant="outline" className="text-sm">
-              {filteredFeedback.length} {filteredFeedback.length === 1 ? 'item' : 'items'}
-            </Badge>
-          </div>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-8">
+      <div className="fixed inset-0 pointer-events-none opacity-5">
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: "radial-gradient(circle at 2px 2px, rgba(255,255,255,0.15) 1px, transparent 1px)",
+            backgroundSize: "32px 32px",
+          }}
+        />
       </div>
 
-      {/* Filters */}
-      <Card className="mb-6">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Filter className="h-5 w-5 text-gray-500" />
-              <CardTitle className="text-lg">Filters</CardTitle>
-              {activeFiltersCount > 0 && (
-                <Badge variant="secondary" className="ml-2">
-                  {activeFiltersCount} active
-                </Badge>
-              )}
-            </div>
-            {activeFiltersCount > 0 && (
-              <Button variant="outline" size="sm" onClick={clearFilters}>
-                <X className="h-4 w-4 mr-2" />
-                Clear all
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">Status</label>
-              <Select value={statusFilter} onValueChange={(value: StatusFilter) => setStatusFilter(value)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="resolved">Resolved</SelectItem>
-                  <SelectItem value="archived">Archived</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="relative mx-auto max-w-6xl">
+        <div className="mb-8">
+          <h1 className="mb-2 text-4xl font-bold text-transparent bg-gradient-to-r from-white to-gray-400 bg-clip-text">
+            Feedback Inbox
+          </h1>
+          <p className="text-gray-400">
+            Review customer feedback, status, and follow-up priorities in one place.
+          </p>
+        </div>
 
-      {/* Feedback List */}
-      <div className="space-y-4">
-        {filteredFeedback.length > 0 ? (
-          filteredFeedback.map((feedback) => (
-            <Card key={feedback.id} className="hover:shadow-md transition-shadow">
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="h-10 w-10 bg-indigo-100 rounded-full flex items-center justify-center">
-                      <User className="h-5 w-5 text-indigo-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-gray-900">
-                        {feedback.name || 'Anonymous User'}
-                      </h3>
-                      {feedback.email && (
-                        <p className="text-sm text-gray-500">{feedback.email}</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <Badge variant={getStatusBadgeVariant(feedback.status)}>
-                      {feedback.status || 'pending'}
-                    </Badge>
-                    <div className="flex items-center text-sm text-gray-500">
-                      <Calendar className="h-4 w-4 mr-1" />
-                      {feedback.createdAt ? new Date(feedback.createdAt).toLocaleDateString() : 'No date'}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mb-4">
-                  <p className="text-gray-700 leading-relaxed">{feedback.content}</p>
-                </div>
-
-                {feedback.prioritizedFeatures && feedback.prioritizedFeatures.length > 0 && (
-                  <div className="mb-4">
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">Prioritized Features:</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {feedback.prioritizedFeatures.map((feature, index) => (
-                        <Badge key={index} variant="outline" className="text-xs">
-                          {feature}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))
-        ) : (
-          <Card>
-            <CardContent className="text-center py-12">
-              <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No feedback found</h3>
-              <p className="text-gray-500 mb-4">
-                {activeFiltersCount > 0 
-                  ? "No feedback matches your current filters. Try adjusting your search criteria."
-                  : "No feedback has been received yet."
-                }
+        <div className="rounded-xl border border-gray-700 bg-gradient-to-br from-gray-800 to-gray-900 shadow-xl">
+          <div className="flex items-center justify-between border-b border-gray-700/60 px-6 py-4">
+            <div>
+              <h2 className="text-lg font-semibold text-white">Latest submissions</h2>
+              <p className="text-sm text-gray-400">
+                Showing {feedbackEntries?.length ?? 0} of {limit} requested entries
+                {isFetching ? " • refreshing" : ""}
               </p>
-              {activeFiltersCount > 0 && (
-                <Button variant="outline" onClick={clearFilters}>
-                  Clear filters
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-        )}
+            </div>
+          </div>
+
+          {isLoading ? (
+            <div className="flex h-48 items-center justify-center text-gray-400">Loading feedback…</div>
+          ) : feedbackEntries && feedbackEntries.length > 0 ? (
+            <ul className="divide-y divide-gray-800">
+              {feedbackEntries.map((entry) => {
+                const prioritizedFeatures = entry.prioritizedFeatures ?? [];
+
+                return (
+                  <li key={entry.id} className="px-6 py-5 transition-colors hover:bg-gray-800/50">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div className="flex-1 min-w-[240px]">
+                        <div className="flex flex-wrap items-center gap-2 text-sm text-gray-300">
+                          <span className="font-semibold text-white">{entry.name || "Anonymous"}</span>
+                          {entry.email && (
+                            <span className="text-gray-400">({entry.email})</span>
+                          )}
+                          {entry.status && (
+                            <span className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-xs text-indigo-300">
+                              {entry.status}
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-2 text-sm leading-relaxed text-gray-300 whitespace-pre-line">
+                          {entry.content || "No message provided."}
+                        </p>
+                        {prioritizedFeatures.length > 0 ? (
+                          <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-400">
+                            {prioritizedFeatures.map((feature) => (
+                              <span
+                                key={feature}
+                                className="rounded-md border border-gray-700/70 bg-gray-800/60 px-2 py-1"
+                              >
+                                {feature}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="text-right text-xs text-gray-500">
+                        {entry.createdAt
+                          ? new Date(entry.createdAt).toLocaleString()
+                          : "Unknown date"}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <div className="flex h-48 items-center justify-center text-gray-500">
+              No feedback entries yet.
+            </div>
+          )}
+
+          <div className="border-t border-gray-800 px-6 py-4 text-center">
+            <button
+              type="button"
+              onClick={handleLoadMore}
+              className="inline-flex items-center rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-2 text-sm font-medium text-white shadow-lg transition hover:from-indigo-600 hover:to-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={isFetching}
+            >
+              {isFetching ? "Loading…" : "Load more"}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

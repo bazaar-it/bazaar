@@ -1,8 +1,8 @@
 // src/server/api/routers/admin.ts
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
-import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory, emailSubscribers, exports, promoCodes, promoCodeUsage, paywallEvents, paywallAnalytics, creditTransactions, templates, templateUsages, brandProfiles, autofixMetrics, autofixSessions, userAttribution } from "~/server/db/schema";
-import { sql, and, gte, lt, lte, desc, count, eq, like, or, inArray, asc, countDistinct } from "drizzle-orm";
+import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory, emailSubscribers, exports, promoCodes, promoCodeUsage, paywallEvents, paywallAnalytics, creditTransactions, templates, templateUsages, brandProfiles, autofixMetrics, autofixSessions, userAttribution, assets } from "~/server/db/schema";
+import { sql, and, gte, lt, lte, desc, count, eq, like, or, inArray, asc, countDistinct, isNull, ne } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
@@ -897,7 +897,7 @@ export const adminRouter = createTRPCRouter({
   // Get time-series analytics data
   getAnalyticsData: adminOnlyProcedure
     .input(z.object({ 
-      timeframe: z.enum(['24h', '7d', '30d']),
+      timeframe: z.enum(['24h', '7d', '30d', 'all']),
       metric: z.enum(['users', 'projects', 'scenes', 'prompts'])
     }))
     .query(async ({ input }) => {
@@ -906,6 +906,7 @@ export const adminRouter = createTRPCRouter({
       // Calculate intervals and date ranges
       let intervalHours: number;
       let totalPeriodHours: number;
+      let allowHourly = true;
 
       switch (timeframe) {
         case '24h':
@@ -920,9 +921,73 @@ export const adminRouter = createTRPCRouter({
           intervalHours = 24; // 24-hour (daily) intervals
           totalPeriodHours = 30 * 24;
           break;
+        case 'all':
+          intervalHours = 24;
+          totalPeriodHours = 0; // Placeholder, will compute dynamically
+          allowHourly = false;
+          break;
       }
 
-      const startDate = new Date(Date.now() - totalPeriodHours * 60 * 60 * 1000);
+      const now = new Date();
+
+      const resolveEarliest = async (): Promise<Date | null> => {
+        switch (metric) {
+          case 'users': {
+            const result = await db
+              .select({ min: sql<Date | null>`MIN(${users.createdAt})` })
+              .from(users)
+              .where(sql`${users.createdAt} IS NOT NULL`)
+              .limit(1);
+            return result[0]?.min ?? null;
+          }
+          case 'projects': {
+            const result = await db
+              .select({ min: sql<Date | null>`MIN(${projects.createdAt})` })
+              .from(projects)
+              .limit(1);
+            return result[0]?.min ?? null;
+          }
+          case 'scenes': {
+            const result = await db
+              .select({ min: sql<Date | null>`MIN(${scenes.createdAt})` })
+              .from(scenes)
+              .limit(1);
+            return result[0]?.min ?? null;
+          }
+          case 'prompts': {
+            const result = await db
+              .select({ min: sql<Date | null>`MIN(${messages.createdAt})` })
+              .from(messages)
+              .limit(1);
+            return result[0]?.min ?? null;
+          }
+        }
+      };
+
+      let startDate: Date;
+      if (timeframe === 'all') {
+        const earliest = await resolveEarliest();
+        if (!earliest) {
+          return {
+            timeframe,
+            metric,
+            data: [],
+            totalCount: 0,
+            periodStart: null,
+            periodEnd: now.toISOString(),
+          };
+        }
+
+        startDate = new Date(earliest);
+        startDate.setHours(0, 0, 0, 0);
+        totalPeriodHours = Math.max(24, Math.ceil((now.getTime() - startDate.getTime()) / (1000 * 60 * 60)));
+        if (!allowHourly && totalPeriodHours > 90 * 24) {
+          // When showing very long ranges, ensure skipping hourly granularity
+          intervalHours = 24;
+        }
+      } else {
+        startDate = new Date(now.getTime() - totalPeriodHours * 60 * 60 * 1000);
+      }
 
       // Generate time slots
       const timeSlots = [];
@@ -932,7 +997,7 @@ export const adminRouter = createTRPCRouter({
         timeSlots.push({
           start: slotStart,
           end: slotEnd,
-          label: timeframe === '24h' 
+          label: timeframe === '24h' && allowHourly
             ? slotStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             : slotStart.toLocaleDateString([], { month: 'short', day: 'numeric' })
         });
@@ -956,8 +1021,8 @@ export const adminRouter = createTRPCRouter({
             .orderBy(users.createdAt);
 
           data = userCounts.map(row => ({
-            timestamp: row.timestamp!,
-            count: 1
+              timestamp: row.timestamp!,
+              count: 1
           }));
           break;
 
@@ -1039,7 +1104,7 @@ export const adminRouter = createTRPCRouter({
         data: chartData,
         totalCount: cumulative,
         periodStart: startDate.toISOString(),
-        periodEnd: new Date().toISOString(),
+        periodEnd: now.toISOString(),
       };
     }),
 
@@ -1426,6 +1491,25 @@ export default function GeneratedScene() {
     }),
 
   // 🆕 NEW: Comprehensive user analytics endpoint
+  getAttributionSources: adminOnlyProcedure
+    .query(async () => {
+      const rows = await db
+        .select({ source: userAttribution.firstTouchSource })
+        .from(userAttribution)
+        .where(and(
+          sql`${userAttribution.firstTouchSource} IS NOT NULL`,
+          ne(userAttribution.firstTouchSource, '')
+        ))
+        .groupBy(userAttribution.firstTouchSource)
+        .orderBy(asc(userAttribution.firstTouchSource));
+
+      const sources = rows
+        .map((row) => row.source)
+        .filter((source): source is string => Boolean(source));
+
+      return sources;
+    }),
+
   getUserAnalytics: adminOnlyProcedure
     .input(z.object({
       limit: z.number().min(1).max(100).default(20),
@@ -1438,6 +1522,7 @@ export default function GeneratedScene() {
       signupDateFilter: z.enum(['all', 'today', 'week', 'month', 'older']).default('all'),
       projectsFilter: z.enum(['all', 'none', 'low', 'medium', 'high']).default('all'),
       adminFilter: z.enum(['all', 'admin', 'user']).default('all'),
+      utmSource: z.union([z.literal('all'), z.literal('none'), z.string()]).default('all'),
     }))
     .query(async ({ input }) => {
       const { 
@@ -1450,7 +1535,8 @@ export default function GeneratedScene() {
         activityFilter, 
         signupDateFilter, 
         projectsFilter,
-        adminFilter 
+        adminFilter,
+        utmSource,
       } = input;
 
       // Build WHERE conditions for filtering
@@ -1469,6 +1555,15 @@ export default function GeneratedScene() {
       // Admin status filter
       if (adminFilter !== 'all') {
         whereConditions.push(eq(users.isAdmin, adminFilter === 'admin'));
+      }
+
+      // UTM source filter
+      if (utmSource !== 'all') {
+        if (utmSource === 'none') {
+          whereConditions.push(or(isNull(userAttribution.firstTouchSource), eq(userAttribution.firstTouchSource, '')));
+        } else {
+          whereConditions.push(eq(userAttribution.firstTouchSource, utmSource));
+        }
       }
 
       // Signup date filter
@@ -1703,9 +1798,10 @@ export default function GeneratedScene() {
           activityFilter,
           signupDateFilter,
           projectsFilter,
-          adminFilter,
-        },
-      };
+        adminFilter,
+        utmSource,
+      },
+    };
     }),
 
   // 🆕 NEW: Get detailed user activity timeline
@@ -1720,13 +1816,13 @@ export default function GeneratedScene() {
       // 🚨 FIXED: Calculate date threshold explicitly to avoid SQL parameter binding issues
       const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
       
-      const activityTimeline = await db
+      const messageActivity = await db
         .select({
           date: sql<string>`DATE(${messages.createdAt})`.as('date'),
           totalMessages: sql<number>`COUNT(*)`.as('total_messages'),
           userPrompts: sql<number>`COUNT(CASE WHEN ${messages.role} = 'user' THEN 1 END)`.as('user_prompts'),
           assistantResponses: sql<number>`COUNT(CASE WHEN ${messages.role} = 'assistant' THEN 1 END)`.as('assistant_responses'),
-          imagesUploaded: sql<number>`COUNT(CASE WHEN ${messages.imageUrls} IS NOT NULL AND jsonb_array_length(${messages.imageUrls}) > 0 THEN 1 END)`.as('images_uploaded'),
+          imagePromptCount: sql<number>`COUNT(CASE WHEN ${messages.imageUrls} IS NOT NULL AND jsonb_array_length(${messages.imageUrls}) > 0 THEN 1 END)`.as('image_prompt_count'),
           scenesCreated: sql<number>`COUNT(DISTINCT ${scenes.id})`.as('scenes_created'),
           projectsWorkedOn: sql<number>`COUNT(DISTINCT ${projects.id})`.as('projects_worked_on'),
           avgSessionTime: sql<number>`EXTRACT(EPOCH FROM (MAX(${messages.createdAt}) - MIN(${messages.createdAt})))/60`.as('avg_session_minutes'),
@@ -1744,7 +1840,78 @@ export default function GeneratedScene() {
         .groupBy(sql`DATE(${messages.createdAt})`)
         .orderBy(sql`DATE(${messages.createdAt}) DESC`);
 
-      return activityTimeline;
+      const assetUploads = await db
+        .select({
+          date: sql<string>`DATE(${assets.createdAt})`.as('date'),
+          imagesUploaded: sql<number>`COUNT(*)`.as('images_uploaded'),
+        })
+        .from(assets)
+        .where(and(
+          eq(assets.userId, userId),
+          eq(assets.type, 'image'),
+          isNull(assets.deletedAt),
+          gte(assets.createdAt, startDate),
+        ))
+        .groupBy(sql`DATE(${assets.createdAt})`)
+        .orderBy(sql`DATE(${assets.createdAt}) DESC`);
+
+      const timelineMap = new Map<string, {
+        date: string;
+        totalMessages: number;
+        userPrompts: number;
+        assistantResponses: number;
+        scenesCreated: number;
+        projectsWorkedOn: number;
+        avgSessionTime: number;
+        imagePromptCount: number;
+        imagesUploaded: number;
+      }>();
+
+      for (const row of messageActivity) {
+        const dateKey = row.date;
+        const avgSessionRaw = (row as any).avgSessionTime ?? (row as any).avgSessionMinutes ?? 0;
+        const avgSessionMinutes = Number(avgSessionRaw ?? 0);
+        timelineMap.set(dateKey, {
+          date: dateKey,
+          totalMessages: Number(row.totalMessages ?? 0),
+          userPrompts: Number(row.userPrompts ?? 0),
+          assistantResponses: Number(row.assistantResponses ?? 0),
+          scenesCreated: Number(row.scenesCreated ?? 0),
+          projectsWorkedOn: Number(row.projectsWorkedOn ?? 0),
+          avgSessionTime: avgSessionMinutes,
+          imagePromptCount: Number(row.imagePromptCount ?? 0),
+          imagesUploaded: 0,
+        });
+      }
+
+      for (const row of assetUploads) {
+        const dateKey = row.date;
+        const uploads = Number(row.imagesUploaded ?? 0);
+        const existing = timelineMap.get(dateKey);
+        if (existing) {
+          existing.imagesUploaded = uploads;
+        } else {
+          timelineMap.set(dateKey, {
+            date: dateKey,
+            totalMessages: 0,
+            userPrompts: 0,
+            assistantResponses: 0,
+            scenesCreated: 0,
+            projectsWorkedOn: 0,
+            avgSessionTime: 0,
+            imagePromptCount: 0,
+            imagesUploaded: uploads,
+          });
+        }
+      }
+
+      const combinedTimeline = Array.from(timelineMap.values()).sort((a, b) => {
+        const aTime = new Date(a.date).getTime();
+        const bTime = new Date(b.date).getTime();
+        return bTime - aTime;
+      });
+
+      return combinedTimeline;
     }),
 
   // 🆕 NEW: Get individual user details
@@ -1793,7 +1960,7 @@ export default function GeneratedScene() {
           
           // Image usage metrics - simplified to avoid double-counting
           promptsWithImages: sql<number>`COUNT(DISTINCT CASE WHEN ${messages.imageUrls} IS NOT NULL AND jsonb_array_length(${messages.imageUrls}) > 0 THEN ${messages.id} END)`.as('prompts_with_images'),
-          totalImagesUploaded: sql<number>`COALESCE(SUM(CASE WHEN ${messages.imageUrls} IS NOT NULL THEN jsonb_array_length(${messages.imageUrls}) ELSE 0 END), 0)`.as('total_images_uploaded'),
+          totalImagesUploaded: sql<number>`COUNT(DISTINCT ${assets.id})`.as('total_images_uploaded'),
           
           // Activity metrics
           firstActivity: sql<Date>`MIN(${messages.createdAt})`.as('first_activity'),
@@ -1815,6 +1982,11 @@ export default function GeneratedScene() {
         .leftJoin(projects, eq(users.id, projects.userId))
         .leftJoin(scenes, eq(projects.id, scenes.projectId))
         .leftJoin(messages, eq(projects.id, messages.projectId))
+        .leftJoin(assets, and(
+          eq(assets.userId, users.id),
+          eq(assets.type, 'image'),
+          isNull(assets.deletedAt),
+        ))
         .leftJoin(sceneIterations, eq(projects.id, sceneIterations.projectId))
         .leftJoin(projectMemory, eq(projects.id, projectMemory.projectId))
         .leftJoin(userAttribution, eq(users.id, userAttribution.userId))
