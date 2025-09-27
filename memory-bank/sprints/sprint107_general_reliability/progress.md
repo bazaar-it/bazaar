@@ -1,5 +1,13 @@
 # Sprint 107 - Progress Log
 
+## 2025-09-29 - Admin image metrics realignment
+- Logged analysis outlining the mismatch between chat attachment counts and true uploads, plus verification plan for asset-backed numbers.【memory-bank/sprints/sprint107_general_reliability/admin-dashboard-images-analysis.md:1】
+- `getUserDetails` now counts distinct active image assets (R2-backed) instead of summing message attachments; keeps prompts-with-images for context.【src/server/api/routers/admin.ts:1865】
+- `getUserActivityTimeline` merges chat activity with per-day asset uploads so the dashboard can show both image uploads and prompt usage.【src/server/api/routers/admin.ts:1749】
+- Admin UI cards/timeline label the new metrics and expose prompt-with-image totals alongside unique uploads.【src/app/admin/users/[userId]/page.tsx:208】
+- Dashboard overview now focuses on core engagement metrics and sends feedback to a standalone inbox, accessible via the sidebar.【src/app/admin/page.tsx:615】【src/app/admin/feedback/page.tsx:10】【src/components/AdminSidebar.tsx:24】
+- Admin analytics page now draws every visual from live data (metrics API, template usage, engagement) and removes mock funnels/heatmaps to keep insights trustworthy.【src/app/admin/analytics/page.tsx:1】
+
 ## 2025-09-13 - Preview sucrase crash and client logger fix
 
 ### Issue
@@ -332,3 +340,12 @@ Date: 2025-09-24 (markdown fence strip)
 - Documented redesign plan (`analysis/2025-09-26-admin-dashboard-metrics.md`) covering richer payload, absolute deltas, avg/day figures, and clearer labeling when timeframe filters are active.
 - Flagged noisy console logging and 100% fallback behaviour for zero baselines as follow-up fixes.
 - 2025-09-26: Implemented richer admin metrics payload (per-timeframe totals + deltas) and refreshed dashboard cards to surface total-versus-period messaging with avg/day and small-baseline handling.
+
+## 2025-09-27 - Dashboard trendlines
+- Added sparkline area charts to the admin overview cards using the existing `admin.getAnalyticsData` time-series endpoint for users, prompts, and scenes.
+- Reused timeframe toggle selection for chart window (fallback to 30d when "All Time" is active) and provided ARIA captions noting the 30-day fallback.
+- Attempted `npm run lint -- src/app/admin/page.tsx`; run blocked in sandbox by Node 16.17.1 (Next.js now requires ≥18.18). Pending rerun once the toolchain is updated.
+- Fixed the resulting hook order warning by deferring redirect/guard returns until after the new sparkline `useMemo` hooks run, so `AdminDashboard` keeps a stable hook sequence across loading states.
+- Added a first-touch UTM source filter to the admin users grid (`getAttributionSources` for options + `utmSource` filter on `getUserAnalytics`) so we can isolate direct/paid campaigns without manual CSV exports.
+- Reworked the Growth view so "All Time" pulls the real historical window (new timeframe in `admin.getAnalyticsData`), added wheel/pinch zoom plus horizontal pan directly inside each chart (no brush bar), and fixed hover behaviour so tooltips follow the cursor with delta details.
+- Introduced an "Overview ↔ Growth" toggle on the admin dashboard; growth mode renders three cumulative charts for users/prompts/scenes using the existing analytics feed (`cumulative` series) while keeping the metric cards intact.

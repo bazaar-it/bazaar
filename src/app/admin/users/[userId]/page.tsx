@@ -206,8 +206,13 @@ function UserDetailPageContent({ userId }: { userId: string }) {
           </div>
           <div className="bg-gray-50 rounded-lg p-4">
             <div className="text-2xl font-bold text-orange-600">{userDetails.totalImagesUploaded || 0}</div>
-            <div className="text-sm text-gray-600">Images</div>
+            <div className="text-sm text-gray-600">Image uploads</div>
           </div>
+        </div>
+
+        <div className="mt-2 text-sm text-gray-500">
+          <span className="font-medium text-gray-700">Prompts with image attachments:</span>{' '}
+          {userDetails.promptsWithImages || 0}
         </div>
 
         {/* Additional Metrics */}
@@ -304,7 +309,12 @@ function UserDetailPageContent({ userId }: { userId: string }) {
                   </div>
                   <div>
                     <span className="font-medium">{day.imagesUploaded}</span>
-                    <span className="text-gray-500 ml-1">images</span>
+                    <span className="text-gray-500 ml-1">image uploads</span>
+                    {day.imagePromptCount ? (
+                      <div className="text-xs text-gray-400 mt-1">
+                        {day.imagePromptCount} prompt{day.imagePromptCount === 1 ? '' : 's'} with images
+                      </div>
+                    ) : null}
                   </div>
                   <div>
                     <span className="font-medium">{Math.round(day.avgSessionTime || 0)}</span>
