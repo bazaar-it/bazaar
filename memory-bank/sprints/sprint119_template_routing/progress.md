@@ -39,7 +39,26 @@
 ## 2025-09-30 – Ninth batch metadata wired
 - Added portrait Google AI Search Box, Growth Graph, Homescreen Notifications, Message, and Pill Chart metadata to canonical and updated the coverage tracker.
 
+## 2025-09-28 – Sanitized dataset groundwork
+- Logged analysis in `analysis/2025-09-28-sanitized-template-dataset.md` outlining how to swap the SFT generator over to sanitized template code (validator + scene compiler pipeline).
+- Extended `scripts/generate-template-code-sft.ts` to run every template TSX through `validateAndFixCode` and `SceneCompilerService.compileScene` before emitting JSONL entries; failures now surface as explicit sanitization skips.
+- Added dataset stats logging for sanitizer failures so we can track which templates still need upstream fixes when the generator runs.
+- Protected existing datasets by auto-writing to a fresh directory (`v1`, `v1-1`, `v1-2`, …) whenever the chosen tag already has contents.
+
 ## 2025-10-01 – Code generator fine-tune scaffolding
 - Authored `analysis/2025-10-01-template-code-generator-finetune-sft.md` documenting the SFT plan (prompt synthesis, dataset shape, validation) for replacing the manual code-generator prompt.
 - Seeded `data/fine-tuning/template-code-generator/` with override hooks, README, and output staging for JSONL splits.
 - Built `scripts/generate-template-code-sft.ts` plus npm script `data:code-sft` to pull DB TSX code + canonical metadata into train/validation/test JSONL (supports dry-run + deterministic seeds).
+
+## 2025-10-01 – Code fine-tune prompt refresh
+- Pointed the TSX dataset generator at the curated prompt sets in `metadata_prompt_dataset.jsonl` / `metadata_finetune_dataset.jsonl`, normalizing format hints into natural briefs and falling back to metadata synthesis only when we lack coverage.
+- The generator now logs which templates still rely on fallback prompts (when run with --verbose) so we can author missing scenarios before training.
+- Added a local TSX override for `pill-shaped-bar-chart` so training stays complete until the prod `tsx_code` is restored.
+- Limited curated prompt usage to a single entry per template in `scripts/generate-template-code-sft.ts` so the fine-tune doesn’t overweight canonical template code. Overrides can still add explicit variants if needed.
+
+## 2025-09-28 – Sanitized dataset generated
+- Ran the updated generator against the full canonical set; sanitized TSX for all 51 templates landed in `data/fine-tuning/template-code-generator/v1-1` with 40/5/6 splits and zero sanitizer failures.
+- Console output showed the validator still flagging missing exports pre-compiler, but `SceneCompilerService` returned clean modules for every template, matching the dataset plan.
+
+## 2025-09-28 – Message-only dataset export
+- Switched the generator to write chat-only JSONL alongside `*.meta.jsonl` descriptors, removing template metadata from the training files while preserving context for analysis.

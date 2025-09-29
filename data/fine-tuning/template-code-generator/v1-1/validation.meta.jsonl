@@ -1,0 +1,5 @@
+{"meta": {"templateId": "corporate-credit-card", "dbId": "f83feab4-9ef2-425d-8c63-ed0d38c150b0", "duration": 189, "supportedFormats": ["landscape"], "promptVariant": "curated-1"}}
+{"meta": {"templateId": "blur-db", "dbId": "4fefddd4-f509-423a-953c-fc066d25d009", "duration": 30, "supportedFormats": ["landscape", "portrait", "square"], "promptVariant": "curated-1"}}
+{"meta": {"templateId": "ui-data-visualisation", "dbId": "20880f1b-f72f-442b-a416-c368e9b640ff", "duration": 40, "supportedFormats": ["landscape"], "promptVariant": "curated-1"}}
+{"meta": {"templateId": "hello-circles", "dbId": "31bcdb78-9dfa-49ac-af34-1de889fc2e08", "duration": 90, "supportedFormats": ["portrait"], "promptVariant": "curated-1"}}
+{"meta": {"templateId": "message-notification-db", "dbId": "ed3ff0bf-6e54-4d98-b2c4-b923797071bc", "duration": 90, "supportedFormats": ["landscape"], "promptVariant": "curated-1"}}

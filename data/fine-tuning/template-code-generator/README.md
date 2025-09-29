@@ -14,6 +14,20 @@ npm run data:code-sft -- --dry-run      # preview a handful of examples
 npm run data:code-sft                  # build v1/train.jsonl, v1/validation.jsonl, v1/test.jsonl
 ```
 
-Each JSONL entry follows OpenAI's chat fine-tune schema: minimal system instruction, a natural-language brief that mentions format + duration, and the TSX code response. The generator enforces format gating, deterministic splits (seeded), and optional metadata for QA.
+Each JSONL entry follows OpenAI's chat fine-tune schema: minimal system instruction, a natural-language brief that mentions format + duration, and the TSX code response. Briefs are sourced from `metadata_prompt_dataset.jsonl` / `metadata_finetune_dataset.jsonl` (curated routing prompts) with optional overrides, so the model sees realistic phrasing instead of synthetic metadata dumps. The generator enforces format gating, deterministic splits (seeded), and optional metadata for QA.
+
+If a legacy DB template is missing `tsx_code`, the generator falls back to the inline overrides defined in `scripts/generate-template-code-sft.ts` (see `LOCAL_TEMPLATE_CODE_OVERRIDES`). This keeps canonical entries like `pill-shaped-bar-chart` available while we patch the production record.
+
+Upload-ready files (no `meta`) live beside the originals:
+```
+train.upload.jsonl
+validation.upload.jsonl
+test.upload.jsonl
+```
+They contain only the `messages` arrays expected by the fine-tuning API.
+
+> The generator will never overwrite an existing dataset directory. If `data/fine-tuning/template-code-generator/v1/` already contains files, the script writes into `v1-1/`, `v1-2/`, etc., so previous exports stay intact.
+
+Each dataset directory also includes `train.meta.jsonl`, `validation.meta.jsonl`, and `test.meta.jsonl`. These files keep the template metadata (templateId, dbId, duration, supported formats, prompt variant) alongside the stripped training corpora, so uploads stay clean while the analysis hooks retain context.
 
 Set `DATABASE_URL` before running so the script can pull the latest TSX code for DB templates. For local/staging experimentation, point the env var at the development database.

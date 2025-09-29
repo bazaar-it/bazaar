@@ -1210,7 +1210,7 @@ The core video generation pipeline is **production-ready** with:
 
 2025-09-24 – Media plan guard: project-linked assets
 - Fixed `MediaPlanService.resolvePlan` so project-linked assets survive even when their R2 path encodes a legacy project id. `resolveToken` now propagates a `projectScoped` flag, and `canUsePlanUrl`/`isTrustedUrl` trust any media library entry with `scope: 'project'` + `requiresLink !== true`.
-- Added unit regression coverage (`src/brain/services/__tests__/media-plan.service.test.ts`) covering both the legacy-path success case and the user-library failure path, matching the prod incident for project `fa164d69-…`.
+- Added unit regression coverage (`src/brain/services/__tests__/media-plan.service.test.ts`) covering both the legacy-path success case and the user-library failure path, matching the prod incident for project `fa164d69-...`.
 - Updated sprint doc `2025-09-24-media-plan-cross-project-assets.md` with the fix details and follow-up instrumentation tasks.
 
 2025-09-24 – Prompt guard for interpolate ranges
@@ -1228,7 +1228,7 @@ The core video generation pipeline is **production-ready** with:
 - Incident captured in `sprint116_images/2025-09-24-live-media-plan-failure.md`; follow-up migration needed to align prod table structure with current Drizzle schema.
 
 2025-09-24 – Cross-project asset guard regression
-- Prod project `fa164d69…` failing to add scenes traced to new media-plan guard skipping linked assets when the R2 URL encodes a different project UUID.
+- Prod project `fa164d69...` failing to add scenes traced to new media-plan guard skipping linked assets when the R2 URL encodes a different project UUID.
 - Added `sprint116_images/2025-09-24-media-plan-cross-project-assets.md` with SQL evidence, reproduction steps, and fix recommendation (respect `mediaLibrary.scope`/link metadata before applying the project-id filter).
 - Next step: adjust `mediaPlanService.resolvePlan` to allow project-scoped assets regardless of URL path and extend the media-plan suite with linked-asset coverage.
 - Applied guard refinement in `mediaPlanService.resolvePlan` so project-scoped assets bypass the URL-based project check; added Jest coverage ensuring linked assets succeed while unlinked ones remain blocked (`npm run test -- src/brain/services/__tests__/media-plan.service.test.ts`).
@@ -1273,3 +1273,26 @@ The core video generation pipeline is **production-ready** with:
 - Authored `sprints/sprint119_template_routing/analysis/2025-10-01-template-code-generator-finetune-sft.md` capturing dataset shape, prompt synthesis, and validation for a code-generation SFT model.
 - Created `data/fine-tuning/template-code-generator/` with override hooks, README, and output staging for JSONL splits.
 - Implemented `scripts/generate-template-code-sft.ts` plus npm script `data:code-sft` so canonical metadata + DB TSX export to train/validation/test JSONL (deterministic seed, dry-run support).
+2025-10-01 – Code fine-tune prompt refresh
+- Updated `scripts/generate-template-code-sft.ts` to consume curated routing prompts (metadata JSONL) so fine-tune training uses realistic user phrasing; synthetic metadata fallbacks only trigger when no curated prompt exists.
+- Documented the change and reminded future runs to inspect `--verbose` output for templates still needing hand-authored briefs.
+- Added a local TSX override for the missing `pill-shaped-bar-chart` template so the generated dataset remains complete until we backfill prod.
+- Trimmed the generator to use only the first curated prompt per template (unless an override is provided) before exporting fine-tune JSONL, cutting the duplicate signal that encouraged template regurgitation.
+
+2025-09-28 – Manual scene runtime crash RCA
+- Investigated Code Panel runtime failure complaining that the SingleSceneComposition received an undefined component after compiling a hand-written scene snippet.【src/app/projects/[id]/generate/workspace/panels/PreviewPanelG.tsx:1427】
+- Root cause: the snippet never exported a default component or duration, so the dynamic import completed but returned { default: undefined }, triggering the Remotion element type error.【src/app/projects/[id]/generate/workspace/panels/PreviewPanelG.tsx:1424】
+- Produced a corrected template that keeps the existing Remotion globals but adds `export default TemplateScene` and `export const durationInFrames = ...` so Code Panel users can paste working code without hitting the runtime blocker.
+
+2025-09-28 – Template dataset sanitization
+- Captured the sanitization plan in `sprints/sprint119_template_routing/analysis/2025-09-28-sanitized-template-dataset.md`, confirming we should train fine-tunes on post-validator/scene-compiler output instead of raw DB blobs.
+- Updated `scripts/generate-template-code-sft.ts` so each template TSX runs through `validateAndFixCode` plus `SceneCompilerService.compileScene` before being added to the JSONL dataset; skipped templates now log under `sanitizerFailures` in the emitted stats.
+- Dry-run attempt is blocked in the sandbox (`tsx` IPC pipe EPERM), so the dataset regeneration needs to happen outside the CLI once we have filesystem permissions.
+- Generator now guards previous exports by writing into a fresh `v1`, `v1-1`, `v1-2`, … directory instead of overwriting existing datasets.
+
+2025-09-28 – Sanitized dataset generated
+- Ran `npm run data:code-sft` from the host shell; the sanitizer path compiled 51 templates with no failures and wrote the new dataset to `data/fine-tuning/template-code-generator/v1-1`.
+- `stats.json` confirms 40/5/6 split and empty `sanitizerFailures`, so all canonical templates now have post-compiler TSX examples ready for the fine-tune upload.
+
+2025-09-28 – Dataset output stripping
+- Updated `scripts/generate-template-code-sft.ts` to emit chat-only JSONL for train/validation/test and mirror metadata in separate `*.meta.jsonl` files, so uploads no longer carry templateId/promptVariant baggage.
