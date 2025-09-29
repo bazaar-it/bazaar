@@ -1,37 +1,77 @@
 // src/server/db/index.ts
 import { drizzle as drizzleNeon } from "drizzle-orm/neon-http";
-import { neon } from "@neondatabase/serverless";
+import { neon, neonConfig } from "@neondatabase/serverless";
 import { env } from "~/env";
 import * as schema from "./schema";
 
-// fetchConnectionCache is deprecated and now always true
+neonConfig.fetchConnectionCache = true;
 
-// Try to use pooling if available, otherwise fall back to HTTP
-let db: ReturnType<typeof drizzleNeon<typeof schema>>;
-
-try {
-  // Only try pooling on server-side
-  if (typeof window === 'undefined') {
-    // Try to require the server-only pool module
-    const poolModule = require('./pool-server');
-    db = poolModule.getServerPooledDb();
-    console.log("[DB] ✅ Using WebSocket-based connection pooling");
-  } else {
-    throw new Error("Client-side execution");
-  }
-} catch (error) {
-  // Fallback to HTTP connection
-  // Only log in development
-  if (process.env.NODE_ENV === 'development') {
-    console.log("[DB] Using HTTP-based connection (pooling not available)");
-  }
+const createHttpDb = () => {
+  neonConfig.poolQueryViaFetch = true;
   const sql = neon(env.DATABASE_URL, {
     fetchOptions: {
       keepalive: true,
       timeout: 30000,
     },
   });
-  db = drizzleNeon(sql, { schema });
+  return drizzleNeon(sql, { schema });
+};
+
+type DbInstance = ReturnType<typeof createHttpDb>;
+
+type GlobalState = typeof globalThis & {
+  __bazaarDb?: DbInstance;
+};
+
+const globalState = globalThis as GlobalState;
+
+let db: DbInstance;
+
+if (typeof window === 'undefined') {
+  try {
+    // Lazily require heavy Node-only modules so bundlers can tree-shake for edge runtimes
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const ws = require('ws');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { Pool } = require('@neondatabase/serverless');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { drizzle: drizzleServerless } = require('drizzle-orm/neon-serverless');
+
+    neonConfig.webSocketConstructor = ws;
+
+    if (!globalState.__bazaarDb) {
+      const pool = new Pool({
+        connectionString: env.DATABASE_URL,
+        max: 10,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 10000,
+      });
+
+      if (process.env.NODE_ENV === 'development') {
+        let connectCount = 0;
+        pool.on('connect', () => {
+          connectCount += 1;
+          console.log(`[DB Pool] Connection established (#${connectCount})`);
+        });
+        pool.on('error', (err: unknown) => {
+          console.error('[DB Pool] Error:', err);
+        });
+      }
+
+      globalState.__bazaarDb = drizzleServerless(pool, { schema }) as DbInstance;
+      console.log('[DB] ✅ Using WebSocket-based connection pooling');
+    }
+
+    db = globalState.__bazaarDb!;
+  } catch (error) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[DB] Using HTTP-based connection (pooling not available)');
+      console.warn('[DB] Pool init failed:', error instanceof Error ? error.message : error);
+    }
+    db = createHttpDb();
+  }
+} else {
+  db = createHttpDb();
 }
 
 export { db };

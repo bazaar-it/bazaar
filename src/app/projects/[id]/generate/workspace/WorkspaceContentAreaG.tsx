@@ -977,8 +977,7 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
               {/* Panel layout */}
               {openPanels.length > 0 && (
                 <PanelGroup 
-                  // Keep key stable across layout changes to avoid remount loops
-                  key={`pg-${openPanels.map(p=>p.id).join('-')}`}
+                  id={`workspace-panels-${projectId}`}
                   direction="horizontal" 
                   className="h-full min-h-0 min-w-0"
                   onLayout={(layout) => {
@@ -991,10 +990,12 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
                     setPanelLayout(layout);
                   }}
                 >
-                  {openPanels.map((panel, idx) => (
-                      <React.Fragment key={panel?.id || `panel-${idx}`}>
+                  {openPanels.map((panel, idx) => {
+                    const panelId = panel?.id || `panel-${idx}`;
+                    return (
+                      <React.Fragment key={panelId}>
                         <Panel 
-                          id={panel?.id}
+                          id={panelId}
                           minSize={10} 
                           defaultSize={(panelLayout && panelLayout[idx]) || (100 / (openPanels.length || 1))}
                           className="transition-all duration-300"
@@ -1011,25 +1012,25 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
                             className="h-full min-h-0 w-full min-w-0"
                             style={{
                               transition: `transform ${PANEL_ANIM_MS}ms cubic-bezier(0.25, 1, 0.5, 1), opacity ${PANEL_ANIM_MS}ms cubic-bezier(0.25, 1, 0.5, 1), box-shadow ${PANEL_ANIM_MS}ms` ,
-                              transform: panelAnim[panel?.id || ''] === 'enter' 
+                              transform: panelAnim[panelId] === 'enter' 
                                 ? 'scale(0.96)' 
-                                : panelAnim[panel?.id || ''] === 'exit'
+                                : panelAnim[panelId] === 'exit'
                                   ? 'scale(0.96)'
                                   : 'scale(1)',
-                              opacity: panelAnim[panel?.id || ''] === 'enter' 
+                              opacity: panelAnim[panelId] === 'enter' 
                                 ? 0 
-                                : panelAnim[panel?.id || ''] === 'exit' 
+                                : panelAnim[panelId] === 'exit' 
                                   ? 0 
                                   : 1,
                               willChange: 'transform, opacity',
-                              pointerEvents: panelAnim[panel?.id || ''] === 'exit' ? 'none' : undefined,
-                              boxShadow: panelAnim[panel?.id || ''] === 'enter' ? '0 8px 24px rgba(15, 23, 42, 0.06)' : undefined,
+                              pointerEvents: panelAnim[panelId] === 'exit' ? 'none' : undefined,
+                              boxShadow: panelAnim[panelId] === 'enter' ? '0 8px 24px rgba(15, 23, 42, 0.06)' : undefined,
                               borderRadius: 15,
                               overflow: 'hidden'
                             }}
                           >
                           <SortablePanelG 
-                            id={panel?.id || `panel-${idx}`}
+                            id={panelId}
                             onRemove={() => panel?.id ? removePanel(panel.id) : null}
                             projectId={projectId}
                             currentPlaybackSpeed={currentPlaybackSpeed}
@@ -1049,7 +1050,8 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
                           <PanelResizeHandle className="w-[10px] bg-transparent hover:bg-white/20 hover:shadow-[0_0_10px_rgba(255,255,255,0.5)] transition-all" data-panel-resize-handle-id={`horizontal-${idx}`} />
                         )}
                       </React.Fragment>
-                  ))}
+                    );
+                  })}
                   </PanelGroup>
               )}
               

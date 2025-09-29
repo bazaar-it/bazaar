@@ -102,3 +102,43 @@ Date: 2025-09-22 (auto-link drag & paste)
 - Upload/media panels stamp drag payloads with asset IDs and link on click before inserting into chat.
 - ChatPanel now links assets when users drop or paste R2 URLs by resolving IDs from `getUserUploads`; fallback handles normalized URLs.
 - Added textarea paste hook + attachment effect so reused assets auto-link without manual intervention (`2025-09-22-auto-linking-drag-paste.md`).
+
+Date: 2025-09-24 (image recreate prompt guardrail)
+- Adjusted `generateImageRecreationScene` prompt to treat uploaded images as reference-only and forbid `<Img>` embedding when media plan resolves `imageAction: "recreate"`.
+- Updated recreation instructions to emphasize rebuilding layouts with React primitives so AI stops mixing embed + recreate outputs.
+
+Date: 2025-09-24 (metadata synchronization)
+- Added metadata-await logic in `ContextBuilder` so freshly uploaded attachments wait for tagging before Brain decisions; re-fetches asset/media libraries after analysis completes.
+- Introduced `MediaMetadataService.ensureAnalyzed` with shared in-flight promise map, allowing callers (upload + orchestrator) to await tag completion without duplicate AI calls.
+- Upload route now schedules `ensureAnalyzed` instead of fire-and-forget `analyzeAndTag`, giving downstream requests a consistent hook to await metadata readiness.
+
+Date: 2025-09-24 (cross-project media guard fix)
+- Relaxed the project-id guard in `mediaPlanService.resolvePlan` by trusting any URL flagged `scope: 'project'` in the media library, even when the R2 path encodes a different project. `resolveToken` now returns `{ url, projectScoped }`, and `canUsePlanUrl` short-circuits for `projectScoped` assets.
+- Added helper `isProjectScopedAsset` so fallback paths (`plan-index`, attachments, direct URLs) also bypass the guard when metadata shows the asset is linked.
+- Introduced regression tests in `src/brain/services/__tests__/media-plan.service.test.ts` to cover legacy-path project assets vs. unlinked user-library assets, ensuring we don't reintroduce the skip.
+
+Date: 2025-09-24 (live prod crash fix)
+- Hardened `MediaPlanService.resolvePlan()` so debug instrumentation is optional; production no longer crashes when `NODE_ENV='production'` disables the debug accumulator.
+- Added live incident doc `2025-09-24-live-media-plan-failure.md` capturing stack trace, asset payload, and follow-up actions.
+- Confirmed GitHub gateway errors stem from schema drift; coordinating fallback in `scene-operations.ts` (see Sprint 107 log update).
+
+Date: 2025-09-24 (cross-project asset guard regression)
+- Investigated prod project `fa164d69…` where image generation now fails immediately when reusing linked assets.
+- Found media-plan guard rejects URLs whose path encodes a different project ID, even when the asset is formally linked via `project_asset` (scope `project`).
+- Documented reproduction + SQL evidence in `2025-09-24-media-plan-cross-project-assets.md`; identified fix path: honour scope/link metadata before falling back to path inference.
+- Next: adjust `mediaPlanService.resolvePlan()` guard + extend media-plan suite with linked-asset cases to prevent regressions.
+- Patched `mediaPlanService.resolvePlan` to trust project-linked assets even when the R2 path encodes a different project, and added unit tests covering trusted vs unlinked assets.
+
+Date: 2025-09-24 (prompt guard for interpolate ranges)
+- Added a technical guardrail shared by add/edit prompts: every `interpolate()` call must use inputRange and outputRange arrays of equal length.
+- Update lives in `TECHNICAL_GUARDRAILS_BASE`, so both CodeGenerator and CodeEditor inherit the requirement; prevents Remotion runtime errors like “inputRange (2) and outputRange (3) must have the same length.”
+- Logged this regression from prod repro (AnimateLogo scene) and folded it into sprint docs to keep the LLM from emitting mismatched animation config.
+
+Date: 2025-09-24 (duration extractor literal support)
+- Expanded `extractDurationFromCode` so suffixed exports like `export const durationInFrames_animate_logo = 240;` are parsed correctly instead of falling back to 180 frames.
+- Added Jest coverage (`src/lib/utils/__tests__/codeDurationExtractor.test.ts`) for the new literal path, legacy literals, and fallback behavior.
+- Keeps timeline/DB duration aligned with the scene’s exported frame count even when the LLM emits a direct literal.
+
+Date: 2025-09-24 (media-plan skip for non-media edits)
+- Short-circuited `Orchestrator` so `mediaPlanService.resolvePlan` runs only when the brain actually returns plan data (images, videos, directives). Pure text edits now bypass the heavy media orchestration path, cutting unnecessary compute when users tweak copy/colors.
+- Added lightweight logging to confirm the skip path; tools still receive any attachments via `userContext` when no plan is present.

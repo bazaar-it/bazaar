@@ -3,88 +3,54 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { api } from "~/trpc/react";
 import { useLastUsedFormat } from "~/hooks/use-last-used-format";
+import { analytics } from "~/lib/utils/analytics";
+
+const VALID_FORMATS = new Set(["landscape", "portrait", "square"]);
+
+const resolveFormat = (candidate?: string | null) => {
+  if (candidate && VALID_FORMATS.has(candidate)) {
+    return candidate as "landscape" | "portrait" | "square";
+  }
+  return "landscape" as const;
+};
 
 export default function QuickCreatePage() {
   const router = useRouter();
   const { data: session, status } = useSession();
-  const { lastFormat } = useLastUsedFormat();
-  const hasRedirectedRef = useRef(false);
-  const createTimerRef = useRef<number | null>(null);
-  
-  // Create project mutation
-  const createProjectMutation = api.project.create.useMutation({
-    onSuccess: (result) => {
-      console.log(`[QuickCreate] Project created, redirecting to: /projects/${result.projectId}/generate`);
-      router.push(`/projects/${result.projectId}/generate`);
-    },
-    onError: (error) => {
-      console.error("[QuickCreate] Failed to create project:", error);
-      // Fallback to home page on error
-      router.push("/");
-    }
-  });
-  const pruneMutation = api.project.pruneEmpty.useMutation();
-  const latestIdQuery = api.project.getLatestId.useQuery(undefined, {
-    enabled: status === 'authenticated',
-    staleTime: 0,
-    refetchOnWindowFocus: false,
-  });
+  const { lastFormat } = useLastUsedFormat({ enableRemoteFallback: false });
+  const hasNavigatedRef = useRef(false);
 
-  // (Optional) We no longer rely on lastProjectId for speed — prefer latestId fast path.
+  const displayFormat = resolveFormat(typeof lastFormat === "string" ? lastFormat : undefined);
 
   useEffect(() => {
-    // Simple, direct logic - no complex dependencies
-    
-    // 1. Wait for auth to load
     if (status === "loading") {
-      console.log('[QuickCreate] Waiting for auth...');
       return;
     }
-    
-    // 2. If not authenticated, redirect to login
+
     if (!session?.user) {
-      console.log('[QuickCreate] No user session, redirecting to login');
       router.push("/login?redirect=/projects/quick-create");
       return;
     }
 
-    // 3. If already creating or created, wait
-    if (createProjectMutation.isPending || createProjectMutation.isSuccess) {
-      console.log('[QuickCreate] Already creating or created');
+    if (hasNavigatedRef.current) {
       return;
     }
 
-    // 4. First, prune empty projects in background (non-blocking)
-    if (!pruneMutation.isPending && !pruneMutation.isSuccess) {
-      pruneMutation.mutate();
-    }
+    hasNavigatedRef.current = true;
 
-    // 5. Prefer redirect to latest if available quickly
-    if (latestIdQuery.data && !hasRedirectedRef.current) {
-      hasRedirectedRef.current = true;
-      if (createTimerRef.current) { clearTimeout(createTimerRef.current); createTimerRef.current = null; }
-      console.log('[QuickCreate] Redirecting to latest project:', latestIdQuery.data);
-      router.replace(`/projects/${latestIdQuery.data}/generate`);
-      return;
-    }
+    const formatParam = resolveFormat(typeof lastFormat === "string" ? lastFormat : undefined);
+    analytics.featureUsed("quick_create_redirect", {
+      format: formatParam,
+    });
 
-    // 6. Schedule creation fallback after a short window (prevents stalls on large accounts)
-    if (!hasRedirectedRef.current && !createProjectMutation.isPending && !createProjectMutation.isSuccess && createTimerRef.current == null) {
-      createTimerRef.current = window.setTimeout(() => {
-        if (!hasRedirectedRef.current && !createProjectMutation.isPending && !createProjectMutation.isSuccess) {
-          hasRedirectedRef.current = true;
-          console.log('[QuickCreate] Creating new project (fallback) with format:', lastFormat);
-          createProjectMutation.mutate({ format: lastFormat });
-        }
-      }, 600); // 600ms window for latestId fast path
-    }
+    const params = new URLSearchParams({
+      intent: "auto",
+      format: formatParam,
+    });
 
-    return () => {
-      if (createTimerRef.current) { clearTimeout(createTimerRef.current); createTimerRef.current = null; }
-    };
-  }, [status, session, latestIdQuery.data, latestIdQuery.isLoading, createProjectMutation.isPending, createProjectMutation.isSuccess, lastFormat, router, pruneMutation.isPending, pruneMutation.isSuccess]);
+    router.replace(`/projects/new?${params.toString()}`);
+  }, [status, session?.user, lastFormat, router]);
 
   // Loading state
   return (
@@ -162,7 +128,7 @@ export default function QuickCreatePage() {
             <div className="flex items-center justify-center gap-2">
               <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/20 rounded text-xs font-mono">
                 <span className="text-white/60">FORMAT:</span>
-                <span className="text-white uppercase">{lastFormat}</span>
+                <span className="text-white uppercase">{displayFormat}</span>
               </div>
             </div>
             

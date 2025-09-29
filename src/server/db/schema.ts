@@ -39,9 +39,66 @@ export const users = createTable("user", (d) => ({
   updatedAt: d.timestamp({ withTimezone: true }).default(sql`CURRENT_TIMESTAMP`),
 }));
 
-export const usersRelations = relations(users, ({ many }) => ({
+export const userAttribution = createTable(
+  "user_attribution",
+  (d) => ({
+    userId: d
+      .varchar("user_id", { length: 255 })
+      .notNull()
+      .primaryKey()
+      .references(() => users.id, { onDelete: "cascade" }),
+    firstTouchSource: d.text("first_touch_source").notNull().default("unknown"),
+    firstTouchMedium: d.text("first_touch_medium"),
+    firstTouchCampaign: d.text("first_touch_campaign"),
+    firstTouchTerm: d.text("first_touch_term"),
+    firstTouchContent: d.text("first_touch_content"),
+    firstTouchReferrer: d.text("first_touch_referrer"),
+    firstTouchLandingPath: d.text("first_touch_landing_path"),
+    firstTouchGclid: d.text("first_touch_gclid"),
+    firstTouchFbclid: d.text("first_touch_fbclid"),
+    firstTouchUserAgentHash: d.text("first_touch_user_agent_hash"),
+    firstTouchAt: d.timestamp("first_touch_at", { withTimezone: true }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+    lastTouchSource: d.text("last_touch_source"),
+    lastTouchMedium: d.text("last_touch_medium"),
+    lastTouchCampaign: d.text("last_touch_campaign"),
+    lastTouchTerm: d.text("last_touch_term"),
+    lastTouchContent: d.text("last_touch_content"),
+    lastTouchReferrer: d.text("last_touch_referrer"),
+    lastTouchLandingPath: d.text("last_touch_landing_path"),
+    lastTouchGclid: d.text("last_touch_gclid"),
+    lastTouchFbclid: d.text("last_touch_fbclid"),
+    lastTouchUserAgentHash: d.text("last_touch_user_agent_hash"),
+    lastTouchAt: d.timestamp("last_touch_at", { withTimezone: true }),
+    createdAt: d
+      .timestamp("created_at", { withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    updatedAt: d
+      .timestamp("updated_at", { withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .$onUpdate(() => new Date())
+      .notNull(),
+  }),
+  (t) => [
+    index("user_attr_first_source_idx").on(t.firstTouchSource),
+    index("user_attr_first_campaign_idx").on(t.firstTouchCampaign),
+  ],
+);
+
+export const userAttributionRelations = relations(userAttribution, ({ one }) => ({
+  user: one(users, {
+    fields: [userAttribution.userId],
+    references: [users.id],
+  }),
+}));
+
+export const usersRelations = relations(users, ({ many, one }) => ({
   accounts: many(accounts),
   sharedVideos: many(sharedVideos),
+  attribution: one(userAttribution, {
+    fields: [users.id],
+    references: [userAttribution.userId],
+  }),
 }));
 
 export const accounts = createTable(
@@ -1269,6 +1326,9 @@ export const templates = createTable("templates", (d) => ({
   tags: d.jsonb("tags").$type<string[]>().default([]),
   isActive: d.boolean("is_active").default(true).notNull(),
   isOfficial: d.boolean("is_official").default(false).notNull(),
+  adminOnly: d.boolean("admin_only").default(false).notNull(),
+  sceneCount: d.integer("scene_count").default(1).notNull(),
+  totalDuration: d.integer("total_duration"),
   createdBy: d.varchar("created_by", { length: 255 }).notNull().references(() => users.id),
   sourceProjectId: d.uuid("source_project_id").references(() => projects.id),
   sourceSceneId: d.uuid("source_scene_id").references(() => scenes.id),
@@ -1278,13 +1338,39 @@ export const templates = createTable("templates", (d) => ({
 }), (t) => [
   index("templates_active_idx").on(t.isActive),
   index("templates_official_idx").on(t.isOfficial),
+  index("templates_admin_only_idx").on(t.adminOnly),
   index("templates_category_idx").on(t.category),
   index("templates_created_by_idx").on(t.createdBy),
   index("templates_created_at_idx").on(t.createdAt),
 ]);
 
+export const templateScenes = createTable("template_scene", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  templateId: d.uuid("template_id").notNull().references(() => templates.id, { onDelete: "cascade" }),
+  name: d.varchar("name", { length: 255 }).notNull(),
+  description: d.text("description"),
+  order: d.integer("order").notNull(),
+  duration: d.integer("duration").notNull(),
+  tsxCode: d.text("tsx_code").notNull(),
+  jsCode: d.text("js_code"),
+  jsCompiledAt: d.timestamp("js_compiled_at", { withTimezone: true }),
+  compilationError: d.text("compilation_error"),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: d.timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("template_scene_template_idx").on(t.templateId),
+  index("template_scene_order_idx").on(t.templateId, t.order),
+]);
+
+export const templateScenesRelations = relations(templateScenes, ({ one }) => ({
+  template: one(templates, {
+    fields: [templateScenes.templateId],
+    references: [templates.id],
+  }),
+}));
+
 // Template relations
-export const templatesRelations = relations(templates, ({ one }) => ({
+export const templatesRelations = relations(templates, ({ one, many }) => ({
   creator: one(users, {
     fields: [templates.createdBy],
     references: [users.id],
@@ -1297,6 +1383,7 @@ export const templatesRelations = relations(templates, ({ one }) => ({
     fields: [templates.sourceSceneId],
     references: [scenes.id],
   }),
+  scenes: many(templateScenes),
 }));
 
 // Track per-usage events for templates to enable timeframe analytics

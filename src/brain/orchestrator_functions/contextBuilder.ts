@@ -7,13 +7,15 @@ import { eq, desc, and, inArray } from "drizzle-orm";
 import type { OrchestrationInput, ContextPacket } from "~/lib/types/ai/brain.types";
 import { extractFirstValidUrl, normalizeUrl, isValidWebUrl } from "~/lib/utils/url-detection";
 import { assetContext } from "~/server/services/context/assetContextService";
+import { mediaMetadataService } from "~/server/services/media/media-metadata.service";
 import { templateMatcher } from "~/services/ai/templateMatching.service";
 import { templateLoader } from "~/services/ai/templateLoader.service";
 
 const extractProjectIdFromUrl = (url: string | undefined | null): string | null => {
   if (!url) return null;
   const match = url.match(/projects\/([0-9a-fA-F-]+)/);
-  return match ? match[1] : null;
+  const group = match?.[1];
+  return typeof group === 'string' ? group : null;
 };
 
 export class ContextBuilder {
@@ -66,22 +68,62 @@ export class ContextBuilder {
       const [
         imageContext,
         webContext,
-        projectAssets,
-        mediaLibImages,
-        mediaLibVideos,
-        userLibImages,
-        userLibVideos,
+        projectAssetsRaw,
+        projectMediaRaw,
+        userMediaRaw,
         templateContext
       ] = await Promise.all([
         this.buildImageContext(input),
         this.buildWebContext(input),
         assetContext.getProjectAssets(input.projectId),
-        assetContext.listProjectAssets(input.projectId, { types: ['image', 'logo'], limit: 50 }),
-        assetContext.listProjectAssets(input.projectId, { types: ['video'], limit: 50 }),
-        assetContext.listUserAssets(input.userId, { types: ['image', 'logo'], limit: 100 }),
-        assetContext.listUserAssets(input.userId, { types: ['video'], limit: 60 }),
+        assetContext.listProjectAssets(input.projectId, { limit: 75 }),
+        assetContext.listUserAssets(input.userId, { limit: 150 }),
         this.buildTemplateContext(input, scenesWithCode),
       ]);
+
+      let projectAssets = projectAssetsRaw;
+      let mediaLibImages = projectMediaRaw.filter((asset) => asset.type === 'image' || asset.type === 'logo');
+      let mediaLibVideos = projectMediaRaw.filter((asset) => asset.type === 'video');
+      let userLibImages = userMediaRaw.filter((asset) => asset.type === 'image' || asset.type === 'logo');
+      let userLibVideos = userMediaRaw.filter((asset) => asset.type === 'video');
+
+      const attachmentImageUrls = Array.isArray(input.userContext?.imageUrls)
+        ? (input.userContext?.imageUrls as string[]).filter(
+            (url): url is string => typeof url === 'string' && url.length > 0 && /^https?:\/\//i.test(url)
+          )
+        : [];
+
+      if (attachmentImageUrls.length > 0) {
+        const assetsByUrl = new Map(projectAssets.assets.map((asset) => [asset.url, asset]));
+        const assetsNeedingTags = attachmentImageUrls
+          .map((url) => assetsByUrl.get(url))
+          .filter((asset): asset is typeof projectAssets.assets[number] => !!asset && (!asset.tags || asset.tags.length === 0));
+
+        if (assetsNeedingTags.length > 0) {
+          const uniqueAssets = Array.from(new Map(assetsNeedingTags.map((asset) => [asset.id, asset])).values());
+          console.log(`📚 [CONTEXT BUILDER] Waiting for metadata on ${uniqueAssets.length} attachment(s)`);
+
+          await Promise.allSettled(
+            uniqueAssets.map((asset) => mediaMetadataService.ensureAnalyzed(asset.id, asset.url, { timeoutMs: 4000 }))
+          );
+
+          const [
+            refreshedProjectAssets,
+            refreshedProjectMedia,
+            refreshedUserMedia
+          ] = await Promise.all([
+            assetContext.getProjectAssets(input.projectId),
+            assetContext.listProjectAssets(input.projectId, { limit: 75 }),
+            assetContext.listUserAssets(input.userId, { limit: 150 })
+          ]);
+
+          projectAssets = refreshedProjectAssets;
+          mediaLibImages = refreshedProjectMedia.filter((asset) => asset.type === 'image' || asset.type === 'logo');
+          mediaLibVideos = refreshedProjectMedia.filter((asset) => asset.type === 'video');
+          userLibImages = refreshedUserMedia.filter((asset) => asset.type === 'image' || asset.type === 'logo');
+          userLibVideos = refreshedUserMedia.filter((asset) => asset.type === 'video');
+        }
+      }
 
       console.log(`📚 [CONTEXT BUILDER] Found ${projectAssets.assets.length} persistent assets`);
       console.log(`📚 [CONTEXT BUILDER] Logos: ${projectAssets.logos.length}`);
@@ -169,6 +211,7 @@ export class ContextBuilder {
         // Persistent asset context
         assetContext: projectAssets.assets.length > 0 ? {
           allAssets: projectAssets.assets.map(a => ({
+            id: a.id,
             url: a.url,
             type: a.type,
             originalName: a.originalName,

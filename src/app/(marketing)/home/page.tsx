@@ -18,7 +18,6 @@ const HomePageTemplatesSection = dynamic(
 import AspectRatioTransitionPlayer from "~/components/AspectRatioTransitionPlayer";
 import DynamicFormatTitle from "~/components/DynamicFormatTitle";
 import ParticleEffect from "~/components/marketing/ParticleEffect";
-import LiveBadge from "~/components/marketing/LiveBadge";
 
 export default function Homepage() {
   const { data: session, status } = useSession();
@@ -58,31 +57,13 @@ export default function Homepage() {
 
   return (
     <div className="min-h-screen bg-white flex flex-col animate-fade-in">
-      <MarketingHeader ref={marketingHeaderRef} redirectTo='/' showLiveButton />
+      <MarketingHeader ref={marketingHeaderRef} redirectTo='/' />
 
       {/* Main content */}
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-4 md:py-8 max-w-6xl mx-auto w-full relative overflow-hidden">
         {/* Advanced Floating Particles - Hero Section Only */}
         <ParticleEffect />
 
-        {/* Top badge area: Product Hunt badge moved here */}
-        <div className="w-full mb-8 flex justify-center">
-          <a
-            href="https://www.producthunt.com/products/bazaar-2?embed=true&utm_source=badge-featured&utm_medium=badge&utm_source=badge-bazaar-2"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="See Bazaar on Product Hunt"
-          >
-            <img
-              src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=996887&theme=light"
-              alt="Bazaar – Vibe Code your Software Demo Video on Product Hunt"
-              width={250}
-              height={54}
-              className="w-[250px] h-[54px]"
-            />
-          </a>
-        </div>
-        
         <div className="mb-8 md:mb-16 w-full text-center">
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold mb-4 md:mb-6 leading-tight text-gray-900 px-2">
             <span className="relative inline-block px-2 py-1 border-2 border-dashed border-gray-400 bg-white/60 backdrop-blur-sm rounded shadow-md mr-2">
@@ -144,7 +125,6 @@ export default function Homepage() {
           <p className="text-center text-gray-500 text-sm mt-2 mb-0">
             Start with 100 free prompts
           </p>
-          {/* Product Hunt badge moved to top */}
         </div>
         
         {/* Marketing Video Player - responsive positioning */}

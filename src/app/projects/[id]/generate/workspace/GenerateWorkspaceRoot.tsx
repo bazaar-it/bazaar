@@ -4,6 +4,7 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useSession } from "next-auth/react";
+import { useRouter } from 'next/navigation';
 import { useVideoState } from '~/stores/videoState';
 import { api } from "~/trpc/react";
 import AppHeader from "~/components/AppHeader";
@@ -13,6 +14,7 @@ import WorkspaceContentAreaG from './WorkspaceContentAreaG';
 import type { WorkspaceContentAreaGHandle, PanelTypeG } from './WorkspaceContentAreaG';
 import { MobileWorkspaceLayout } from './MobileWorkspaceLayout';
 import { useBreakpoint } from '~/hooks/use-breakpoint';
+import { useIsTouchDevice } from '~/hooks/use-is-touch';
 import MobileAppHeader from '~/components/MobileAppHeader';
 import { CreateTemplateModal } from '~/components/CreateTemplateModal';
 import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
@@ -34,6 +36,7 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
   const [isCreateTemplateModalOpen, setIsCreateTemplateModalOpen] = useState(false);
   const [isTimelineVisible, setIsTimelineVisible] = useState(false);
   const [isTimelineMounted, setIsTimelineMounted] = useState(false);
+  const router = useRouter();
   const TIMELINE_ANIM_MS = 320;
   const [timelineAnim, setTimelineAnim] = useState<'enter' | 'exit' | null>(null);
   useEffect(() => {
@@ -114,6 +117,8 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
   const { data: session } = useSession();
   const { setProject, getCurrentProps } = useVideoState();
   const breakpoint = useBreakpoint();
+  const isTouchDevice = useIsTouchDevice();
+  const [forcedMobile, setForcedMobile] = useState(false);
   
   // Debug breakpoint detection
   useEffect(() => {
@@ -123,6 +128,24 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
       height: typeof window !== 'undefined' ? window.innerHeight : 'SSR'
     });
   }, [breakpoint]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const flag = sessionStorage.getItem('bazaar:new-project-mobile');
+      if (flag === '1') {
+        setForcedMobile(true);
+        sessionStorage.removeItem('bazaar:new-project-mobile');
+      }
+    } catch {}
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!forcedMobile) return;
+    if (breakpoint === 'desktop' && !isTouchDevice) {
+      setForcedMobile(false);
+    }
+  }, [forcedMobile, breakpoint, isTouchDevice]);
 
   // ✅ NEW: Fetch current project details to get updated title
   const { data: currentProjectData } = api.project.getById.useQuery(
@@ -215,9 +238,17 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
     setTitle(newTitle);
     setUserProjects((prev) => prev.map(p => p.id === projectId ? { ...p, name: newTitle } : p));
   }, [projectId]);
-  
+
   // Get tRPC utils for cache invalidation
   const utils = api.useUtils();
+
+  const handleProjectSwitch = useCallback((targetId: string) => {
+    if (!targetId || targetId === projectId) return;
+    try {
+      setIsTimelineVisible(false);
+    } catch {}
+    router.push(`/projects/${targetId}/generate`);
+  }, [projectId, router]);
 
   // Set up rename mutation
   const renameMutation = api.project.rename.useMutation({
@@ -280,7 +311,7 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
   // Get current scenes for template creation
   const currentScenes = getCurrentProps()?.scenes || [];
 
-  const isMobile = breakpoint === 'mobile';
+  const isMobile = forcedMobile || breakpoint === 'mobile' || (isTouchDevice && breakpoint !== 'desktop');
 
   // Desktop/Tablet layout
   // Prevent two-finger horizontal swipe from triggering browser Back/Forward
@@ -334,6 +365,9 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
           user={user}
           projectId={projectId}
           onCreateTemplate={() => setIsCreateTemplateModalOpen(true)}
+          projects={userProjects}
+          currentProjectId={projectId}
+          onProjectSwitch={handleProjectSwitch}
         />
       </div>
       

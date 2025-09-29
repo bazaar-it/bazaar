@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { DownloadIcon, LogOutIcon, CheckIcon, XIcon, ShareIcon, Copy, Loader2, Layers } from "lucide-react";
+import { DownloadIcon, LogOutIcon, CheckIcon, XIcon, ShareIcon, Copy, Loader2, Layers, ChevronDown, FolderIcon } from "lucide-react";
 import { signOut } from "next-auth/react";
 import {
   DropdownMenu,
@@ -59,6 +59,9 @@ interface AppHeaderProps {
   user?: { name: string; email?: string; isAdmin?: boolean };
   projectId?: string;
   onCreateTemplate?: () => void;
+  projects?: { id: string; name: string }[];
+  currentProjectId?: string;
+  onProjectSwitch?: (projectId: string) => void;
 }
 
 export default function AppHeader({
@@ -70,12 +73,22 @@ export default function AppHeader({
   user,
   projectId,
   onCreateTemplate,
+  projects,
+  currentProjectId,
+  onProjectSwitch,
 }: AppHeaderProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [newTitle, setNewTitle] = useState(projectTitle || "");
   const [isSharing, setIsSharing] = useState(false);
   const [renderId, setRenderId] = useState<string | null>(null);
   const [hasDownloaded, setHasDownloaded] = useState(false);
+  const currentProjectName = projects?.find((p) => p.id === currentProjectId)?.name;
+  const canSwitchProjects = Boolean(onProjectSwitch && projects && projects.length > 0);
+
+  const handleProjectSwitch = React.useCallback((targetId: string) => {
+    if (!onProjectSwitch) return;
+    onProjectSwitch(targetId);
+  }, [onProjectSwitch]);
 
   // Sync newTitle with projectTitle prop when it changes
   React.useEffect(() => {
@@ -341,9 +354,10 @@ export default function AppHeader({
       {/* Center: Project Title - Responsive */}
       <div className="flex-1 flex justify-center px-4 min-w-0">
         {projectTitle ? (
-          <div className="max-w-[280px] w-full flex justify-center min-w-0">
+          <div className="flex w-full max-w-[320px] flex-col items-center gap-2 min-w-0">
             {isEditingName ? (
-              <div className="flex items-center w-full min-w-0">
+              <div className="flex items-center w-full min-w-0 gap-2">
+                
                 <Input
                   value={newTitle}
                   onChange={e => setNewTitle(e.target.value)}
@@ -359,12 +373,12 @@ export default function AppHeader({
                     }
                   }}
                 />
-                <div className="flex items-center ml-2 flex-shrink-0">
+                <div className="flex items-center gap-1 flex-shrink-0">
                   <Button 
                     type="button" 
                     size="icon" 
                     variant="default" 
-                    className="w-6 h-6 bg-green-500 hover:bg-green-600 mr-1 rounded-[8px] shadow-sm"
+                    className="w-6 h-6 bg-green-500 hover:bg-green-600 rounded-[8px] shadow-sm"
                     onClick={handleRenameClick} 
                     disabled={isRenaming}
                   >
@@ -386,25 +400,27 @@ export default function AppHeader({
                 </div>
               </div>
             ) : (
-              <h1
-                className={`text-sm font-medium cursor-pointer hover:text-primary px-2 text-center truncate min-w-0 ${
-                  isRenaming ? 'text-gray-400 pointer-events-none' : ''
-                }`}
-                onClick={() => {
-                  setNewTitle(projectTitle);
-                  setIsEditingName(true);
-                }}
-                title={projectTitle} // Show full title on hover
-              >
-                {isRenaming ? (
-                  <div className="flex items-center justify-center gap-2">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    <span>{newTitle}</span>
-                  </div>
-                ) : (
-                  projectTitle
-                )}
-              </h1>
+              <div className="flex items-center gap-2">
+                <h1
+                  className={`text-sm font-medium cursor-pointer hover:text-primary truncate min-w-0 ${
+                    isRenaming ? 'text-gray-400 pointer-events-none' : ''
+                  }`}
+                  onClick={() => {
+                    setNewTitle(projectTitle);
+                    setIsEditingName(true);
+                  }}
+                  title={currentProjectName || projectTitle}
+                >
+                  {isRenaming ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <span>{newTitle}</span>
+                    </div>
+                  ) : (
+                    projectTitle
+                  )}
+                </h1>
+              </div>
             )}
           </div>
         ) : null}

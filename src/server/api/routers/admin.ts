@@ -1,8 +1,8 @@
 // src/server/api/routers/admin.ts
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
-import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory, emailSubscribers, exports, promoCodes, promoCodeUsage, paywallEvents, paywallAnalytics, creditTransactions, templates, templateUsages, brandProfiles, autofixMetrics, autofixSessions } from "~/server/db/schema";
-import { sql, and, gte, lt, lte, desc, count, eq, like, or, inArray, asc, countDistinct } from "drizzle-orm";
+import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory, emailSubscribers, exports, promoCodes, promoCodeUsage, paywallEvents, paywallAnalytics, creditTransactions, templates, templateUsages, brandProfiles, autofixMetrics, autofixSessions, userAttribution, assets } from "~/server/db/schema";
+import { sql, and, gte, lt, lte, desc, count, eq, like, or, inArray, asc, countDistinct, isNull, ne } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
@@ -35,6 +35,49 @@ const adminOnlyProcedure = protectedProcedure.use(async ({ ctx, next }) => {
 
   return next();
 });
+
+const timeframeWindows = {
+  '30d': 30,
+  '7d': 7,
+  '24h': 1,
+} as const;
+
+type TimeframeKey = keyof typeof timeframeWindows;
+
+type MetricSummary = {
+  totalAllTime: number;
+  currentPeriod: number;
+  previousPeriod: number;
+  absoluteChange: number;
+  percentChange: number | null;
+  averagePerDay: number | null;
+};
+
+const buildTimeframeSummary = (
+  totalAllTime: number,
+  current: number,
+  previous: number,
+  windowDays: number,
+): MetricSummary => {
+  const absoluteChange = current - previous;
+  const percentChange = previous > 0 ? (absoluteChange / previous) * 100 : null;
+  const averagePerDay = windowDays > 0 ? current / windowDays : null;
+
+  return {
+    totalAllTime,
+    currentPeriod: current,
+    previousPeriod: previous,
+    absoluteChange,
+    percentChange,
+    averagePerDay,
+  };
+};
+
+const extractCount = (rows: Array<{ count: number | string | null | undefined }> | undefined): number => {
+  if (!rows || rows.length === 0) return 0;
+  const raw = rows[0]?.count ?? 0;
+  return typeof raw === 'number' ? raw : Number(raw);
+};
 
 export const adminRouter = createTRPCRouter({
   // List projects with filters - admin only
@@ -453,48 +496,114 @@ export const adminRouter = createTRPCRouter({
           .limit(5)
       ]);
 
+      const usersAllCount = extractCount(totalUsersAll);
+      const users30Count = extractCount(totalUsers30d);
+      const users7Count = extractCount(totalUsers7d);
+      const users24Count = extractCount(totalUsers24h);
+      const prevUsers30Count = extractCount(prevUsers30d);
+      const prevUsers7Count = extractCount(prevUsers7d);
+      const prevUsers24Count = extractCount(prevUsers24h);
+
+      const projectsAllCount = extractCount(projectsAll);
+      const projects30Count = extractCount(projects30d);
+      const projects7Count = extractCount(projects7d);
+      const projects24Count = extractCount(projects24h);
+      const prevProjects30Count = extractCount(prevProjects30d);
+      const prevProjects7Count = extractCount(prevProjects7d);
+      const prevProjects24Count = extractCount(prevProjects24h);
+
+      const scenesAllCount = extractCount(scenesAll);
+      const scenes30Count = extractCount(scenes30d);
+      const scenes7Count = extractCount(scenes7d);
+      const scenes24Count = extractCount(scenes24h);
+      const prevScenes30Count = extractCount(prevScenes30d);
+      const prevScenes7Count = extractCount(prevScenes7d);
+      const prevScenes24Count = extractCount(prevScenes24h);
+
+      const promptsAllCount = extractCount(promptsAll);
+      const prompts30Count = extractCount(prompts30d);
+      const prompts7Count = extractCount(prompts7d);
+      const prompts24Count = extractCount(prompts24h);
+      const prevPrompts30Count = extractCount(prevPrompts30d);
+      const prevPrompts7Count = extractCount(prevPrompts7d);
+      const prevPrompts24Count = extractCount(prevPrompts24h);
+
+      const buildMetricTimeframes = (
+        totalAllTime: number,
+        current: Record<TimeframeKey, number>,
+        previous: Record<TimeframeKey, number>,
+      ): Record<TimeframeKey, MetricSummary> => ({
+        '30d': buildTimeframeSummary(totalAllTime, current['30d'], previous['30d'], timeframeWindows['30d']),
+        '7d': buildTimeframeSummary(totalAllTime, current['7d'], previous['7d'], timeframeWindows['7d']),
+        '24h': buildTimeframeSummary(totalAllTime, current['24h'], previous['24h'], timeframeWindows['24h']),
+      });
+
+      const userTimeframes = buildMetricTimeframes(
+        usersAllCount,
+        { '30d': users30Count, '7d': users7Count, '24h': users24Count },
+        { '30d': prevUsers30Count, '7d': prevUsers7Count, '24h': prevUsers24Count },
+      );
+
+      const projectTimeframes = buildMetricTimeframes(
+        projectsAllCount,
+        { '30d': projects30Count, '7d': projects7Count, '24h': projects24Count },
+        { '30d': prevProjects30Count, '7d': prevProjects7Count, '24h': prevProjects24Count },
+      );
+
+      const sceneTimeframes = buildMetricTimeframes(
+        scenesAllCount,
+        { '30d': scenes30Count, '7d': scenes7Count, '24h': scenes24Count },
+        { '30d': prevScenes30Count, '7d': prevScenes7Count, '24h': prevScenes24Count },
+      );
+
+      const promptTimeframes = buildMetricTimeframes(
+        promptsAllCount,
+        { '30d': prompts30Count, '7d': prompts7Count, '24h': prompts24Count },
+        { '30d': prevPrompts30Count, '7d': prevPrompts7Count, '24h': prevPrompts24Count },
+      );
+
       return {
         users: {
-          all: totalUsersAll[0]?.count || 0,
-          last30Days: totalUsers30d[0]?.count || 0,
-          last7Days: totalUsers7d[0]?.count || 0,
-          last24Hours: totalUsers24h[0]?.count || 0,
-          // Previous periods for change calculation
-          prev30Days: prevUsers30d[0]?.count || 0,
-          prev7Days: prevUsers7d[0]?.count || 0,
-          prev24Hours: prevUsers24h[0]?.count || 0,
+          all: usersAllCount,
+          last30Days: users30Count,
+          last7Days: users7Count,
+          last24Hours: users24Count,
+          prev30Days: prevUsers30Count,
+          prev7Days: prevUsers7Count,
+          prev24Hours: prevUsers24Count,
+          timeframes: userTimeframes,
         },
         projects: {
-          all: projectsAll[0]?.count || 0,
-          last30Days: projects30d[0]?.count || 0,
-          last7Days: projects7d[0]?.count || 0,
-          last24Hours: projects24h[0]?.count || 0,
-          // Previous periods for change calculation
-          prev30Days: prevProjects30d[0]?.count || 0,
-          prev7Days: prevProjects7d[0]?.count || 0,
-          prev24Hours: prevProjects24h[0]?.count || 0,
+          all: projectsAllCount,
+          last30Days: projects30Count,
+          last7Days: projects7Count,
+          last24Hours: projects24Count,
+          prev30Days: prevProjects30Count,
+          prev7Days: prevProjects7Count,
+          prev24Hours: prevProjects24Count,
+          timeframes: projectTimeframes,
         },
         scenes: {
-          all: scenesAll[0]?.count || 0,
-          last30Days: scenes30d[0]?.count || 0,
-          last7Days: scenes7d[0]?.count || 0,
-          last24Hours: scenes24h[0]?.count || 0,
-          // Previous periods for change calculation
-          prev30Days: prevScenes30d[0]?.count || 0,
-          prev7Days: prevScenes7d[0]?.count || 0,
-          prev24Hours: prevScenes24h[0]?.count || 0,
+          all: scenesAllCount,
+          last30Days: scenes30Count,
+          last7Days: scenes7Count,
+          last24Hours: scenes24Count,
+          prev30Days: prevScenes30Count,
+          prev7Days: prevScenes7Count,
+          prev24Hours: prevScenes24Count,
+          timeframes: sceneTimeframes,
         },
         prompts: {
-          all: promptsAll[0]?.count || 0,
-          last30Days: prompts30d[0]?.count || 0,
-          last7Days: prompts7d[0]?.count || 0,
-          last24Hours: prompts24h[0]?.count || 0,
-          // Previous periods for change calculation
-          prev30Days: prevPrompts30d[0]?.count || 0,
-          prev7Days: prevPrompts7d[0]?.count || 0,
-          prev24Hours: prevPrompts24h[0]?.count || 0,
+          all: promptsAllCount,
+          last30Days: prompts30Count,
+          last7Days: prompts7Count,
+          last24Hours: prompts24Count,
+          prev30Days: prevPrompts30Count,
+          prev7Days: prevPrompts7Count,
+          prev24Hours: prevPrompts24Count,
+          timeframes: promptTimeframes,
         },
-        recentFeedback
+        recentFeedback,
       };
     }),
 
@@ -788,7 +897,7 @@ export const adminRouter = createTRPCRouter({
   // Get time-series analytics data
   getAnalyticsData: adminOnlyProcedure
     .input(z.object({ 
-      timeframe: z.enum(['24h', '7d', '30d']),
+      timeframe: z.enum(['24h', '7d', '30d', 'all']),
       metric: z.enum(['users', 'projects', 'scenes', 'prompts'])
     }))
     .query(async ({ input }) => {
@@ -797,6 +906,7 @@ export const adminRouter = createTRPCRouter({
       // Calculate intervals and date ranges
       let intervalHours: number;
       let totalPeriodHours: number;
+      let allowHourly = true;
 
       switch (timeframe) {
         case '24h':
@@ -811,9 +921,73 @@ export const adminRouter = createTRPCRouter({
           intervalHours = 24; // 24-hour (daily) intervals
           totalPeriodHours = 30 * 24;
           break;
+        case 'all':
+          intervalHours = 24;
+          totalPeriodHours = 0; // Placeholder, will compute dynamically
+          allowHourly = false;
+          break;
       }
 
-      const startDate = new Date(Date.now() - totalPeriodHours * 60 * 60 * 1000);
+      const now = new Date();
+
+      const resolveEarliest = async (): Promise<Date | null> => {
+        switch (metric) {
+          case 'users': {
+            const result = await db
+              .select({ min: sql<Date | null>`MIN(${users.createdAt})` })
+              .from(users)
+              .where(sql`${users.createdAt} IS NOT NULL`)
+              .limit(1);
+            return result[0]?.min ?? null;
+          }
+          case 'projects': {
+            const result = await db
+              .select({ min: sql<Date | null>`MIN(${projects.createdAt})` })
+              .from(projects)
+              .limit(1);
+            return result[0]?.min ?? null;
+          }
+          case 'scenes': {
+            const result = await db
+              .select({ min: sql<Date | null>`MIN(${scenes.createdAt})` })
+              .from(scenes)
+              .limit(1);
+            return result[0]?.min ?? null;
+          }
+          case 'prompts': {
+            const result = await db
+              .select({ min: sql<Date | null>`MIN(${messages.createdAt})` })
+              .from(messages)
+              .limit(1);
+            return result[0]?.min ?? null;
+          }
+        }
+      };
+
+      let startDate: Date;
+      if (timeframe === 'all') {
+        const earliest = await resolveEarliest();
+        if (!earliest) {
+          return {
+            timeframe,
+            metric,
+            data: [],
+            totalCount: 0,
+            periodStart: null,
+            periodEnd: now.toISOString(),
+          };
+        }
+
+        startDate = new Date(earliest);
+        startDate.setHours(0, 0, 0, 0);
+        totalPeriodHours = Math.max(24, Math.ceil((now.getTime() - startDate.getTime()) / (1000 * 60 * 60)));
+        if (!allowHourly && totalPeriodHours > 90 * 24) {
+          // When showing very long ranges, ensure skipping hourly granularity
+          intervalHours = 24;
+        }
+      } else {
+        startDate = new Date(now.getTime() - totalPeriodHours * 60 * 60 * 1000);
+      }
 
       // Generate time slots
       const timeSlots = [];
@@ -823,7 +997,7 @@ export const adminRouter = createTRPCRouter({
         timeSlots.push({
           start: slotStart,
           end: slotEnd,
-          label: timeframe === '24h' 
+          label: timeframe === '24h' && allowHourly
             ? slotStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             : slotStart.toLocaleDateString([], { month: 'short', day: 'numeric' })
         });
@@ -847,8 +1021,8 @@ export const adminRouter = createTRPCRouter({
             .orderBy(users.createdAt);
 
           data = userCounts.map(row => ({
-            timestamp: row.timestamp!,
-            count: 1
+              timestamp: row.timestamp!,
+              count: 1
           }));
           break;
 
@@ -930,7 +1104,7 @@ export const adminRouter = createTRPCRouter({
         data: chartData,
         totalCount: cumulative,
         periodStart: startDate.toISOString(),
-        periodEnd: new Date().toISOString(),
+        periodEnd: now.toISOString(),
       };
     }),
 
@@ -1317,6 +1491,25 @@ export default function GeneratedScene() {
     }),
 
   // 🆕 NEW: Comprehensive user analytics endpoint
+  getAttributionSources: adminOnlyProcedure
+    .query(async () => {
+      const rows = await db
+        .select({ source: userAttribution.firstTouchSource })
+        .from(userAttribution)
+        .where(and(
+          sql`${userAttribution.firstTouchSource} IS NOT NULL`,
+          ne(userAttribution.firstTouchSource, '')
+        ))
+        .groupBy(userAttribution.firstTouchSource)
+        .orderBy(asc(userAttribution.firstTouchSource));
+
+      const sources = rows
+        .map((row) => row.source)
+        .filter((source): source is string => Boolean(source));
+
+      return sources;
+    }),
+
   getUserAnalytics: adminOnlyProcedure
     .input(z.object({
       limit: z.number().min(1).max(100).default(20),
@@ -1329,6 +1522,7 @@ export default function GeneratedScene() {
       signupDateFilter: z.enum(['all', 'today', 'week', 'month', 'older']).default('all'),
       projectsFilter: z.enum(['all', 'none', 'low', 'medium', 'high']).default('all'),
       adminFilter: z.enum(['all', 'admin', 'user']).default('all'),
+      utmSource: z.union([z.literal('all'), z.literal('none'), z.string()]).default('all'),
     }))
     .query(async ({ input }) => {
       const { 
@@ -1341,7 +1535,8 @@ export default function GeneratedScene() {
         activityFilter, 
         signupDateFilter, 
         projectsFilter,
-        adminFilter 
+        adminFilter,
+        utmSource,
       } = input;
 
       // Build WHERE conditions for filtering
@@ -1360,6 +1555,15 @@ export default function GeneratedScene() {
       // Admin status filter
       if (adminFilter !== 'all') {
         whereConditions.push(eq(users.isAdmin, adminFilter === 'admin'));
+      }
+
+      // UTM source filter
+      if (utmSource !== 'all') {
+        if (utmSource === 'none') {
+          whereConditions.push(or(isNull(userAttribution.firstTouchSource), eq(userAttribution.firstTouchSource, '')));
+        } else {
+          whereConditions.push(eq(userAttribution.firstTouchSource, utmSource));
+        }
       }
 
       // Signup date filter
@@ -1398,9 +1602,18 @@ export default function GeneratedScene() {
           isAdmin: users.isAdmin,
           signupDate: users.createdAt,
           oauthProvider: accounts.provider,
+          attributionSource: userAttribution.firstTouchSource,
+          attributionMedium: userAttribution.firstTouchMedium,
+          attributionCampaign: userAttribution.firstTouchCampaign,
+          attributionReferrer: userAttribution.firstTouchReferrer,
+          attributionLandingPath: userAttribution.firstTouchLandingPath,
+          attributionCapturedAt: userAttribution.firstTouchAt,
+          lastTouchSource: userAttribution.lastTouchSource,
+          lastTouchAt: userAttribution.lastTouchAt,
         })
         .from(users)
         .leftJoin(accounts, eq(users.id, accounts.userId))
+        .leftJoin(userAttribution, eq(users.id, userAttribution.userId))
         .$dynamic();
 
       // Apply WHERE conditions
@@ -1413,6 +1626,7 @@ export default function GeneratedScene() {
         .select({ count: sql<number>`COUNT(DISTINCT ${users.id})` })
         .from(users)
         .leftJoin(accounts, eq(users.id, accounts.userId))
+        .leftJoin(userAttribution, eq(users.id, userAttribution.userId))
         .where(whereConditions.length > 0 ? and(...whereConditions) : undefined);
       
       const totalCount = countResult[0]?.count || 0;
@@ -1584,9 +1798,10 @@ export default function GeneratedScene() {
           activityFilter,
           signupDateFilter,
           projectsFilter,
-          adminFilter,
-        },
-      };
+        adminFilter,
+        utmSource,
+      },
+    };
     }),
 
   // 🆕 NEW: Get detailed user activity timeline
@@ -1601,13 +1816,13 @@ export default function GeneratedScene() {
       // 🚨 FIXED: Calculate date threshold explicitly to avoid SQL parameter binding issues
       const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
       
-      const activityTimeline = await db
+      const messageActivity = await db
         .select({
           date: sql<string>`DATE(${messages.createdAt})`.as('date'),
           totalMessages: sql<number>`COUNT(*)`.as('total_messages'),
           userPrompts: sql<number>`COUNT(CASE WHEN ${messages.role} = 'user' THEN 1 END)`.as('user_prompts'),
           assistantResponses: sql<number>`COUNT(CASE WHEN ${messages.role} = 'assistant' THEN 1 END)`.as('assistant_responses'),
-          imagesUploaded: sql<number>`COUNT(CASE WHEN ${messages.imageUrls} IS NOT NULL AND jsonb_array_length(${messages.imageUrls}) > 0 THEN 1 END)`.as('images_uploaded'),
+          imagePromptCount: sql<number>`COUNT(CASE WHEN ${messages.imageUrls} IS NOT NULL AND jsonb_array_length(${messages.imageUrls}) > 0 THEN 1 END)`.as('image_prompt_count'),
           scenesCreated: sql<number>`COUNT(DISTINCT ${scenes.id})`.as('scenes_created'),
           projectsWorkedOn: sql<number>`COUNT(DISTINCT ${projects.id})`.as('projects_worked_on'),
           avgSessionTime: sql<number>`EXTRACT(EPOCH FROM (MAX(${messages.createdAt}) - MIN(${messages.createdAt})))/60`.as('avg_session_minutes'),
@@ -1625,7 +1840,78 @@ export default function GeneratedScene() {
         .groupBy(sql`DATE(${messages.createdAt})`)
         .orderBy(sql`DATE(${messages.createdAt}) DESC`);
 
-      return activityTimeline;
+      const assetUploads = await db
+        .select({
+          date: sql<string>`DATE(${assets.createdAt})`.as('date'),
+          imagesUploaded: sql<number>`COUNT(*)`.as('images_uploaded'),
+        })
+        .from(assets)
+        .where(and(
+          eq(assets.userId, userId),
+          eq(assets.type, 'image'),
+          isNull(assets.deletedAt),
+          gte(assets.createdAt, startDate),
+        ))
+        .groupBy(sql`DATE(${assets.createdAt})`)
+        .orderBy(sql`DATE(${assets.createdAt}) DESC`);
+
+      const timelineMap = new Map<string, {
+        date: string;
+        totalMessages: number;
+        userPrompts: number;
+        assistantResponses: number;
+        scenesCreated: number;
+        projectsWorkedOn: number;
+        avgSessionTime: number;
+        imagePromptCount: number;
+        imagesUploaded: number;
+      }>();
+
+      for (const row of messageActivity) {
+        const dateKey = row.date;
+        const avgSessionRaw = (row as any).avgSessionTime ?? (row as any).avgSessionMinutes ?? 0;
+        const avgSessionMinutes = Number(avgSessionRaw ?? 0);
+        timelineMap.set(dateKey, {
+          date: dateKey,
+          totalMessages: Number(row.totalMessages ?? 0),
+          userPrompts: Number(row.userPrompts ?? 0),
+          assistantResponses: Number(row.assistantResponses ?? 0),
+          scenesCreated: Number(row.scenesCreated ?? 0),
+          projectsWorkedOn: Number(row.projectsWorkedOn ?? 0),
+          avgSessionTime: avgSessionMinutes,
+          imagePromptCount: Number(row.imagePromptCount ?? 0),
+          imagesUploaded: 0,
+        });
+      }
+
+      for (const row of assetUploads) {
+        const dateKey = row.date;
+        const uploads = Number(row.imagesUploaded ?? 0);
+        const existing = timelineMap.get(dateKey);
+        if (existing) {
+          existing.imagesUploaded = uploads;
+        } else {
+          timelineMap.set(dateKey, {
+            date: dateKey,
+            totalMessages: 0,
+            userPrompts: 0,
+            assistantResponses: 0,
+            scenesCreated: 0,
+            projectsWorkedOn: 0,
+            avgSessionTime: 0,
+            imagePromptCount: 0,
+            imagesUploaded: uploads,
+          });
+        }
+      }
+
+      const combinedTimeline = Array.from(timelineMap.values()).sort((a, b) => {
+        const aTime = new Date(a.date).getTime();
+        const bTime = new Date(b.date).getTime();
+        return bTime - aTime;
+      });
+
+      return combinedTimeline;
     }),
 
   // 🆕 NEW: Get individual user details
@@ -1645,9 +1931,19 @@ export default function GeneratedScene() {
           image: users.image,
           isAdmin: users.isAdmin,
           signupDate: users.createdAt,
-          
+
           // OAuth provider info
           oauthProvider: accounts.provider,
+
+          // Attribution
+          attributionSource: userAttribution.firstTouchSource,
+          attributionMedium: userAttribution.firstTouchMedium,
+          attributionCampaign: userAttribution.firstTouchCampaign,
+          attributionReferrer: userAttribution.firstTouchReferrer,
+          attributionLandingPath: userAttribution.firstTouchLandingPath,
+          attributionCapturedAt: userAttribution.firstTouchAt,
+          lastTouchSource: userAttribution.lastTouchSource,
+          lastTouchAt: userAttribution.lastTouchAt,
           
           // Project metrics
           totalProjects: sql<number>`COUNT(DISTINCT ${projects.id})`.as('total_projects'),
@@ -1664,7 +1960,7 @@ export default function GeneratedScene() {
           
           // Image usage metrics - simplified to avoid double-counting
           promptsWithImages: sql<number>`COUNT(DISTINCT CASE WHEN ${messages.imageUrls} IS NOT NULL AND jsonb_array_length(${messages.imageUrls}) > 0 THEN ${messages.id} END)`.as('prompts_with_images'),
-          totalImagesUploaded: sql<number>`COALESCE(SUM(CASE WHEN ${messages.imageUrls} IS NOT NULL THEN jsonb_array_length(${messages.imageUrls}) ELSE 0 END), 0)`.as('total_images_uploaded'),
+          totalImagesUploaded: sql<number>`COUNT(DISTINCT ${assets.id})`.as('total_images_uploaded'),
           
           // Activity metrics
           firstActivity: sql<Date>`MIN(${messages.createdAt})`.as('first_activity'),
@@ -1686,10 +1982,32 @@ export default function GeneratedScene() {
         .leftJoin(projects, eq(users.id, projects.userId))
         .leftJoin(scenes, eq(projects.id, scenes.projectId))
         .leftJoin(messages, eq(projects.id, messages.projectId))
+        .leftJoin(assets, and(
+          eq(assets.userId, users.id),
+          eq(assets.type, 'image'),
+          isNull(assets.deletedAt),
+        ))
         .leftJoin(sceneIterations, eq(projects.id, sceneIterations.projectId))
         .leftJoin(projectMemory, eq(projects.id, projectMemory.projectId))
+        .leftJoin(userAttribution, eq(users.id, userAttribution.userId))
         .where(eq(users.id, userId))
-        .groupBy(users.id, users.name, users.email, users.image, users.isAdmin, users.createdAt, accounts.provider)
+        .groupBy(
+          users.id,
+          users.name,
+          users.email,
+          users.image,
+          users.isAdmin,
+          users.createdAt,
+          accounts.provider,
+          userAttribution.firstTouchSource,
+          userAttribution.firstTouchMedium,
+          userAttribution.firstTouchCampaign,
+          userAttribution.firstTouchReferrer,
+          userAttribution.firstTouchLandingPath,
+          userAttribution.firstTouchAt,
+          userAttribution.lastTouchSource,
+          userAttribution.lastTouchAt,
+        )
         .limit(1);
 
       return userDetails[0] || null;
@@ -2500,6 +2818,8 @@ export default function GeneratedScene() {
 
       let usersChangePct: number | undefined;
       let revenueChangePct: number | undefined;
+      let previousUsersCount = previousPeriod?.users ?? 0;
+      let previousRevenueCents = previousPeriod?.revenueCents ?? 0;
       if (previousPeriod) {
         usersChangePct = previousPeriod.users === 0 ? (payingUsers > 0 ? 100 : 0) : Math.round(((payingUsers - previousPeriod.users) / previousPeriod.users) * 100);
         revenueChangePct = previousPeriod.revenueCents === 0 ? (revenueCents > 0 ? 100 : 0) : Math.round(((revenueCents - previousPeriod.revenueCents) / previousPeriod.revenueCents) * 100);
@@ -2511,6 +2831,8 @@ export default function GeneratedScene() {
         revenueCents,
         usersChangePct,
         revenueChangePct,
+        previousPayingUsers: previousUsersCount,
+        previousRevenueCents,
       };
     }),
 

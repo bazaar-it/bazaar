@@ -267,12 +267,17 @@ export class UnifiedCodeProcessor {
       // Build message content with text and images - include URLs in prompt text too!
       const filteredUrls = input.imageUrls.filter((u) => /^https?:\/\//i.test(u));
       const imageUrlsList = filteredUrls.map((url, i) => `Image ${i + 1}: ${url}`).join('\n');
+      const imageUsageInstruction = `REFERENCE-ONLY: These uploaded images are a visual guide.
+- Do NOT embed them with <Img> or any direct URL usage.
+- Rebuild the layout with React nodes (divs, gradients, shapes, text) that match the design, typography, spacing, and colors.
+- Animate the recreated elements so they feel alive.`;
+
       const enhancedPrompt = `${input.userPrompt}
 
-UPLOADED IMAGES TO USE:
+UPLOADED IMAGE REFERENCES:
 ${imageUrlsList}
 
-CRITICAL: You MUST use these exact image URLs above in your generated code with the Remotion <Img> component.`;
+${imageUsageInstruction}`;
 
       const messageContent: Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }> = [
         { type: 'text', text: enhancedPrompt }

@@ -5,9 +5,10 @@ import { IntentAnalyzer } from "./orchestrator_functions/intentAnalyzer";
 import { parseDurationFromPrompt } from "./utils/durationParser";
 import { youTubeContextStore } from "~/server/services/media/youtube-context.store";
 // YouTube imports removed - analysis will be handled by tools when brain decides
-import type { 
-  OrchestrationInput, 
-  OrchestrationOutput 
+import type {
+  OrchestrationInput,
+  OrchestrationOutput,
+  ToolSelectionResult,
 } from "~/lib/types/ai/brain.types";
 import { FEATURES } from "~/config/features";
 import { mediaPlanService } from "./services/media-plan.service";
@@ -187,7 +188,7 @@ export class Orchestrator {
       // 2. Analyze intent and select tool
       console.log('🧠 [NEW ORCHESTRATOR] Step 2: Analyzing intent...');
       input.onProgress?.('🎯 Choosing the right approach...', 'building');
-      const toolSelection = await this.intentAnalyzer.analyzeIntent(enhancedInput, contextPacket);
+      let toolSelection = await this.intentAnalyzer.analyzeIntent(enhancedInput, contextPacket);
       console.log('🧠 [NEW ORCHESTRATOR] Tool selected:', {
         tool: toolSelection.toolName,
         reasoning: toolSelection.reasoning?.substring(0, 100) + '...'
@@ -211,7 +212,7 @@ export class Orchestrator {
           reasoning: toolSelection.reasoning
         };
       }
-      
+
       // 3. Return decision (NO EXECUTION!)
       console.log('🧠 [NEW ORCHESTRATOR] Decision complete! Returning to router...');
       
@@ -231,14 +232,21 @@ export class Orchestrator {
         console.log(`🧠 [ORCHESTRATOR] Parsed duration from prompt: ${requestedDurationFrames} frames`);
       }
 
-      // Resolve media plan via service (maps IDs→URLs, merges attachments, applies suppression & heuristics)
-      const planned = mediaPlanService.resolvePlan(
-        toolSelection,
-        contextPacket,
-        input.prompt,
-        { imageUrls: input.userContext?.imageUrls as string[] | undefined, videoUrls: input.userContext?.videoUrls as string[] | undefined },
-        { requestId, projectId: input.projectId }
-      );
+      const shouldResolveMediaPlan = this.shouldResolveMediaPlan(toolSelection);
+
+      const planned = shouldResolveMediaPlan
+        ? mediaPlanService.resolvePlan(
+            toolSelection,
+            contextPacket,
+            input.prompt,
+            { imageUrls: input.userContext?.imageUrls as string[] | undefined, videoUrls: input.userContext?.videoUrls as string[] | undefined },
+            { requestId, projectId: input.projectId }
+          )
+        : ({ suppressed: false } as ReturnType<typeof mediaPlanService.resolvePlan>);
+
+      if (!shouldResolveMediaPlan) {
+        console.log('🧠 [NEW ORCHESTRATOR][MediaPlan] Skipping resolvePlan — no media required for this decision.');
+      }
       if (!planned.suppressed && ((planned.imageUrls?.length || 0) > 0 || (planned.videoUrls?.length || 0) > 0)) {
         console.log('🧠 [NEW ORCHESTRATOR][MediaPlan] Using planned media', {
           images: planned.imageUrls?.length || 0,
@@ -384,6 +392,19 @@ export class Orchestrator {
     }
   }
 
+  private shouldResolveMediaPlan(selection: ToolSelectionResult | undefined): boolean {
+    if (!selection) return false;
+
+    const plan = selection.mediaPlan;
+    if (!plan) return false;
+
+    const planHasImages = Array.isArray(plan.imagesOrdered) && plan.imagesOrdered.length > 0;
+    const planHasVideos = Array.isArray(plan.videosOrdered) && plan.videosOrdered.length > 0;
+    const planHasDirectives = Array.isArray((plan as any).imageDirectives) && ((plan as any).imageDirectives as unknown[]).length > 0;
+    const planHasMapping = plan.mapping ? Object.keys(plan.mapping).length > 0 : false;
+
+    return planHasImages || planHasVideos || planHasDirectives || planHasMapping;
+  }
 }
 
 // Singleton export
