@@ -1,5 +1,7 @@
+"use client";
+
 import Link from "next/link";
-import { Youtube, Instagram, Twitter } from "lucide-react";
+import { Youtube, Instagram } from "lucide-react";
 
 export function Footer() {
   return (
@@ -13,6 +15,22 @@ export function Footer() {
           </div>
           
           <div className="flex items-center space-x-6 text-sm text-gray-600">
+            <Link 
+              href="/" 
+              onClick={(e) => {
+                e.preventDefault();
+                window.dispatchEvent(new CustomEvent('open-pricing-modal'));
+              }}
+              className="hover:text-gray-900 transition-colors"
+            >
+              Pricing
+            </Link>
+            <Link 
+              href="/animation-as-a-service" 
+              className="hover:text-gray-900 transition-colors"
+            >
+              Hire us
+            </Link>
             <Link 
               href="/our-story" 
               className="hover:text-gray-900 transition-colors"
@@ -59,7 +77,16 @@ export function Footer() {
                 className="text-gray-600 hover:text-gray-900 transition-colors"
                 title="X (Twitter)"
               >
-                <Twitter className="h-5 w-5" />
+                <svg
+                  className="h-5 w-5"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <path d="M19.633 2H24L14.75 12.375 24 22h-7.75l-6.25-8.5L3.75 22H0l9.5-11.75L0 2h7.75l5.75 8L19.633 2z"/>
+                </svg>
               </a>
               <a
                 href="https://www.instagram.com/bazaar.it.gram/"

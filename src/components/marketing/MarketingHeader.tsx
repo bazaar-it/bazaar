@@ -115,9 +115,11 @@ const MarketingHeader = forwardRef<MarketingHeaderRef, MarketingHeaderProps>(
       <>
         <header className="w-full h-16 md:h-20 border-b shadow-sm flex items-center px-4 md:px-12 justify-between bg-white z-10">
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-4 md:gap-5 font-inter">
-              <span onClick={() => router.push('/')} className="text-2xl md:text-3xl font-semibold text-black cursor-pointer">Bazaar</span>
-              <span className="text-sm md:text-base font-medium bg-gradient-to-r from-pink-500 to-orange-500 bg-clip-text text-transparent">V3</span>
+            <div className="flex items-center gap-3 md:gap-4 font-inter">
+              <span className="relative inline-block leading-none" onClick={() => router.push('/') }>
+                <span className="text-2xl md:text-3xl font-semibold text-black cursor-pointer">Bazaar</span>
+                <span className="absolute bottom-0 md:-bottom-[-2px] -right-4 md:-right-6 text-xs md:text-sm font-medium bg-gradient-to-r from-pink-500 to-orange-500 bg-clip-text text-transparent select-none">V3</span>
+              </span>
               {isLiveStreaming && (
                 <a
                   href={liveUrl}
