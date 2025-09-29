@@ -1,7 +1,9 @@
+
 // src/app/(marketing)/page.tsx
 "use client";
 import { useState, lazy, Suspense, useCallback, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { NewProjectButton } from "~/components/client/NewProjectButton";
 
@@ -18,10 +20,13 @@ const HomePageTemplatesSection = dynamic(
 import AspectRatioTransitionPlayer from "~/components/AspectRatioTransitionPlayer";
 import DynamicFormatTitle from "~/components/DynamicFormatTitle";
 import ParticleEffect from "~/components/marketing/ParticleEffect";
+import LiveBadge from "~/components/marketing/LiveBadge";
+import { PurchaseModal } from "~/components/purchase/PurchaseModal";
 
-export default function Homepage() {
+function HomepageContent() {
   const { data: session, status } = useSession();
   const [intendedAction, setIntendedAction] = useState<'try-for-free' | null>(null);
+  const [showTopUp, setShowTopUp] = useState(false);
   
   // Add loading state for unauthenticated Try for Free button
   const [tryForFreeLoading, setTryForFreeLoading] = useState(false);
@@ -31,6 +36,7 @@ export default function Homepage() {
   
   // Ref to access MarketingHeader methods
   const marketingHeaderRef = useRef<MarketingHeaderRef>(null);
+  const searchParams = useSearchParams();
 
   // Mobile detection effect
   useEffect(() => {
@@ -40,6 +46,21 @@ export default function Homepage() {
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Open pricing modal if pricing=1 is present
+  useEffect(() => {
+    const showPricing = searchParams?.get('pricing');
+    if (showPricing === '1') {
+      setShowTopUp(true);
+    }
+  }, [searchParams]);
+
+  // Listen for footer-triggered modal open
+  useEffect(() => {
+    const handler = () => setShowTopUp(true);
+    window.addEventListener('open-pricing-modal' as any, handler);
+    return () => window.removeEventListener('open-pricing-modal' as any, handler);
   }, []);
 
   const handleTryForFree = async () => {
@@ -64,6 +85,24 @@ export default function Homepage() {
         {/* Advanced Floating Particles - Hero Section Only */}
         <ParticleEffect />
 
+        {/* Top badge area: Product Hunt badge moved here */}
+        <div className="w-full mb-8 flex justify-center">
+          <a
+            href="https://www.producthunt.com/products/bazaar-2?embed=true&utm_source=badge-featured&utm_medium=badge&utm_source=badge-bazaar-2"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="See Bazaar on Product Hunt"
+          >
+            <img
+              src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=996887&theme=light"
+              alt="Bazaar – Vibe Code your Software Demo Video on Product Hunt"
+              width={250}
+              height={54}
+              className="w-[250px] h-[54px]"
+            />
+          </a>
+        </div>
+        
         <div className="mb-8 md:mb-16 w-full text-center">
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold mb-4 md:mb-6 leading-tight text-gray-900 px-2">
             <span className="relative inline-block px-2 py-1 border-2 border-dashed border-gray-400 bg-white/60 backdrop-blur-sm rounded shadow-md mr-2">
@@ -125,6 +164,7 @@ export default function Homepage() {
           <p className="text-center text-gray-500 text-sm mt-2 mb-0">
             Start with 100 free prompts
           </p>
+          {/* Product Hunt badge moved to top */}
         </div>
         
         {/* Marketing Video Player - responsive positioning */}
@@ -152,6 +192,8 @@ export default function Homepage() {
                   width="100%"
                   height="100%"
                   src="https://www.youtube.com/embed/zZgUWZfQjxM?si=QFlsfGu1Ya1Z68oD&controls=0&modestbranding=1&rel=0&playsinline=1&iv_load_policy=3&fs=0&disablekb=1"
+                  
+                  
                   title="YouTube video player"
                   frameBorder="0"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -212,7 +254,7 @@ export default function Homepage() {
         {/* Homepage Templates Section */}
         <HomePageTemplatesSection marketingHeaderRef={marketingHeaderRef} />
 
-        {/* Start Creating Now CTA Section */}
+        {/* Start Creating Now CTA Section (moved above AaaS promo) */}
         <section className="mt-8 py-16 px-4">
           <div className="max-w-4xl mx-auto text-center">
             {status === "authenticated" && session?.user ? (
@@ -255,10 +297,35 @@ export default function Homepage() {
           </div>
         </section>
 
+        {/* AaaS Promo Section */}
+        <section className="mt-16 w-full py-12 -mx-4 px-4 bg-gradient-to-b from-white to-gray-50/60">
+          <div className="max-w-4xl mx-auto text-center">
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 text-gray-900">
+              Too busy building your product?
+            </h2>
+            <p className="text-lg md:text-xl text-gray-600 mb-8">
+              Our team will craft the launch video your product deserves — scroll-stopping, on-brand and ready to post everywhere.
+            </p>
+            <div className="flex justify-center">
+              <Link
+                href="/animation-as-a-service"
+                className="cursor-pointer inline-block bg-black text-white px-6 md:px-8 py-3 md:py-4 rounded-lg text-base md:text-lg font-semibold shadow-none hover:bg-gray-900 transition-colors"
+              >
+                learn more
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        
+
       </main>
 
       {/* Removed V2 announcement & video modal */}
 
+
+      {/* Purchase Modal for homepage */}
+      <PurchaseModal isOpen={showTopUp} onClose={() => setShowTopUp(false)} />
 
       <style jsx global>{`
   .bazaar-gradient-hover {
@@ -270,5 +337,21 @@ export default function Homepage() {
   }
 `}</style>
     </div>
+  );
+}
+
+function HomepageSuspenseFallback() {
+  return (
+    <div className="min-h-screen bg-white flex items-center justify-center">
+      <span className="text-sm text-gray-500">Loading homepage...</span>
+    </div>
+  );
+}
+
+export default function Homepage() {
+  return (
+    <Suspense fallback={<HomepageSuspenseFallback />}>
+      <HomepageContent />
+    </Suspense>
   );
 }
