@@ -349,3 +349,8 @@ Date: 2025-09-24 (markdown fence strip)
 - Added a first-touch UTM source filter to the admin users grid (`getAttributionSources` for options + `utmSource` filter on `getUserAnalytics`) so we can isolate direct/paid campaigns without manual CSV exports.
 - Reworked the Growth view so "All Time" pulls the real historical window (new timeframe in `admin.getAnalyticsData`), added wheel/pinch zoom plus horizontal pan directly inside each chart (no brush bar), and fixed hover behaviour so tooltips follow the cursor with delta details.
 - Introduced an "Overview ↔ Growth" toggle on the admin dashboard; growth mode renders three cumulative charts for users/prompts/scenes using the existing analytics feed (`cumulative` series) while keeping the metric cards intact.
+
+## 2025-09-27 - Template panel compilation regression
+- Investigated workspace template panel crashes; found desktop grid compiles every database template client-side via `sucrase`, mounting dozens of Remotion players at once.
+- Sampled prod templates and confirmed `js_code`/`js_compiled_at` are NULL (sanitization scripts nulled them without backfill), so the client never receives precompiled artifacts.
+- Logged recovery plan in `analysis/2025-09-27-template-panel-compilation.md`: backfill compiled JS, ensure future writes store it, expose it via API, and teach the panel to consume it instead of recompiling.

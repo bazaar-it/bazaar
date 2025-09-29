@@ -11,11 +11,16 @@ import { Player } from "@remotion/player";
 import { useVideoState } from "~/stores/videoState";
 import { transform } from 'sucrase';
 import { useIsTouchDevice } from "~/hooks/use-is-touch";
+import { dangerousTemplatePatterns, inferTemplateComponentName, wrapCompiledTemplateModule } from "./template-code-utils";
 
 type ExtendedTemplateDefinition = TemplateDefinition & {
   previewImage?: string | null;
   tags?: string[];
+  compiledCode?: string | null;
+  compiledAt?: string | null;
 };
+
+const compiledComponentCache = new Map<string, React.ComponentType>();
 
 interface TemplatesPanelGProps {
   projectId: string;
@@ -254,53 +259,68 @@ const useCompiledTemplate = (
       return;
     }
 
+    const cacheKey = `${template.id}-${format}`;
+    const cached = compiledComponentCache.get(cacheKey);
+    if (cached) {
+      setComponent(() => cached);
+      setCompilationError(null);
+      setIsCompiling(false);
+      return;
+    }
+
     let isCancelled = false;
     let blobUrl: string | null = null;
 
     const compileTemplate = async () => {
       setIsCompiling(true);
       try {
-        const code = template.getCode?.();
-        if (!code) {
-          throw new Error('Template code unavailable');
-        }
+        let loadedComponent: React.ComponentType | null = null;
 
-        const dangerousPatterns = [
-          /eval\s*\(/,
-          /Function\s*\(/,
-          /\.innerHTML\s*=/,
-          /document\.write/,
-          /window\.location/,
-          /__proto__/,
-          /constructor\s*\[/,
-        ];
-
-        for (const pattern of dangerousPatterns) {
-          if (pattern.test(code)) {
-            throw new Error(`Security: Template contains potentially dangerous code pattern: ${pattern}`);
+        if (template.compiledCode) {
+          const componentName = inferTemplateComponentName(
+            template.compiledCode,
+            template.name || template.id || 'TemplateComponent'
+          );
+          const moduleCode = wrapCompiledTemplateModule(template.compiledCode, componentName);
+          const blob = new Blob([moduleCode], { type: 'application/javascript' });
+          blobUrl = URL.createObjectURL(blob);
+          const module = await import(/* webpackIgnore: true */ blobUrl);
+          loadedComponent = module.default ?? null;
+        } else {
+          const code = template.getCode?.();
+          if (!code) {
+            throw new Error('Template code unavailable');
           }
+
+          for (const pattern of dangerousTemplatePatterns) {
+            if (pattern.test(code)) {
+              throw new Error(`Security: Template contains potentially dangerous code pattern: ${pattern}`);
+            }
+          }
+
+          const { code: transformed } = transform(code, {
+            transforms: ['typescript', 'jsx'],
+            jsxRuntime: 'classic',
+            production: false,
+          });
+
+          const blob = new Blob([transformed], {
+            type: 'application/javascript'
+          });
+          blobUrl = URL.createObjectURL(blob);
+
+          const module = await import(/* webpackIgnore: true */ blobUrl);
+          loadedComponent = module.default ?? null;
         }
 
-        const { code: transformed } = transform(code, {
-          transforms: ['typescript', 'jsx'],
-          jsxRuntime: 'classic',
-          production: false,
-        });
-
-        const blob = new Blob([transformed], {
-          type: 'application/javascript'
-        });
-        blobUrl = URL.createObjectURL(blob);
-
-        const module = await import(/* webpackIgnore: true */ blobUrl);
+        if (!loadedComponent || typeof loadedComponent !== 'function') {
+          throw new Error('No default export found in template code');
+        }
 
         if (!isCancelled) {
-          if (module.default && typeof module.default === 'function') {
-            setComponent(() => module.default);
-            setCompilationError(null);
-          } else {
-            throw new Error('No default export found in template code');
-          }
+          compiledComponentCache.set(cacheKey, loadedComponent);
+          setComponent(() => loadedComponent);
+          setCompilationError(null);
         }
       } catch (error) {
         if (!isCancelled) {
@@ -325,7 +345,7 @@ const useCompiledTemplate = (
         URL.revokeObjectURL(blobUrl);
       }
     };
-  }, [template, enableCompilation]);
+  }, [template, enableCompilation, format]);
 
   return {
     component,
@@ -516,6 +536,8 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
       creator: dbTemplate.creator,
       previewImage: dbTemplate.thumbnailUrl ?? null,
       tags: dbTemplate.tags ?? [],
+      compiledCode: dbTemplate.jsCode ?? null,
+      compiledAt: dbTemplate.jsCompiledAt ?? null,
     }));
     // DB templates first (newest first), then hardcoded
     return [...dbTemplatesFormatted, ...TEMPLATES] as ExtendedTemplateDefinition[];
