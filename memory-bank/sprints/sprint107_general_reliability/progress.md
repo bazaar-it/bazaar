@@ -134,6 +134,11 @@ Audio in the live preview ignored timeline offset and total video duration, star
 ### Result
 - Above-the-fold layout remains balanced; primary CTA and hero copy stay centered without the external widget.
 
+## 2025-09-29 - Homepage Suspense guard for search params
+- Root cause: Next 15 now requires any component using `useSearchParams` to be rendered under a Suspense boundary; the marketing homepage was still calling it in the top-level export, so `next build` failed with `missing-suspense-with-csr-bailout` for `/home`.
+- Change: Extracted the UI into `HomepageContent` and wrapped it with `<Suspense>` plus a lightweight fallback component so the hook runs within a compliant boundary.【src/app/(marketing)/home/page.tsx:343】【src/app/(marketing)/home/page.tsx:351】
+- Result: `npm run build` completes without CSR bailout errors and the marketing homepage continues to render as before (modal/search param logic unaffected).
+
 ## 2025-09-24 - Marketing OG metadata refresh
 
 ### Change

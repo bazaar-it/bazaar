@@ -23,7 +23,7 @@ import ParticleEffect from "~/components/marketing/ParticleEffect";
 import LiveBadge from "~/components/marketing/LiveBadge";
 import { PurchaseModal } from "~/components/purchase/PurchaseModal";
 
-export default function Homepage() {
+function HomepageContent() {
   const { data: session, status } = useSession();
   const [intendedAction, setIntendedAction] = useState<'try-for-free' | null>(null);
   const [showTopUp, setShowTopUp] = useState(false);
@@ -337,5 +337,21 @@ export default function Homepage() {
   }
 `}</style>
     </div>
+  );
+}
+
+function HomepageSuspenseFallback() {
+  return (
+    <div className="min-h-screen bg-white flex items-center justify-center">
+      <span className="text-sm text-gray-500">Loading homepage...</span>
+    </div>
+  );
+}
+
+export default function Homepage() {
+  return (
+    <Suspense fallback={<HomepageSuspenseFallback />}>
+      <HomepageContent />
+    </Suspense>
   );
 }
