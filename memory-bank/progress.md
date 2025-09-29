@@ -10,6 +10,7 @@
 - Sprint 107: Admin user metrics now pull unique image uploads from the asset registry and surface image-prompt counts in the timeline for clarity.【src/server/api/routers/admin.ts:1749】【src/app/admin/users/[userId]/page.tsx:208】
 - Sprint 107: Dashboard overview drops the paying-user vanity card, and feedback now lives in a dedicated inbox route with sidebar navigation.【src/app/admin/page.tsx:615】【src/app/admin/feedback/page.tsx:10】【src/components/AdminSidebar.tsx:24】
 - Sprint 107: Rebuilt the admin analytics page to rely on real metrics (cards, growth chart, template usage, engagement) and removed all mock data sections.【src/app/admin/analytics/page.tsx:1】
+- Sprint 107: Wrapped the marketing homepage in a Suspense boundary so `useSearchParams` complies with Next.js 15 CSR requirements and the production build succeeds again.【src/app/(marketing)/home/page.tsx:343】【src/app/(marketing)/home/page.tsx:351】
 
 ## 📝 Latest Update (Sep 27, 2025)
 - Sprint 140: Documented desktop vs mobile UX map for Projects and Generate flows to anchor upcoming mobile-first work.【memory-bank/sprints/sprint140_mobile/desktop-vs-mobile-ux-map.md:1】
