@@ -1266,3 +1266,4 @@ The core video generation pipeline is **production-ready** with:
 - Drafted and wired the fifth batch (Shazam animation, Testimonials, UI Data Visualisation, 50+ Integrations, Bar Chart) into the canonical metadata workflow.
 - Added `template-metadata-coverage.md` in Sprint 119 to track IDs, formats, and completion status for all production templates.
 - Documented Toggle, Banking App, Blur, portrait Gradient Globe, and I want to break free in canonical metadata and refreshed the coverage checklist.
+- 2025-09-27: Identified template panel crash regression; prod templates lost their `js_code`/`js_compiled_at` after sanitization scripts, so desktop mounts sucrase + dozens of Remotion players per grid open. Backfill + API/client fixes captured in `sprints/sprint107_general_reliability/analysis/2025-09-27-template-panel-compilation.md` before implementation.
