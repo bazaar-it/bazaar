@@ -1,6 +1,8 @@
 # 🏆 Bazaar-Vid Progress Summary
 
 ## 📝 Latest Update (Sep 29, 2025)
+- Sprint 124: Started Template Bootstrap onboarding sprint; captured the template-first personalization brief for Amy with brand-data extraction and orchestration guardrails.【memory-bank/sprints/sprint124_template_bootstrap/2025-09-29-template-onboarding-strategy.md:1】【memory-bank/sprints/sprint124_template_bootstrap/README.md:1】
+- Sprint 124: Delivered admin-only multi-scene templates end-to-end (schema, tRPC, add flow, desktop/mobile UI) and seeded the OrbitFlow 4-scene demo for QA.【src/server/api/routers/templates.ts:11】【src/server/api/routers/generation/template-operations.ts:24】【src/components/CreateTemplateModal.tsx:1】【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx:364】【scripts/seed-admin-multiscene-template.ts:1】
 - Sprint 140: Refactored `NewProjectButton` to reuse the shared `useIsMobile` hook, fixing the mobile TDZ crash and aligning project creation with the central breakpoint system.【src/components/client/NewProjectButton.tsx:11】【src/components/client/NewProjectButton.tsx:41】
 - Sprint 140: Synced the mobile format picker sheet with breakpoint changes so it auto-closes when dropdowns are disabled or the viewport shifts back to desktop layouts.【src/components/client/NewProjectButton.tsx:108】【memory-bank/sprints/sprint140_mobile/progress.md:39】
 - Sprint 140: Projects panel now renders real scene thumbnails on mobile (frame 15) instead of placeholder initials, bringing parity with desktop cards while keeping previews optional.【src/app/projects/[id]/generate/workspace/panels/MyProjectsPanelG.tsx:197】【src/app/projects/[id]/generate/workspace/panels/MyProjectsPanelG.tsx:298】
@@ -1266,3 +1268,8 @@ The core video generation pipeline is **production-ready** with:
 - Drafted and wired the fifth batch (Shazam animation, Testimonials, UI Data Visualisation, 50+ Integrations, Bar Chart) into the canonical metadata workflow.
 - Added `template-metadata-coverage.md` in Sprint 119 to track IDs, formats, and completion status for all production templates.
 - Documented Toggle, Banking App, Blur, portrait Gradient Globe, and I want to break free in canonical metadata and refreshed the coverage checklist.
+
+2025-09-28 – Desktop templates incremental load
+- Swapped TemplatesPanelG to page Remotion templates 10-at-a-time with tRPC infinite query + scroll fetch, so we only compile what is visible.
+- Backend getAll now accepts cursor/search, filtering by name server-side instead of pulling 100 rows every time.
+- Implemented client-side template cache (memory + localStorage) with hashed modules so compiled templates reuse instantly in desktop panel.

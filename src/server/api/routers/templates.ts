@@ -3,20 +3,21 @@ import { createTRPCRouter, publicProcedure, protectedProcedure, adminProcedure }
 import { db } from "~/server/db";
 import { getProdTemplatesDb } from "~/server/db/templates-prod";
 import { env } from "~/env";
-import { templates, scenes, projects, templateUsages } from "~/server/db/schema";
-import { eq, and, desc, inArray, sql } from "drizzle-orm";
+import { templates, scenes, projects, templateUsages, templateScenes } from "~/server/db/schema";
+import { eq, and, desc, inArray, sql, asc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 // Input schemas
 const createTemplateSchema = z.object({
   projectId: z.string().uuid(),
-  sceneId: z.string().uuid(),
+  sceneIds: z.array(z.string().uuid()).min(1),
   name: z.string().min(1).max(255),
   description: z.string().optional(),
   category: z.string().optional(),
   tags: z.array(z.string()).optional(),
   supportedFormats: z.array(z.enum(['landscape', 'portrait', 'square'])).optional(),
   isOfficial: z.boolean().optional(),
+  adminOnly: z.boolean().optional(),
 });
 
 const updateTemplateSchema = z.object({
@@ -34,92 +35,155 @@ const getTemplatesSchema = z.object({
   category: z.string().optional(),
   isOfficial: z.boolean().optional(),
   format: z.enum(['landscape', 'portrait', 'square']).optional(),
+  search: z.string().trim().min(1).max(255).optional(),
   limit: z.number().min(1).max(100).default(50),
   offset: z.number().min(0).default(0),
+  cursor: z.number().min(0).optional(),
 });
 
 export const templatesRouter = createTRPCRouter({
-  // Create a new template from a scene (Admin only)
+  // Create a new template from scene(s) (Admin only)
   create: adminProcedure
     .input(createTemplateSchema)
     .mutation(async ({ ctx, input }) => {
-      const { projectId, sceneId, ...templateData } = input;
-      
-      // Verify the admin owns or has access to the project
+      const { projectId, sceneIds, ...templateData } = input;
+
       const project = await db.query.projects.findFirst({
         where: eq(projects.id, projectId),
       });
-      
+
       if (!project) {
         throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Project not found",
+          code: 'NOT_FOUND',
+          message: 'Project not found',
         });
       }
-      
-      // Get the scene to extract code
-      const scene = await db.query.scenes.findFirst({
+
+      const uniqueSceneIds = Array.from(new Set(sceneIds));
+      const projectScenes = await db.query.scenes.findMany({
+        columns: {
+          id: true,
+          order: true,
+          name: true,
+          duration: true,
+          tsxCode: true,
+          jsCode: true,
+          jsCompiledAt: true,
+          compilationError: true,
+        },
         where: and(
-          eq(scenes.id, sceneId),
-          eq(scenes.projectId, projectId)
+          eq(scenes.projectId, projectId),
+          inArray(scenes.id, uniqueSceneIds)
         ),
+        orderBy: asc(scenes.order),
       });
-      
-      if (!scene) {
+
+      if (projectScenes.length === 0) {
         throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Scene not found",
+          code: 'NOT_FOUND',
+          message: 'No scenes found for template creation',
         });
       }
-      
-      // Process the scene code to make it template-ready
-      let templateCode = scene.tsxCode;
-      
-      // Remove any project-specific IDs or references
-      // This is a simplified version - you might want more sophisticated processing
-      templateCode = templateCode.replace(/Scene_[a-zA-Z0-9]{8}/g, 'TemplateScene');
-      
-      // Create the template
-      const [newTemplate] = await db.insert(templates).values({
-        name: templateData.name,
-        description: templateData.description,
-        tsxCode: templateCode,
+
+      if (projectScenes.length !== uniqueSceneIds.length) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'One or more selected scenes were not found in the project',
+        });
+      }
+
+      const sanitizeCode = (code: string) =>
+        code.replace(/Scene_[a-zA-Z0-9]{8}/g, 'TemplateScene');
+
+      const orderedScenes = projectScenes.map((scene) => ({
+        id: scene.id,
+        order: scene.order,
+        name: scene.name,
         duration: scene.duration,
-        category: templateData.category,
-        tags: templateData.tags || [],
-        supportedFormats: templateData.supportedFormats || ['landscape', 'portrait', 'square'],
-        isOfficial: templateData.isOfficial || false,
-        isActive: true,
-        createdBy: ctx.session.user.id,
-        sourceProjectId: projectId,
-        sourceSceneId: sceneId,
-      }).returning();
-      
-      return newTemplate;
+        tsxCode: sanitizeCode(scene.tsxCode),
+        jsCode: scene.jsCode ?? null,
+        jsCompiledAt: scene.jsCompiledAt ?? null,
+        compilationError: scene.compilationError ?? null,
+      }));
+
+      const primaryScene = orderedScenes[0];
+      const totalDuration = orderedScenes.reduce((sum, scene) => sum + (scene.duration ?? 0), 0);
+
+      const createTemplateResult = await db.transaction(async (tx) => {
+        const [templateRow] = await tx.insert(templates).values({
+          name: templateData.name,
+          description: templateData.description,
+          tsxCode: primaryScene.tsxCode,
+          jsCode: primaryScene.jsCode ?? undefined,
+          jsCompiledAt: primaryScene.jsCompiledAt ?? undefined,
+          compilationError: primaryScene.compilationError ?? undefined,
+          duration: primaryScene.duration,
+          supportedFormats: templateData.supportedFormats || ['landscape', 'portrait', 'square'],
+          category: templateData.category,
+          tags: templateData.tags || [],
+          isOfficial: templateData.isOfficial || false,
+          isActive: true,
+          adminOnly: templateData.adminOnly ?? false,
+          sceneCount: orderedScenes.length,
+          totalDuration: totalDuration || primaryScene.duration,
+          createdBy: ctx.session.user.id,
+          sourceProjectId: projectId,
+          sourceSceneId: primaryScene.id,
+        }).returning();
+
+        await tx.insert(templateScenes).values(
+          orderedScenes.map((scene, index) => ({
+            templateId: templateRow.id,
+            name: scene.name,
+            order: index,
+            duration: scene.duration,
+            tsxCode: scene.tsxCode,
+            jsCode: scene.jsCode ?? undefined,
+            jsCompiledAt: scene.jsCompiledAt ?? undefined,
+            compilationError: scene.compilationError ?? undefined,
+          }))
+        );
+
+        return templateRow;
+      });
+
+      return createTemplateResult;
     }),
 
   // Get all active templates (Public - for template panel)
   getAll: publicProcedure
     .input(getTemplatesSchema)
-    .query(async ({ input }) => {
-      const { category, isOfficial, format, limit, offset } = input;
-      
-      // Build where conditions
+    .query(async ({ input, ctx }) => {
+      const { category, isOfficial, format, search, limit, offset, cursor } = input;
+      const isAdmin = ctx.session?.user?.isAdmin ?? false;
+
       const conditions = [eq(templates.isActive, true)];
-      
+
       if (category) {
         conditions.push(eq(templates.category, category));
       }
-      
+
       if (isOfficial !== undefined) {
         conditions.push(eq(templates.isOfficial, isOfficial));
       }
+
+      if (search) {
+        const normalized = `%${search.toLowerCase()}%`;
+        conditions.push(sql`lower(${templates.name}) LIKE ${normalized}`);
+      }
+
+      if (format) {
+        conditions.push(sql`${templates.supportedFormats} @> ${sql.raw(`'["${format}"]'::jsonb`)}`);
+      }
+
+      if (!isAdmin) {
+        conditions.push(eq(templates.adminOnly, false));
+        conditions.push(eq(templates.sceneCount, 1));
+      }
       
-      // Select data source (local by default, prod RO when enabled)
       const prodDb = getProdTemplatesDb();
       const sourceDb = prodDb || db;
 
-      // Get templates (explicit columns to support prod schema without js_code)
       const allTemplates = await sourceDb.query.templates.findMany({
         columns: {
           id: true,
@@ -134,6 +198,9 @@ export const templatesRouter = createTRPCRouter({
           tags: true,
           isActive: true,
           isOfficial: true,
+          adminOnly: true,
+          sceneCount: true,
+          totalDuration: true,
           createdBy: true,
           sourceProjectId: true,
           sourceSceneId: true,
@@ -144,7 +211,7 @@ export const templatesRouter = createTRPCRouter({
         where: and(...conditions),
         orderBy: [desc(templates.isOfficial), desc(templates.usageCount), desc(templates.createdAt)],
         limit,
-        offset,
+        offset: cursor ?? offset,
         with: {
           creator: {
             columns: {
@@ -154,46 +221,34 @@ export const templatesRouter = createTRPCRouter({
           },
         },
       });
-      
-      // Filter by format if specified
-      let filteredTemplates = allTemplates;
-      if (format) {
-        filteredTemplates = allTemplates.filter(template => {
-          const formats = template.supportedFormats as string[];
-          return formats.includes(format);
-        });
-      }
-      
-      return filteredTemplates.map((t: any) => ({ ...t, __source: prodDb ? 'prod' : 'local' }));
+
+      return allTemplates.map((t: any) => ({ ...t, __source: prodDb ? 'prod' : 'local' }));
     }),
 
-  // Get template by ID (Public - for preview)
-  getById: publicProcedure
+  // Get template with scenes (Admin only)
+  getWithScenes: adminProcedure
     .input(z.string().uuid())
     .query(async ({ input }) => {
       const template = await db.query.templates.findFirst({
-        where: and(
-          eq(templates.id, input),
-          eq(templates.isActive, true)
-        ),
-        with: {
-          creator: {
-            columns: {
-              id: true,
-              name: true,
-            },
-          },
-        },
+        where: eq(templates.id, input),
       });
-      
+
       if (!template) {
         throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Template not found",
+          code: 'NOT_FOUND',
+          message: 'Template not found',
         });
       }
-      
-      return template;
+
+      const scenesForTemplate = await db.query.templateScenes.findMany({
+        where: eq(templateScenes.templateId, template.id),
+        orderBy: asc(templateScenes.order),
+      });
+
+      return {
+        ...template,
+        scenes: scenesForTemplate,
+      };
     }),
 
   // Update template (Admin only)

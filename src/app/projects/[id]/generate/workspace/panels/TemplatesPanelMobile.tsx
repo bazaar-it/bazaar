@@ -1,6 +1,7 @@
 "use client";
 
 import React, {useState, useMemo, useCallback, useEffect, useRef} from "react";
+import {useSession} from "next-auth/react";
 import {Card} from "~/components/ui/card";
 import {Button} from "~/components/ui/button";
 import {Input} from "~/components/ui/input";
@@ -42,6 +43,9 @@ type MobileTemplate = {
   tags?: string[];
   isFromDatabase?: boolean;
   compiledCode?: string | null;
+  sceneCount?: number;
+  totalDuration?: number | null;
+  adminOnly?: boolean;
 };
 
 const getFormatDimensions = (format: string) => {
@@ -304,8 +308,11 @@ const TemplateVideoPlayer: React.FC<{template: MobileTemplate; format: string}> 
   );
 };
 
-const MobileTemplateCard: React.FC<{template: MobileTemplate; format: string; onSelect: () => void}> = ({template, format, onSelect}) => {
-  const duration = `${Math.round((template.duration / 30) * 10) / 10}s`;
+const MobileTemplateCard: React.FC<{template: MobileTemplate; format: string; onSelect: () => void; adminView?: boolean}> = ({template, format, onSelect, adminView = false}) => {
+  const baseDuration = `${Math.round((template.duration / 30) * 10) / 10}s`;
+  const totalDuration = `${Math.round(((template.totalDuration ?? template.duration) / 30) * 10) / 10}s`;
+  const isMultiScene = (template.sceneCount ?? 1) > 1;
+
   return (
     <Card className="overflow-hidden" onClick={onSelect}>
       <div
@@ -318,8 +325,18 @@ const MobileTemplateCard: React.FC<{template: MobileTemplate; format: string; on
         } bg-black`}
       >
         <TemplateThumbnail template={template} format={format} />
-        <div className="absolute bottom-2 left-2 bg-black/70 text-white text-[10px] px-2 py-1 rounded-full">
-          {duration}
+        <div className="absolute bottom-2 left-2 flex flex-wrap items-center gap-1">
+          <span className="bg-black/80 text-white text-[10px] px-2 py-1 rounded-full">
+            {isMultiScene ? totalDuration : baseDuration}
+          </span>
+          {isMultiScene && (
+            <span className="bg-black/70 text-white/80 text-[10px] px-2 py-1 rounded-full">
+              {(template.sceneCount ?? 1)} scenes
+            </span>
+          )}
+          {adminView && template.adminOnly && (
+            <span className="bg-amber-500/90 text-white text-[10px] px-2 py-1 rounded-full">Admin only</span>
+          )}
         </div>
       </div>
     </Card>
@@ -328,10 +345,12 @@ const MobileTemplateCard: React.FC<{template: MobileTemplate; format: string; on
 
 const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, onSceneGenerated}) => {
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<'all' | 'colors' | 'ui' | 'text' | 'other'>("all");
+  const [selectedCategory, setSelectedCategory] = useState<'all' | 'colors' | 'ui' | 'text' | 'other' | 'multi'>("all");
   const [loadingTemplateId, setLoadingTemplateId] = useState<string | null>(null);
   const [previewTemplate, setPreviewTemplate] = useState<MobileTemplate | null>(null);
   const [visibleCount, setVisibleCount] = useState(MOBILE_PAGE_SIZE);
+  const {data: session} = useSession();
+  const isAdmin = session?.user?.isAdmin ?? false;
 
   const utils = api.useUtils();
   const {addScene, getCurrentProps} = useVideoState();
@@ -346,6 +365,12 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
     };
   }, [previewTemplate]);
 
+  useEffect(() => {
+    if (!isAdmin && selectedCategory === 'multi') {
+      setSelectedCategory('all');
+    }
+  }, [isAdmin, selectedCategory]);
+
   const {data: databaseTemplates = [], isLoading} = api.templates.getAll.useQuery(
     {format: currentFormat, limit: 100},
     {
@@ -353,6 +378,29 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
       refetchOnWindowFocus: false,
     }
   );
+
+  const categoryOptions = useMemo(() => {
+    const base = [
+      {key: 'all', label: 'All'},
+      {key: 'colors', label: 'Colors'},
+      {key: 'ui', label: 'UI'},
+      {key: 'text', label: 'Text'},
+      {key: 'other', label: 'Other'},
+    ];
+
+    if (isAdmin) {
+      return [
+        {key: 'all', label: 'All'},
+        {key: 'multi', label: 'Multi-scene'},
+        {key: 'colors', label: 'Colors'},
+        {key: 'ui', label: 'UI'},
+        {key: 'text', label: 'Text'},
+        {key: 'other', label: 'Other'},
+      ];
+    }
+
+    return base;
+  }, [isAdmin]);
 
   const combinedTemplates = useMemo<MobileTemplate[]>(() => {
     const dbFormatted: MobileTemplate[] = (databaseTemplates || []).map((t: any) => ({
@@ -368,6 +416,9 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
       getCode: () => (t.tsxCode ?? null),
       isFromDatabase: true,
       compiledCode: t.jsCode ?? null,
+      sceneCount: t.sceneCount ?? 1,
+      totalDuration: t.totalDuration ?? t.duration ?? 150,
+      adminOnly: t.adminOnly ?? false,
     }));
 
     const registryFormatted: MobileTemplate[] = TEMPLATES.map((t) => ({
@@ -390,20 +441,29 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
 
   const filteredTemplates = useMemo(() => {
     let templates = combinedTemplates;
+
+    if (!isAdmin) {
+      templates = templates.filter((t) => (t.sceneCount ?? 1) <= 1);
+    }
+
     if (selectedCategory !== 'all') {
-      templates = templates.filter((t) => {
-        const hay = `${t.category || ''} ${t.name || ''}`.toLowerCase();
-        switch (selectedCategory) {
-          case 'colors':
-            return /color|gradient|bg|background/.test(hay);
-          case 'ui':
-            return /ui|app|card|button|form|login|signup|screen/.test(hay);
-          case 'text':
-            return /text|type|word|typography/.test(hay);
-          default:
-            return true;
-        }
-      });
+      if (selectedCategory === 'multi') {
+        templates = templates.filter((t) => (t.sceneCount ?? 1) > 1);
+      } else {
+        templates = templates.filter((t) => {
+          const hay = `${t.category || ''} ${t.name || ''}`.toLowerCase();
+          switch (selectedCategory) {
+            case 'colors':
+              return /color|gradient|bg|background/.test(hay);
+            case 'ui':
+              return /ui|app|card|button|form|login|signup|screen/.test(hay);
+            case 'text':
+              return /text|type|word|typography/.test(hay);
+            default:
+              return true;
+          }
+        });
+      }
     }
 
     templates = templates.filter((t) => {
@@ -417,29 +477,35 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
     }
 
     return templates;
-  }, [combinedTemplates, selectedCategory, currentFormat, searchQuery]);
+  }, [combinedTemplates, selectedCategory, currentFormat, searchQuery, isAdmin]);
 
   const visibleTemplates = filteredTemplates.slice(0, visibleCount);
   const hasMore = visibleCount < filteredTemplates.length;
 
   useEffect(() => {
     setVisibleCount(Math.min(MOBILE_PAGE_SIZE, filteredTemplates.length));
-  }, [filteredTemplates.length, searchQuery, selectedCategory]);
+  }, [filteredTemplates.length, searchQuery, selectedCategory, isAdmin]);
 
   const trackUsageMutation = api.templates.trackUsage.useMutation();
 
   const addTemplateMutation = api.generation.addTemplate.useMutation({
-    onSuccess: async (result) => {
+    onSuccess: async (result, variables) => {
       setLoadingTemplateId(null);
-      if (result.success && result.scene) {
-        if (result.message?.trim()) {
-          toast.success(result.message);
+      const createdScenes = result.scenes ?? (result.scene ? [result.scene] : []);
+
+      if (result.success && createdScenes.length > 0) {
+        const sceneCount = createdScenes.length;
+        const defaultMessage = `${variables.templateName}${sceneCount > 1 ? ` (${sceneCount} scenes)` : ''} added`;
+        const toastMessage = result.message?.trim() || defaultMessage;
+        toast.success(toastMessage);
+
+        for (const scene of createdScenes) {
+          addScene(projectId, scene);
         }
 
-        addScene(projectId, result.scene);
-
-        if (onSceneGenerated && result.scene?.id) {
-          await onSceneGenerated(result.scene.id);
+        const lastSceneId = createdScenes[createdScenes.length - 1]?.id;
+        if (onSceneGenerated && lastSceneId) {
+          await onSceneGenerated(lastSceneId);
         }
 
         setTimeout(async () => {
@@ -458,10 +524,19 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
   });
 
   const handleAddTemplate = useCallback(async (template: MobileTemplate) => {
-    const templateCode = template.getCode?.() ?? '';
-    if (!templateCode) {
-      toast.error('Template preview unavailable right now. Please try again later.');
+    const isMultiScene = (template.sceneCount ?? 1) > 1;
+    if (isMultiScene && !isAdmin) {
+      toast.error('Multi-scene templates are limited to admin accounts right now.');
       return;
+    }
+
+    let templateCode: string | null = null;
+    if (!isMultiScene) {
+      templateCode = template.getCode?.() ?? null;
+      if (!templateCode) {
+        toast.error('Template preview unavailable right now. Please try again later.');
+        return;
+      }
     }
 
     setLoadingTemplateId(template.id);
@@ -474,10 +549,10 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
       projectId,
       templateId: template.id,
       templateName: template.name,
-      templateCode,
-      templateDuration: template.duration,
+      templateCode: templateCode ?? undefined,
+      templateDuration: !isMultiScene ? template.duration : undefined,
     });
-  }, [addTemplateMutation, projectId, trackUsageMutation]);
+  }, [addTemplateMutation, projectId, trackUsageMutation, isAdmin]);
 
   const handleCardPress = (template: MobileTemplate) => {
     setPreviewTemplate(template);
@@ -502,16 +577,10 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
           />
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {[
-            {key: 'all', label: 'All'},
-            {key: 'colors', label: 'Colors'},
-            {key: 'ui', label: 'UI'},
-            {key: 'text', label: 'Text'},
-            {key: 'other', label: 'Other'},
-          ].map((chip) => (
+          {categoryOptions.map((chip) => (
             <button
               key={chip.key}
-              onClick={() => setSelectedCategory(chip.key as any)}
+              onClick={() => setSelectedCategory(chip.key as typeof selectedCategory)}
               className={`px-2 py-1 text-xs rounded-full border ${selectedCategory === chip.key ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
             >
               {chip.label}
@@ -548,6 +617,7 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
                   template={template}
                   format={currentFormat}
                   onSelect={() => handleCardPress(template)}
+                  adminView={isAdmin}
                 />
               ))}
             </div>
@@ -577,6 +647,22 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
             <div className="mx-auto flex w-full max-w-md flex-col gap-4">
               <div className={`relative w-full overflow-hidden rounded-xl bg-black shadow-lg ${getAspectRatioClass(currentFormat)}`}>
                 <TemplateVideoPlayer template={previewedTemplate} format={currentFormat} />
+                {(previewedTemplate.sceneCount ?? 1) > 1 && (
+                  <div className="absolute top-3 left-3 flex gap-2">
+                    <span className="bg-black/80 text-white text-[10px] px-2 py-1 rounded-full">
+                      {(previewedTemplate.sceneCount ?? 1)} scenes
+                    </span>
+                    <span className="bg-black/70 text-white/80 text-[10px] px-2 py-1 rounded-full">
+                      {`${Math.round(((previewedTemplate.totalDuration ?? previewedTemplate.duration) / 30) * 10) / 10}s`}
+                    </span>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center justify-between text-xs text-white/70">
+                <span className="font-medium text-white">{previewedTemplate.name}</span>
+                {previewedTemplate.adminOnly && (
+                  <span className="bg-amber-500/90 text-white px-2 py-0.5 rounded-full">Admin only</span>
+                )}
               </div>
               <Button
                 className="w-full"
