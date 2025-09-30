@@ -61,6 +61,29 @@ const optimalPack: ModelPack = {
   }
 };
 
+// 🧪 FINE-TUNES PACK: Uses our custom code-generation models
+const fineTunesPack: ModelPack = {
+  name: 'Fine-Tunes Pack',
+  description: 'Uses the motion2 fine-tuned model for code generation/editing',
+  models: {
+    brain: { provider: 'openai', model: 'gpt-5-mini', temperature: 0.4 },
+    codeGenerator: {
+      provider: 'openai',
+      model: 'ft:gpt-4.1-2025-04-14:personal:motion2:CKVM0tke',
+      temperature: 0.3,
+      maxTokens: 16000,
+    },
+    editScene: {
+      provider: 'openai',
+      model: 'ft:gpt-4.1-2025-04-14:personal:motion2:CKVM0tke',
+      temperature: 0.3,
+      maxTokens: 16000,
+    },
+    titleGenerator: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.9, maxTokens: 400 },
+    promptEnhancer: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.4, maxTokens: 300 },
+  },
+};
+
 // 🤖 ANTHROPIC PACK: All Claude models
 const anthropicPack: ModelPack = {
   name: 'Anthropic Pack',
@@ -91,6 +114,7 @@ const openaiPack: ModelPack = {
 // Validate all packs at runtime
 export const MODEL_PACKS: Record<string, ModelPack> = {
   'optimal-pack': ModelPackSchema.parse(optimalPack),
+  'fine-tunes-pack': ModelPackSchema.parse(fineTunesPack),
   'anthropic-pack': ModelPackSchema.parse(anthropicPack),
   'openai-pack': ModelPackSchema.parse(openaiPack),
 };
@@ -107,7 +131,12 @@ export function getActiveModelPack(): ModelPack {
   if (!pack) {
     throw new Error(`Model pack "${ACTIVE_MODEL_PACK}" not found. Available packs: ${Object.keys(MODEL_PACKS).join(', ')}`);
   }
-  
+
+  console.log('\n\u{1F4E6} Active model pack:', ACTIVE_MODEL_PACK);
+  console.log('  Brain:', pack.models.brain.model);
+  console.log('  Code generator:', pack.models.codeGenerator.model);
+  console.log('  Edit scene:', pack.models.editScene.model, '\n');
+
   // Log GPT-5 usage when OpenAI pack is active
   if (ACTIVE_MODEL_PACK === 'openai-pack') {
     console.log('\n🚀 GPT-5 ACTIVE - Using the latest OpenAI models!');

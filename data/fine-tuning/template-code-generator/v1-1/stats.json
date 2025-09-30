@@ -1,0 +1,15 @@
+{
+  "generatedAt": "2025-09-28T11:38:55.869Z",
+  "tag": "v1",
+  "seed": "119",
+  "totals": {
+    "all": 51,
+    "train": 40,
+    "validation": 5,
+    "test": 6
+  },
+  "templatesProcessed": 51,
+  "uniqueTemplatesCovered": 51,
+  "missingTemplates": [],
+  "sanitizerFailures": []
+}

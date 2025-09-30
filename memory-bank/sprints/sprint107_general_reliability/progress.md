@@ -354,3 +354,7 @@ Date: 2025-09-24 (markdown fence strip)
 - Added a first-touch UTM source filter to the admin users grid (`getAttributionSources` for options + `utmSource` filter on `getUserAnalytics`) so we can isolate direct/paid campaigns without manual CSV exports.
 - Reworked the Growth view so "All Time" pulls the real historical window (new timeframe in `admin.getAnalyticsData`), added wheel/pinch zoom plus horizontal pan directly inside each chart (no brush bar), and fixed hover behaviour so tooltips follow the cursor with delta details.
 - Introduced an "Overview ↔ Growth" toggle on the admin dashboard; growth mode renders three cumulative charts for users/prompts/scenes using the existing analytics feed (`cumulative` series) while keeping the metric cards intact.
+
+2025-09-28 – Single scene import guard
+- Reproduced Code Panel runtime crash showing `Element type is invalid` whenever users paste hand-authored scenes without exports; dynamic loader pulled `{ default: undefined }` from the blob import and bailed.【src/app/projects/[id]/generate/workspace/panels/PreviewPanelG.tsx:1427】
+- Documented fix expectations: every scene module must export both a default component and `durationInFrames`; shared a working template so manual Code Panel edits stay within the loader contract instead of tripping SingleSceneComposition.

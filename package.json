@@ -20,6 +20,7 @@
     "db:push-neon": "tsx scripts/migrate-neon.ts",
     "db:update-credits": "dotenv -e .env.local -- tsx src/scripts/update-credit-system.ts",
     "generate:types": "tsx scripts/generate-types.ts",
+    "data:code-sft": "tsx --require tsconfig-paths/register scripts/generate-template-code-sft.ts",
     "setup:s3-public": "node scripts/setup-s3-public-access.js",
     "dev": "NODE_OPTIONS='--max-old-space-size=4096' npm run generate:types && next dev",
     "dev:verbose": "TRPC_DEBUG=true next dev",

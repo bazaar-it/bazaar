@@ -3,7 +3,8 @@
  * Intelligently matches user prompts to template examples for context engineering
  */
 
-import { templateMetadata, type TemplateMetadata } from '~/templates/metadata';
+import type { TemplateMetadata } from '~/templates/metadata';
+import { brainTemplateMetadata } from '~/templates/metadata/canonical';
 
 export interface TemplateMatch {
   templateId: string;
@@ -20,7 +21,7 @@ export interface TemplateMatch {
 }
 
 export class TemplateMatchingService {
-  private metadata = templateMetadata;
+  private metadata = brainTemplateMetadata;
   
   /**
    * Find the best matching templates for a user prompt
