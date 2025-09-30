@@ -53,8 +53,8 @@ const optimalPack: ModelPack = {
   description: 'Best balance of speed, cost, and quality',
   models: {
     brain: { provider: 'openai', model: 'gpt-5-mini', temperature: 0.4 },
-    codeGenerator: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3, maxTokens: 16000 },
-    editScene: { provider: 'anthropic', model: 'claude-sonnet-4-20250514', temperature: 0.3, maxTokens: 16000 },
+    codeGenerator: { provider: 'anthropic', model: 'claude-sonnet-4-5-20250929', temperature: 0.4, maxTokens: 16000 },
+    editScene: { provider: 'anthropic', model: 'claude-sonnet-4-5-20250929', temperature: 0.4, maxTokens: 16000 },
     // Temporarily use gpt-4o-mini for these until GPT-5 reasoning issue is resolved
     titleGenerator: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.9, maxTokens: 400 },
     promptEnhancer: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.4, maxTokens: 300 },
@@ -160,6 +160,12 @@ export const INDIVIDUAL_MODELS: Record<string, ModelConfig> = {
     provider: 'anthropic',
     model: 'claude-sonnet-4-20250514',
     temperature: 0.3,
+    maxTokens: 16000
+  },
+  'claude-sonnet-4-5-20250929': {
+    provider: 'anthropic',
+    model: 'claude-sonnet-4-5-20250929',
+    temperature: 0.4,
     maxTokens: 16000
   },
   
