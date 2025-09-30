@@ -1271,6 +1271,13 @@ The core video generation pipeline is **production-ready** with:
 - Added GitHub connection lookup fallback: detects missing `token_type`/`is_active` columns and re-queries using the legacy schema, unblocking brain orchestration while logging a schema-mismatch warning.
 - Incident captured in `sprint116_images/2025-09-24-live-media-plan-failure.md`; follow-up migration needed to align prod table structure with current Drizzle schema.
 
+2025-09-29 – Personalization admin guard & GitHub fallback update
+- Queried dev/prod Neon branches: dev holds `bazaar-vid_personalization_target`/`bazaar-vid_template_scene`, prod still missing personalization targets and newer GitHub columns (`token_type`, `selected_repos`, etc.).
+- PreviewPanel brand theme controls and personalization list query now check `session.user.isAdmin`; non-admins auto-load the default theme and skip personalization tRPC calls. `/projects/[id]/personalize` hard-gated to admins.
+- `githubRouter.getConnection` retries using a legacy `SELECT` when new columns are absent, while `personalizationTargets.list` returns an empty array (with warning) if the table is missing and createFromUrl surfaces a PRECONDITION_FAILED until migrations land.
+- Attempted `npx eslint` / `npm run typecheck`; both still fail due to pre-existing repo issues (`structuredClone` config, legacy TS errors across unrelated files). Left untouched but recorded here.
+- Added admin-only delete controls for multi-scene templates (desktop + mobile panels) that call the soft-delete API, confirm intent, and invalidate the template list so the UI updates immediately.
+
 2025-09-24 – Cross-project asset guard regression
 - Prod project `fa164d69…` failing to add scenes traced to new media-plan guard skipping linked assets when the R2 URL encodes a different project UUID.
 - Added `sprint116_images/2025-09-24-media-plan-cross-project-assets.md` with SQL evidence, reproduction steps, and fix recommendation (respect `mediaLibrary.scope`/link metadata before applying the project-id filter).
@@ -1315,3 +1322,4 @@ The core video generation pipeline is **production-ready** with:
 - Swapped TemplatesPanelG to page Remotion templates 10-at-a-time with tRPC infinite query + scroll fetch, so we only compile what is visible.
 - Backend getAll now accepts cursor/search, filtering by name server-side instead of pulling 100 rows every time.
 - Implemented client-side template cache (memory + localStorage) with hashed modules so compiled templates reuse instantly in desktop panel.
+- Skip missing brand profile table in personalize page (return null instead of 404 when migration not applied).

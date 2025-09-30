@@ -8,13 +8,21 @@ export const brandProfileRouter = createTRPCRouter({
   getByProject: protectedProcedure
     .input(z.object({ projectId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const brandProfile = await ctx.db
-        .select()
-        .from(brandProfiles)
-        .where(eq(brandProfiles.projectId, input.projectId))
-        .limit(1);
+      try {
+        const brandProfile = await ctx.db
+          .select()
+          .from(brandProfiles)
+          .where(eq(brandProfiles.projectId, input.projectId))
+          .limit(1);
 
-      return brandProfile[0] || null;
+        return brandProfile[0] || null;
+      } catch (error) {
+        if ((error as { code?: string })?.code === '42P01') {
+          console.warn('[brandProfile.getByProject] Table missing; returning null');
+          return null;
+        }
+        throw error;
+      }
     }),
 
   update: protectedProcedure

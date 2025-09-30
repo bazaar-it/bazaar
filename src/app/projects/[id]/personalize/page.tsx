@@ -40,6 +40,10 @@ export default async function PersonalizePage({
     redirect("/login");
   }
 
+  if (!session.user.isAdmin) {
+    notFound();
+  }
+
   if (!projectId || !isUuid(projectId)) {
     notFound();
   }

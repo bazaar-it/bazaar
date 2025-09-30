@@ -19,6 +19,14 @@ const createFromUrlInput = z.object({
   notes: z.string().max(500).optional(),
 });
 
+const isMissingTableError = (error: unknown) => {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+  const code = (error as { code?: string }).code;
+  return code === '42P01';
+};
+
 function normalizeUrl(rawUrl: string): string {
   const trimmed = rawUrl.trim();
   if (!trimmed) {
@@ -45,11 +53,19 @@ export const personalizationTargetRouter = createTRPCRouter({
         throw new TRPCError({ code: "FORBIDDEN", message: "Project not found or access denied" });
       }
 
-      return ctx.db
-        .select()
-        .from(personalizationTargets)
-        .where(eq(personalizationTargets.projectId, input.projectId))
-        .orderBy(desc(personalizationTargets.createdAt));
+      try {
+        return await ctx.db
+          .select()
+          .from(personalizationTargets)
+          .where(eq(personalizationTargets.projectId, input.projectId))
+          .orderBy(desc(personalizationTargets.createdAt));
+      } catch (error) {
+        if (isMissingTableError(error)) {
+          console.warn('[personalizationTargets.list] personalization_target table missing, returning empty set.');
+          return [];
+        }
+        throw error;
+      }
     }),
 
   createFromUrl: protectedProcedure
@@ -74,81 +90,92 @@ export const personalizationTargetRouter = createTRPCRouter({
       const normalizedUrl = normalizeUrl(input.websiteUrl);
       const now = new Date();
 
-      const existing = await ctx.db.query.personalizationTargets.findFirst({
-        where: and(
-          eq(personalizationTargets.projectId, projectId),
-          eq(personalizationTargets.websiteUrl, normalizedUrl),
-        ),
-      });
-
-      let targetId: string;
-
-      if (existing) {
-        await ctx.db
-          .update(personalizationTargets)
-          .set({
-            status: "extracting",
-            errorMessage: null,
-            companyName: input.companyName?.trim() || existing.companyName,
-            contactEmail: input.contactEmail ?? existing.contactEmail,
-            notes: input.notes ?? existing.notes,
-            updatedAt: now,
-          })
-          .where(eq(personalizationTargets.id, existing.id));
-        targetId = existing.id;
-      } else {
-        const [created] = await ctx.db
-          .insert(personalizationTargets)
-          .values({
-            projectId,
-            websiteUrl: normalizedUrl,
-            companyName: input.companyName?.trim() ?? null,
-            contactEmail: input.contactEmail ?? null,
-            notes: input.notes ?? null,
-            status: "extracting",
-            createdAt: now,
-            updatedAt: now,
-          })
-          .returning({ id: personalizationTargets.id });
-        targetId = created.id;
-      }
-
       try {
-        const analyzer = new WebAnalysisAgentV4(projectId);
-        const extracted = await analyzer.analyze(normalizedUrl);
-        const simplified = convertV4ToSimplified(extracted);
-        const brandTheme = createBrandThemeFromExtraction(simplified);
+        const existing = await ctx.db.query.personalizationTargets.findFirst({
+          where: and(
+            eq(personalizationTargets.projectId, projectId),
+            eq(personalizationTargets.websiteUrl, normalizedUrl),
+          ),
+        });
 
-        const displayName = input.companyName?.trim() || simplified.page?.title || project.title;
+        let targetId: string;
 
-        await ctx.db
-          .update(personalizationTargets)
-          .set({
-            status: "ready",
-            companyName: displayName,
-            brandProfile: simplified,
-            brandTheme,
-            errorMessage: null,
-            extractedAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(eq(personalizationTargets.id, targetId));
+        if (existing) {
+          await ctx.db
+            .update(personalizationTargets)
+            .set({
+              status: "extracting",
+              errorMessage: null,
+              companyName: input.companyName?.trim() || existing.companyName,
+              contactEmail: input.contactEmail ?? existing.contactEmail,
+              notes: input.notes ?? existing.notes,
+              updatedAt: now,
+            })
+            .where(eq(personalizationTargets.id, existing.id));
+          targetId = existing.id;
+        } else {
+          const [created] = await ctx.db
+            .insert(personalizationTargets)
+            .values({
+              projectId,
+              websiteUrl: normalizedUrl,
+              companyName: input.companyName?.trim() ?? null,
+              contactEmail: input.contactEmail ?? null,
+              notes: input.notes ?? null,
+              status: "extracting",
+              createdAt: now,
+              updatedAt: now,
+            })
+            .returning({ id: personalizationTargets.id });
+          targetId = created.id;
+        }
 
-        return { id: targetId, status: "ready" as const };
+        try {
+          const analyzer = new WebAnalysisAgentV4(projectId);
+          const extracted = await analyzer.analyze(normalizedUrl);
+          const simplified = convertV4ToSimplified(extracted);
+          const brandTheme = createBrandThemeFromExtraction(simplified);
+
+          const displayName = input.companyName?.trim() || simplified.page?.title || project.title;
+
+          await ctx.db
+            .update(personalizationTargets)
+            .set({
+              status: "ready",
+              companyName: displayName,
+              brandProfile: simplified,
+              brandTheme,
+              errorMessage: null,
+              extractedAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .where(eq(personalizationTargets.id, targetId));
+
+          return { id: targetId, status: "ready" as const };
+        } catch (error) {
+          console.error("[personalizationTarget.createFromUrl] Extraction failed", error);
+          const message = error instanceof Error ? error.message : "Brand extraction failed";
+
+          await ctx.db
+            .update(personalizationTargets)
+            .set({
+              status: "failed",
+              errorMessage: message,
+              updatedAt: new Date(),
+            })
+            .where(eq(personalizationTargets.id, targetId));
+
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message });
+        }
       } catch (error) {
-        console.error("[personalizationTarget.createFromUrl] Extraction failed", error);
-        const message = error instanceof Error ? error.message : "Brand extraction failed";
-
-        await ctx.db
-          .update(personalizationTargets)
-          .set({
-            status: "failed",
-            errorMessage: message,
-            updatedAt: new Date(),
-          })
-          .where(eq(personalizationTargets.id, targetId));
-
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message });
+        if (isMissingTableError(error)) {
+          console.error("[personalizationTarget.createFromUrl] personalization_target table missing; migration required.");
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Personalization targets are not available yet. Please run the latest database migrations.",
+          });
+        }
+        throw error;
       }
     }),
 });

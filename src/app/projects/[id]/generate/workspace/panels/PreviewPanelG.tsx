@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo, Suspense, useRef } from 'react';
+import { useSession } from "next-auth/react";
 import { useVideoState } from '~/stores/videoState';
 import type { InputProps } from '~/lib/types/video/input-props';
 import { Button } from "~/components/ui/button";
@@ -120,6 +121,8 @@ export function PreviewPanelG({
   initial?: InputProps;
   selectedSceneId?: string | null;
 }) {
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.isAdmin ?? false;
   const utils = api.useUtils();
   const brandifyScenesMutation = api.project.applyBrandToScenes.useMutation({
     onSuccess: async () => {
@@ -157,12 +160,13 @@ const currentProps = useVideoState((state) => {
 const { data: personalizationTargetsData } = api.personalizationTargets.list.useQuery(
   { projectId },
   {
-    refetchInterval: 15000,
+    enabled: isAdmin,
+    refetchInterval: isAdmin ? 15000 : false,
   },
 );
 
 const readyBrandTargets = useMemo(() => {
-  if (!personalizationTargetsData) {
+  if (!isAdmin || !personalizationTargetsData) {
     return [] as Array<any>;
   }
   return personalizationTargetsData
@@ -171,9 +175,12 @@ const readyBrandTargets = useMemo(() => {
       ...target,
       brandTheme: sanitizeTheme(target.brandTheme as BrandTheme),
     }));
-}, [personalizationTargetsData]);
+}, [isAdmin, personalizationTargetsData]);
 
 useEffect(() => {
+  if (!isAdmin) {
+    return;
+  }
   if (
     selectedBrandTargetId !== 'default' &&
     !readyBrandTargets.some((target: any) => target.id === selectedBrandTargetId)
@@ -186,7 +193,7 @@ useEffect(() => {
   ) {
     setActiveBrandTargetId('default');
   }
-}, [readyBrandTargets, selectedBrandTargetId, activeBrandTargetId]);
+}, [isAdmin, readyBrandTargets, selectedBrandTargetId, activeBrandTargetId]);
   
   // Debug: Check if jsCode is coming from API and data updates
   React.useEffect(() => {
@@ -388,7 +395,14 @@ useEffect(() => {
     setRefreshToken(`brand-${key}-${Date.now()}`);
   }, [setRefreshToken]);
 
+  useEffect(() => {
+    applyBrandTheme(DEFAULT_BRAND_THEME, 'default');
+  }, [applyBrandTheme]);
+
   const handleApplyBrandTheme = useCallback(async (targetId: string) => {
+    if (!isAdmin) {
+      return;
+    }
     setIsApplyingBrandTheme(true);
     try {
       if (targetId !== 'default') {
@@ -422,7 +436,7 @@ useEffect(() => {
     } finally {
       setIsApplyingBrandTheme(false);
     }
-  }, [applyBrandTheme, brandifyScenesMutation, projectId, readyBrandTargets, utils.personalizationTargets.list]);
+  }, [applyBrandTheme, brandifyScenesMutation, isAdmin, projectId, readyBrandTargets, utils.personalizationTargets.list]);
   
   // Playback speed state
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
@@ -2803,46 +2817,48 @@ export default function FallbackComposition() {
         aria-hidden="true"
       />
 
-      <div className="border-b border-slate-200 bg-white px-4 py-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
-          <span>Brand theme</span>
-          <Badge variant="outline" className="text-xs">
-            {activeBrandTarget ? (activeBrandTarget.companyName || activeBrandTarget.websiteUrl) : 'Default'}
-          </Badge>
+      {isAdmin && (
+        <div className="border-b border-slate-200 bg-white px-4 py-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+            <span>Brand theme</span>
+            <Badge variant="outline" className="text-xs">
+              {activeBrandTarget ? (activeBrandTarget.companyName || activeBrandTarget.websiteUrl) : 'Default'}
+            </Badge>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={selectedBrandTargetId}
+              onChange={(event) => setSelectedBrandTargetId(event.target.value)}
+              className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-700 shadow-sm focus:border-slate-500 focus:outline-none"
+            >
+              <option value="default">Default (Bazaar)</option>
+              {readyBrandTargets.map((target: any) => (
+                <option key={target.id} value={target.id}>
+                  {target.companyName || target.websiteUrl}
+                </option>
+              ))}
+            </select>
+            <Button
+              size="sm"
+              onClick={() => handleApplyBrandTheme(selectedBrandTargetId)}
+              disabled={isApplyingBrandTheme || (selectedBrandTargetId !== 'default' && !selectedBrandTarget)}
+            >
+              {isApplyingBrandTheme ? 'Applying…' : 'Apply theme'}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setSelectedBrandTargetId('default');
+                handleApplyBrandTheme('default');
+              }}
+              disabled={selectedBrandTargetId === 'default'}
+            >
+              Reset
+            </Button>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={selectedBrandTargetId}
-            onChange={(event) => setSelectedBrandTargetId(event.target.value)}
-            className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-700 shadow-sm focus:border-slate-500 focus:outline-none"
-          >
-            <option value="default">Default (Bazaar)</option>
-            {readyBrandTargets.map((target: any) => (
-              <option key={target.id} value={target.id}>
-                {target.companyName || target.websiteUrl}
-              </option>
-            ))}
-          </select>
-          <Button
-            size="sm"
-            onClick={() => handleApplyBrandTheme(selectedBrandTargetId)}
-            disabled={isApplyingBrandTheme || (selectedBrandTargetId !== 'default' && !selectedBrandTarget)}
-          >
-            {isApplyingBrandTheme ? 'Applying…' : 'Apply theme'}
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => {
-              setSelectedBrandTargetId('default');
-              handleApplyBrandTheme('default');
-            }}
-            disabled={selectedBrandTargetId === 'default'}
-          >
-            Reset
-          </Button>
-        </div>
-      </div>
+      )}
       
       <div className="relative flex-grow min-h-0 min-w-0 flex items-center justify-center">
         {/* Preview source indicator removed in this branch */}

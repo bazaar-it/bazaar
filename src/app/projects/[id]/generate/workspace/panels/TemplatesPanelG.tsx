@@ -4,7 +4,8 @@ import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useSession } from "next-auth/react";
 import { Input } from "~/components/ui/input";
 import { Card } from "~/components/ui/card";
-import { SearchIcon, Loader2 } from "lucide-react";
+import { Button } from "~/components/ui/button";
+import { SearchIcon, Loader2, Trash2 } from "lucide-react";
 import { api } from "~/trpc/react";
 import { toast } from "sonner";
 import { TEMPLATES, type TemplateDefinition } from "~/templates/registry";
@@ -144,13 +145,24 @@ const TemplateVideoPlayer = ({ template, format }: { template: ExtendedTemplateD
 };
 
 // Template preview component with thumbnail/video toggle
-const TemplatePreview = ({ template, onClick, isLoading, format, isTouchDevice, adminView = false }: { 
-  template: ExtendedTemplateDefinition; 
+const TemplatePreview = ({
+  template,
+  onClick,
+  isLoading,
+  format,
+  isTouchDevice,
+  adminView = false,
+  onDelete,
+  isDeleting = false,
+}: {
+  template: ExtendedTemplateDefinition;
   onClick: () => void;
   isLoading: boolean;
   format: string;
   isTouchDevice: boolean;
   adminView?: boolean;
+  onDelete?: () => void;
+  isDeleting?: boolean;
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const isMultiScene = (template.sceneCount ?? 1) > 1;
@@ -183,13 +195,39 @@ const TemplatePreview = ({ template, onClick, isLoading, format, isTouchDevice, 
       onMouseLeave={!isTouchDevice ? handleMouseLeave : undefined}
     >
       {showInfo && (
-        <div className="absolute top-2 left-2 right-2 z-10 flex items-center justify-between gap-2">
-          <div className="bg-black/80 text-white text-[10px] sm:text-xs px-2 py-1 rounded-full font-medium shadow-sm max-w-[70%] truncate">
+        <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
+          <div className="bg-black/80 text-white text-[10px] sm:text-xs px-2 py-1 rounded-full font-medium shadow-sm max-w-[12rem] truncate">
             {template.sceneCount ?? 1} scenes
           </div>
           <div className="bg-black/70 text-white text-[10px] sm:text-xs px-2 py-1 rounded-full font-medium">
             {formattedTotalDuration}
           </div>
+        </div>
+      )}
+
+      {adminView && isMultiScene && onDelete && (
+        <div className="absolute top-2 right-2 z-10">
+          <Button
+            variant="destructive"
+            size="sm"
+            className="h-7 px-3 text-[11px]"
+            onClick={(event) => {
+              event.stopPropagation();
+              if (!isDeleting) {
+                onDelete();
+              }
+            }}
+            disabled={isDeleting}
+          >
+            {isDeleting ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <div className="flex items-center gap-1">
+                <Trash2 className="h-3 w-3" />
+                <span>Delete</span>
+              </div>
+            )}
+          </Button>
         </div>
       )}
 
@@ -359,6 +397,7 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'colors' | 'ui' | 'text' | 'other' | 'multi'>("all");
   const [loadingTemplateId, setLoadingTemplateId] = useState<string | null>(null);
+  const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
   const isTouchDevice = useIsTouchDevice();
   const { data: session } = useSession();
   const isAdmin = session?.user?.isAdmin ?? false;
@@ -469,6 +508,22 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
     },
   });
 
+  const deleteTemplateMutation = api.templates.delete.useMutation({
+    onSuccess: async (_data, templateId) => {
+      setDeletingTemplateId(null);
+      toast.success('Template deleted');
+      try {
+        setCachedDbTemplates((prev) => prev.filter((item: any) => item.id !== templateId));
+      } catch {}
+      await utils.templates.getAll.invalidate();
+    },
+    onError: (error) => {
+      setDeletingTemplateId(null);
+      console.error('[TemplatesPanelG] Template deletion failed:', error);
+      toast.error(`Failed to delete template: ${error.message}`);
+    },
+  });
+
   useEffect(() => {
     if (!isAdmin && selectedCategory === 'multi') {
       setSelectedCategory('all');
@@ -526,6 +581,31 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
 
     addTemplateMutation.mutate(mutationParams);
   }, [projectId, addTemplateMutation, trackUsageMutation, isAdmin]);
+
+  const handleDeleteTemplate = useCallback((template: ExtendedTemplateDefinition) => {
+    if (!isAdmin) {
+      return;
+    }
+
+    const isMultiScene = (template.sceneCount ?? 1) > 1;
+    if (!isMultiScene) {
+      toast.error('Only multi-scene templates can be deleted here.');
+      return;
+    }
+
+    if (!template.isFromDatabase) {
+      toast.error('Static registry templates cannot be deleted.');
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete template "${template.name}"? This removes it from the shared library.`);
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingTemplateId(template.id);
+    deleteTemplateMutation.mutate(template.id);
+  }, [isAdmin, deleteTemplateMutation]);
 
   // Combine hardcoded and database templates (DB sorted by newest first)
   const combinedTemplates = useMemo<ExtendedTemplateDefinition[]>(() => {
@@ -685,18 +765,20 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
         ) : (
           <div className={`grid gap-2 sm:gap-3 ${getGridColumns(currentFormat)}`}>
             {filteredTemplates.map((template) => (
-              <Card key={template.id} className="overflow-hidden hover:shadow-lg transition-shadow p-0">
-                {/* Clickable Full-Size Preview with correct aspect ratio */}
-                <TemplatePreview 
-                  template={template} 
-                  onClick={() => handleAddTemplate(template)}
-                  isLoading={loadingTemplateId === template.id}
-                  format={currentFormat}
-                  isTouchDevice={isTouchDevice}
-                  adminView={isAdmin}
-                />
-              </Card>
-            ))}
+            <Card key={template.id} className="overflow-hidden hover:shadow-lg transition-shadow p-0">
+              {/* Clickable Full-Size Preview with correct aspect ratio */}
+              <TemplatePreview 
+                template={template} 
+                onClick={() => handleAddTemplate(template)}
+                isLoading={loadingTemplateId === template.id}
+                format={currentFormat}
+                isTouchDevice={isTouchDevice}
+                adminView={isAdmin}
+                onDelete={isAdmin && template.isFromDatabase && (template.sceneCount ?? 1) > 1 ? () => handleDeleteTemplate(template) : undefined}
+                isDeleting={deletingTemplateId === template.id}
+              />
+            </Card>
+          ))}
           </div>
         )}
 
