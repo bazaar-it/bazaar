@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
 import { scenes, messages, projects } from "~/server/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { addTool } from "~/tools/add/add";
 // imageRecreatorTool removed — use addTool with imageAction: 'recreate'
 import type { ScenePlan } from "~/tools/helpers/types";
@@ -93,7 +93,7 @@ export const createSceneFromPlanRouter = createTRPCRouter({
       
         // Get current storyboard
         const storyboard = await db.query.scenes.findMany({
-          where: eq(scenes.projectId, projectId),
+          where: and(eq(scenes.projectId, projectId), isNull(scenes.deletedAt)),
           orderBy: (scenes, { asc }) => [asc(scenes.order)]
         });
         
@@ -389,7 +389,7 @@ export const createSceneFromPlanRouter = createTRPCRouter({
             
             // Get current storyboard - IMPORTANT: Fetch fresh each time to include newly created scenes
             const storyboard = await db.query.scenes.findMany({
-              where: eq(scenes.projectId, projectId),
+              where: and(eq(scenes.projectId, projectId), isNull(scenes.deletedAt)),
               orderBy: [scenes.order],
             });
             

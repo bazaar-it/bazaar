@@ -37,3 +37,21 @@
 ## Next
 - Manual QA pass: delete via timeline, issue chat edits, confirm scene remains removed after orchestration completes.  
 - Add regression test (integration) that simulates delete→edit to ensure filters stay in place.
+
+---
+
+**Date**: 2025-10-02 (later still)  
+**Engineer**: Codex
+
+## ✅ Today
+- Expanded the soft-delete guards to every remaining scene query (template imports, website-to-video, add-audio, create-scene-from-plan, timeline duplicate/split/reorder/duration) so orchestrator or utility jobs cannot resurrect removed scenes.  
+- Tightened iteration revert logic to ignore deleted scenes when calculating order or applying edits, avoiding accidental restores.  
+- Documented the audit results and outstanding QA steps for the deletion regression.
+
+## Notes
+- Restore/undo paths intentionally bypass the filter; all other mutations now assume `deletedAt` = active.  
+- Need to monitor performance of the additional `isNull` predicates—no noticeable impact expected.
+
+## Next
+- Manual UI verification: delete scene → run website-to-video + chat edit to confirm no resurrection.  
+- Author integration test covering delete→LLM edit flow.

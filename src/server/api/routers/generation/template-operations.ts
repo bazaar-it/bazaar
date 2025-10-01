@@ -3,7 +3,7 @@ import { z } from "zod";
 import { protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
 import { scenes, projects, templateUsages } from "~/server/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { messageService } from "~/server/services/data/message.service";
 import { ResponseBuilder } from "~/lib/api/response-helpers";
 import { generateTemplateSuffix } from "~/lib/utils/uniquifyTemplateCode";
@@ -47,7 +47,7 @@ export const addTemplate = protectedProcedure
 
       // 2. Get current scene count for order
       const existingScenes = await db.query.scenes.findMany({
-        where: eq(scenes.projectId, projectId),
+        where: and(eq(scenes.projectId, projectId), isNull(scenes.deletedAt)),
       });
 
       const sceneOrder = existingScenes.length;

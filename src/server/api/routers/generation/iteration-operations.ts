@@ -4,7 +4,7 @@ import { db } from "~/server/db";
 import { scenes, projects, sceneIterations } from "~/server/db/schema";
 import { env } from "~/env";
 import { sceneCompiler } from "~/server/services/compilation/scene-compiler.service";
-import { eq, and, inArray, sql } from "drizzle-orm";
+import { eq, and, inArray, sql, isNull } from "drizzle-orm";
 import { messageService } from "~/server/services/data/message.service";
 import { ResponseBuilder, getErrorCode } from "~/lib/api/response-helpers";
 import { ErrorCode } from "~/lib/types/api/universal";
@@ -29,7 +29,7 @@ export const getMessageIterations = protectedProcedure
     const iterationsWithScenes = await Promise.all(
       iterations.map(async (iteration) => {
         const scene = await db.query.scenes.findFirst({
-          where: eq(scenes.id, iteration.sceneId),
+          where: and(eq(scenes.id, iteration.sceneId), isNull(scenes.deletedAt)),
         });
         
         return {
@@ -143,7 +143,7 @@ export const revertToIteration = protectedProcedure
         
         // Find the original order by looking at other scenes
         const allScenes = await db.query.scenes.findMany({
-          where: eq(scenes.projectId, projectId),
+          where: and(eq(scenes.projectId, projectId), isNull(scenes.deletedAt)),
           orderBy: [scenes.order],
         });
         
@@ -171,7 +171,7 @@ export const revertToIteration = protectedProcedure
       } else if (iteration.operationType === 'create') {
         // For create operations, use codeAfter (the created state)
         const scene = await db.query.scenes.findFirst({
-          where: eq(scenes.id, iteration.sceneId),
+          where: and(eq(scenes.id, iteration.sceneId), isNull(scenes.deletedAt)),
         });
         
         if (!scene) {
@@ -192,13 +192,13 @@ export const revertToIteration = protectedProcedure
             updatedAt: new Date(),
             revision: sql`${scenes.revision} + 1`,
           })
-          .where(eq(scenes.id, iteration.sceneId))
+          .where(and(eq(scenes.id, iteration.sceneId), isNull(scenes.deletedAt)))
           .returning();
           
       } else {
         // For edit operations, revert to the state after this edit
         const scene = await db.query.scenes.findFirst({
-          where: eq(scenes.id, iteration.sceneId),
+          where: and(eq(scenes.id, iteration.sceneId), isNull(scenes.deletedAt)),
         });
         
         if (!scene) {
@@ -224,7 +224,7 @@ export const revertToIteration = protectedProcedure
             updatedAt: new Date(),
             revision: sql`${scenes.revision} + 1`,
           })
-          .where(eq(scenes.id, iteration.sceneId))
+          .where(and(eq(scenes.id, iteration.sceneId), isNull(scenes.deletedAt)))
           .returning();
       }
       

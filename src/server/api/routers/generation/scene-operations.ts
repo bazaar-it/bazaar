@@ -1189,7 +1189,7 @@ export const trimLeft = protectedProcedure
 
     // Normalize orders 0..n-1
     const ordered = await db.query.scenes.findMany({
-      where: eq(scenes.projectId, projectId),
+      where: and(eq(scenes.projectId, projectId), isNull(scenes.deletedAt)),
       orderBy: [scenes.order],
     });
     await Promise.all(

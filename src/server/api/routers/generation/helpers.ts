@@ -950,7 +950,7 @@ export async function executeToolFromDecision(
       
       // Return multiple scenes that were created
       const generatedScenes = await db.query.scenes.findMany({
-        where: eq(scenes.projectId, projectId),
+        where: and(eq(scenes.projectId, projectId), isNull(scenes.deletedAt)),
         orderBy: [scenes.order],
       });
       

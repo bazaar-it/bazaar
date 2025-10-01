@@ -97,7 +97,11 @@ export const scenesRouter = createTRPCRouter({
 
       // Verify source scene + ownership
       const src = await ctx.db.query.scenes.findFirst({
-        where: and(eq(scenes.id, input.sceneId), eq(scenes.projectId, input.projectId)),
+        where: and(
+          eq(scenes.id, input.sceneId),
+          eq(scenes.projectId, input.projectId),
+          isNull(scenes.deletedAt)
+        ),
         with: { project: true },
       });
       if (!src) throw new Error('Scene not found');
@@ -124,7 +128,7 @@ export const scenesRouter = createTRPCRouter({
       let newOrder = src.order + 1;
       if (input.position === 'end') {
         const last = await ctx.db.query.scenes.findMany({
-          where: eq(scenes.projectId, input.projectId),
+          where: and(eq(scenes.projectId, input.projectId), isNull(scenes.deletedAt)),
           orderBy: (s, { asc }) => [asc(s.order)],
         });
         newOrder = (last[last.length - 1]?.order ?? -1) + 1;
@@ -133,7 +137,13 @@ export const scenesRouter = createTRPCRouter({
         await ctx.db
           .update(scenes)
           .set({ order: sql`${scenes.order} + 1`, updatedAt: new Date() })
-          .where(and(eq(scenes.projectId, input.projectId), sql`${scenes.order} > ${src.order}`));
+          .where(
+            and(
+              eq(scenes.projectId, input.projectId),
+              isNull(scenes.deletedAt),
+              sql`${scenes.order} > ${src.order}`
+            )
+          );
       }
 
       // Name strategy
@@ -200,7 +210,11 @@ export const scenesRouter = createTRPCRouter({
 
       // Verify scene + ownership
       const existingScene = await ctx.db.query.scenes.findFirst({
-        where: and(eq(scenes.id, input.sceneId), eq(scenes.projectId, input.projectId)),
+        where: and(
+          eq(scenes.id, input.sceneId),
+          eq(scenes.projectId, input.projectId),
+          isNull(scenes.deletedAt)
+        ),
         with: { project: true },
       });
 
@@ -238,7 +252,13 @@ export const scenesRouter = createTRPCRouter({
       await ctx.db
         .update(scenes)
         .set({ order: sql`${scenes.order} + 1`, updatedAt: new Date() })
-        .where(and(eq(scenes.projectId, input.projectId), sql`${scenes.order} > ${existingScene.order}`));
+        .where(
+          and(
+            eq(scenes.projectId, input.projectId),
+            isNull(scenes.deletedAt),
+            sql`${scenes.order} > ${existingScene.order}`
+          )
+        );
 
       // Insert new right-hand scene after current
       // Render-range strategy: Do NOT mutate code for offset. Keep original code,
@@ -288,7 +308,7 @@ export const scenesRouter = createTRPCRouter({
 
       // Normalize orders 0..n-1 (belt-and-suspenders)
       const orderedAfterSplit = await ctx.db.query.scenes.findMany({
-        where: eq(scenes.projectId, input.projectId),
+        where: and(eq(scenes.projectId, input.projectId), isNull(scenes.deletedAt)),
       });
       orderedAfterSplit
         .sort((a: any, b: any) => ((a.order ?? 0) - (b.order ?? 0)) || (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()))
@@ -337,7 +357,7 @@ export const scenesRouter = createTRPCRouter({
       
       // Verify project ownership
       const projectScenes = await ctx.db.query.scenes.findMany({
-        where: and(eq(scenes.projectId, input.projectId), sql`"deleted_at" IS NULL`),
+        where: and(eq(scenes.projectId, input.projectId), isNull(scenes.deletedAt)),
         with: {
           project: true
         }
@@ -392,7 +412,7 @@ export const scenesRouter = createTRPCRouter({
 
       // Normalize orders 0..n-1 for safety
       const orderedAfterReorder = await ctx.db.query.scenes.findMany({
-        where: and(eq(scenes.projectId, input.projectId), sql`"deleted_at" IS NULL`),
+        where: and(eq(scenes.projectId, input.projectId), isNull(scenes.deletedAt)),
       });
       orderedAfterReorder
         .sort((a: any, b: any) => ((a.order ?? 0) - (b.order ?? 0)) || (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()))
@@ -601,7 +621,7 @@ export const scenesRouter = createTRPCRouter({
 
       // Normalize orders 0..n-1 (defensive, even though duration change shouldn't affect order)
       const orderedAfterDuration = await ctx.db.query.scenes.findMany({
-        where: eq(scenes.projectId, input.projectId),
+        where: and(eq(scenes.projectId, input.projectId), isNull(scenes.deletedAt)),
       });
       orderedAfterDuration
         .sort((a: any, b: any) => ((a.order ?? 0) - (b.order ?? 0)) || (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()))
