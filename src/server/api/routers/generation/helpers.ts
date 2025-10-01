@@ -529,7 +529,7 @@ export async function executeToolFromDecision(
       
       const [updatedScene] = await db.update(scenes)
         .set(setFields)
-        .where(eq(scenes.id, targetSceneIdForUpdate))
+        .where(and(eq(scenes.id, targetSceneIdForUpdate), isNull(scenes.deletedAt)))
         .returning();
       
       if (!updatedScene) {
@@ -616,7 +616,7 @@ export async function executeToolFromDecision(
           updatedAt: new Date(),
           revision: sql`${scenes.revision} + 1`,
         })
-        .where(eq(scenes.id, decision.toolContext.targetSceneId))
+        .where(and(eq(scenes.id, decision.toolContext.targetSceneId), isNull(scenes.deletedAt)))
         .returning();
       
       if (!trimmedScene) {
