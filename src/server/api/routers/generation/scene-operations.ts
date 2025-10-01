@@ -383,14 +383,15 @@ export const generateScene = protectedProcedure
         // Update or create assistant's clarification message
         let assistantMessageId: string | undefined;
         
+        const { sanitizeAssistantMessage } = await import('~/lib/utils/chat-sanitizer');
+        const safeClarification = sanitizeAssistantMessage(
+          orchestratorResponse.chatResponse || 'Could you provide more details?',
+          'Could you provide more details?'
+        ).message;
+
         if (input.assistantMessageId) {
           // Update existing message from SSE
           assistantMessageId = input.assistantMessageId;
-          const { sanitizeAssistantMessage } = await import('~/lib/utils/chat-sanitizer');
-          const safeClarification = sanitizeAssistantMessage(
-            orchestratorResponse.chatResponse || 'Could you provide more details?',
-            'Could you provide more details?'
-          ).message;
           await db.update(messages)
             .set({
               content: safeClarification,
@@ -400,11 +401,6 @@ export const generateScene = protectedProcedure
             .where(eq(messages.id, input.assistantMessageId));
         } else {
           // Create new message if no SSE message exists (fallback)
-          const { sanitizeAssistantMessage } = await import('~/lib/utils/chat-sanitizer');
-          const safeClarification = sanitizeAssistantMessage(
-            orchestratorResponse.chatResponse || 'Could you provide more details?',
-            'Could you provide more details?'
-          ).message;
           const newAssistantMessage = await messageService.createMessage({
             projectId,
             content: safeClarification,
@@ -419,7 +415,7 @@ export const generateScene = protectedProcedure
           ...response.success(null, 'clarification', 'message', []),
           context: {
             reasoning: orchestratorResponse.reasoning,
-            chatResponse: orchestratorResponse.chatResponse,
+            chatResponse: safeClarification,
             needsClarification: true,
           },
           assistantMessageId,
@@ -495,6 +491,7 @@ export const generateScene = protectedProcedure
       );
       const { sanitizeAssistantMessage } = await import('~/lib/utils/chat-sanitizer');
       const safeChat = sanitizeAssistantMessage(decision.chatResponse, fallbackText).message;
+      let assistantChatMessage = safeChat || fallbackText;
 
       // Respect suppression flag (silent auto-fix or other system flows)
       if (!input.metadata?.suppressAssistantMessage) {
@@ -582,6 +579,7 @@ export const generateScene = protectedProcedure
             newDuration: operationType === 'trim' ? toolResult.scene.duration : undefined
           }
         );
+        assistantChatMessage = betterMessage;
         
         await db.update(messages)
           .set({
@@ -618,8 +616,7 @@ export const generateScene = protectedProcedure
             },
             context: {
               reasoning: decision.reasoning,
-              // Prefer explicit chatResponse from tool if present; fall back to decision text
-              chatResponse: input.metadata?.suppressAssistantMessage ? undefined : ((toolResult as any).chatResponse || (decision as any).chatResponse),
+              chatResponse: input.metadata?.suppressAssistantMessage ? undefined : assistantChatMessage,
             },
             assistantMessageId,
             additionalMessageIds: toolResult.additionalMessageIds || [],
@@ -655,6 +652,19 @@ export const generateScene = protectedProcedure
           'scene.create',
           'scene'
         ) as any as SceneCreateResponse;
+
+        const projectRevisionRow = await db
+          .update(projects)
+          .set({ revision: sql`${projects.revision} + 1` })
+          .where(eq(projects.id, projectId))
+          .returning({ revision: projects.revision });
+
+        const newRevision = projectRevisionRow[0]?.revision;
+
+        if (primaryScene && newRevision !== undefined) {
+          (primaryScene as any).projectRevision = newRevision;
+          (successResponse.data as any).projectRevision = newRevision;
+        }
         
         // Add metadata about all scenes created (cast to any for dynamic properties)
         (successResponse as any).additionalScenes = toolResult.scenes.length - 1;
@@ -664,8 +674,15 @@ export const generateScene = protectedProcedure
         if (toolResult.debugData) {
           (successResponse as any).debugData = toolResult.debugData;
         }
-        
-        return successResponse;
+
+        return {
+          ...successResponse,
+          meta: {
+            ...successResponse.meta,
+            revision: newRevision ?? successResponse.meta.revision,
+          },
+          newRevision,
+        } as SceneCreateResponse;
       }
 
       // Scene is already a proper SceneEntity from the database
@@ -709,17 +726,35 @@ export const generateScene = protectedProcedure
         'scene', 
         [toolResult.scene.id]
       );
+
+      const projectRevisionRow = await db
+        .update(projects)
+        .set({ revision: sql`${projects.revision} + 1` })
+        .where(eq(projects.id, projectId))
+        .returning({ revision: projects.revision });
+
+      const newRevision = projectRevisionRow[0]?.revision;
+
+      if (toolResult.scene && newRevision !== undefined) {
+        (toolResult.scene as any).projectRevision = newRevision;
+        (successResponse.data as any).projectRevision = newRevision;
+      }
       
       // Add context to the response
       return {
         ...successResponse,
+        meta: {
+          ...successResponse.meta,
+          revision: newRevision ?? successResponse.meta.revision,
+        },
         context: {
           reasoning: decision.reasoning,
-          chatResponse: input.metadata?.suppressAssistantMessage ? undefined : decision.chatResponse,
+          chatResponse: input.metadata?.suppressAssistantMessage ? undefined : assistantChatMessage,
         },
         assistantMessageId, // Include the assistant message ID
         // ✅ INCLUDE ADDITIONAL MESSAGE IDs FOR CLIENT SYNC
         additionalMessageIds: toolResult.additionalMessageIds || [],
+        newRevision,
       } as SceneCreateResponse;
 
     } catch (error) {
@@ -942,6 +977,7 @@ export const restoreScene = protectedProcedure
           props: scene.props as any,
           layoutJson: scene.layoutJson as any,
           deletedAt: null,
+          revision: sql`${scenes.revision} + 1`,
         })
         .where(eq(scenes.id, scene.id))
         .returning();
@@ -957,10 +993,17 @@ export const restoreScene = protectedProcedure
         order: scene.order,
         props: scene.props as any,
         layoutJson: scene.layoutJson as any,
+        revision: scene.revision ?? 1,
       }).returning();
     }
 
-    return { success: true, scene: restored };
+    const projectRevision = await db
+      .update(projects)
+      .set({ revision: sql`${projects.revision} + 1` })
+      .where(eq(projects.id, projectId))
+      .returning({ revision: projects.revision });
+
+    return { success: true, scene: restored, newRevision: projectRevision[0]?.revision };
   });
 
 /**
@@ -1024,6 +1067,7 @@ export const updateSceneName = protectedProcedure
         .set({
           name: name.trim(),
           updatedAt: new Date(),
+          revision: sql`${scenes.revision} + 1`,
         })
         .where(eq(scenes.id, sceneId))
         .returning();
@@ -1137,6 +1181,7 @@ export const trimLeft = protectedProcedure
       slug: scene.slug,
       dominantColors: scene.dominantColors as any,
       firstH1Text: scene.firstH1Text,
+      revision: scene.revision ?? 1,
     }).returning();
 
     // Delete original left scene

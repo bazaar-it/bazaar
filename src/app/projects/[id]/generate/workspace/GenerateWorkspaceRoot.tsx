@@ -29,9 +29,10 @@ type Props = {
   initialProps: InputProps;
   initialProjects: { id: string; name: string }[];
   initialAudio?: any;
+  initialRevision?: number;
 };
 
-export default function GenerateWorkspaceRoot({ projectId, userId, initialProps, initialProjects, initialAudio }: Props) {
+export default function GenerateWorkspaceRoot({ projectId, userId, initialProps, initialProjects, initialAudio, initialRevision }: Props) {
   const [userProjects, setUserProjects] = useState(initialProjects);
   const [isCreateTemplateModalOpen, setIsCreateTemplateModalOpen] = useState(false);
   const [isTimelineVisible, setIsTimelineVisible] = useState(false);
@@ -181,7 +182,7 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
     // 2. Current state has no scenes but initial props has scenes (fresh data from server)
     if (!isProjectLoaded || (!currentProps?.scenes?.length && initialProps?.scenes?.length)) {
       if (DEBUG) console.log('[GenerateWorkspaceRoot] Initializing project with server data');
-      setProject(projectId, initialProps, { force: true });
+      setProject(projectId, initialProps, { force: true, revision: initialRevision });
       
       // Set audio if provided
       if (initialAudio) {

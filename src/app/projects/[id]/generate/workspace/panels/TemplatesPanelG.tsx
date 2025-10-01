@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Input } from "~/components/ui/input";
 import { Card } from "~/components/ui/card";
 import { SearchIcon, Loader2 } from "lucide-react";
@@ -11,6 +11,7 @@ import { Player } from "@remotion/player";
 import { useVideoState } from "~/stores/videoState";
 import { transform } from 'sucrase';
 import { useIsTouchDevice } from "~/hooks/use-is-touch";
+import { useIntersectionObserver } from "~/hooks/use-intersection-observer";
 
 type ExtendedTemplateDefinition = TemplateDefinition & {
   previewImage?: string | null;
@@ -50,13 +51,19 @@ const getAspectRatioClass = (format: string) => {
 
 // Template thumbnail showing frame 15 by default
 const TemplateThumbnail = ({ template, format, isTouchDevice = false }: { template: ExtendedTemplateDefinition; format: string; isTouchDevice?: boolean }) => {
-  const shouldCompile = !template.isFromDatabase || !template.previewImage;
+  // Use intersection observer to only compile when visible
+  const { ref, hasBeenVisible } = useIntersectionObserver({
+    rootMargin: '300px', // Start compiling 300px before visible
+    enabled: true,
+  });
+
+  const shouldCompile = (!template.isFromDatabase || !template.previewImage) && hasBeenVisible;
   const { component, isCompiling, compilationError, playerProps } = useCompiledTemplate(template, format, { enableCompilation: shouldCompile });
 
   if (!shouldCompile) {
     if (template.previewImage) {
       return (
-        <div className="w-full h-full bg-black">
+        <div ref={ref} className="w-full h-full bg-black">
           <img
             src={template.previewImage}
             alt={`${template.name} preview`}
@@ -67,13 +74,23 @@ const TemplateThumbnail = ({ template, format, isTouchDevice = false }: { templa
       );
     }
 
-    // Should not happen because shouldCompile would be true when previewImage missing
-    return null;
+    // Not visible yet - show placeholder
+    if (!hasBeenVisible) {
+      return (
+        <div ref={ref} className="w-full h-full bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-gray-400 text-xs sm:text-sm">Loading...</div>
+          </div>
+        </div>
+      );
+    }
+
+    return <div ref={ref} />;
   }
 
   if (compilationError) {
     return (
-      <div className="w-full h-full bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
+      <div ref={ref} className="w-full h-full bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
         <div className="text-center">
           <div className="text-red-500 text-xs sm:text-sm font-medium">Template Error</div>
           <div className="text-gray-500 text-[10px] sm:text-xs mt-1">Failed to compile</div>
@@ -84,7 +101,7 @@ const TemplateThumbnail = ({ template, format, isTouchDevice = false }: { templa
 
   if (isCompiling || !component) {
     return (
-      <div className="w-full h-full bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
+      <div ref={ref} className="w-full h-full bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-4 sm:h-6 w-4 sm:w-6 animate-spin text-gray-400 mx-auto mb-1 sm:mb-2" />
           <div className="text-gray-500 text-xs sm:text-sm">Compiling...</div>
@@ -96,7 +113,7 @@ const TemplateThumbnail = ({ template, format, isTouchDevice = false }: { templa
   const safeInitialFrame = Math.min(15, Math.floor(template.duration / 2));
 
   return (
-    <div className="w-full h-full">
+    <div ref={ref} className="w-full h-full">
       <Player
         component={playerProps?.component || component}
         durationInFrames={playerProps?.durationInFrames || 150}
@@ -355,49 +372,47 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
   
   // Get current project format
   const currentFormat = getCurrentProps()?.meta?.format ?? 'landscape';
-  
-  // Client-side cache for DB templates to prevent flicker and speed up initial paint
-  const cacheKey = `templates-cache-${currentFormat}`;
-  const [cachedDbTemplates, setCachedDbTemplates] = useState<any[]>([]);
 
-  useEffect(() => {
-    try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem(cacheKey) : null;
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          setCachedDbTemplates(parsed);
-        }
-      }
-    } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cacheKey]);
-
-  // Fetch database templates with a generous stale time; use cached as placeholder to avoid reorder flash
-  const placeholderFromCache = useMemo(
-    () => (cachedDbTemplates.length ? cachedDbTemplates : undefined),
-    [cachedDbTemplates]
-  );
-
-  const { data: databaseTemplates = [], isLoading: isLoadingDbTemplates } = api.templates.getAll.useQuery(
-    { format: currentFormat, limit: 100 },
+  // Use infinite query for pagination - only loads 10 at a time
+  const {
+    data: templatesData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: isLoadingDbTemplates,
+  } = api.templates.getAll.useInfiniteQuery(
+    { format: currentFormat, limit: 10 },
     {
+      getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
       staleTime: 5 * 60 * 1000,
       refetchOnWindowFocus: false,
-      placeholderData: (previousData) => previousData ?? placeholderFromCache,
     }
   );
 
-  // Persist latest DB templates to cache
+  // Flatten all pages into a single array
+  const databaseTemplates = useMemo(() => {
+    return templatesData?.pages.flatMap((page) => page.items) ?? [];
+  }, [templatesData]);
+
+  // Infinite scroll trigger - fetch more when scrolling near bottom
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    try {
-      if (databaseTemplates && databaseTemplates.length) {
-        localStorage.setItem(cacheKey, JSON.stringify(databaseTemplates));
-        // Update in-memory cache too so next re-render uses the same ordering
-        setCachedDbTemplates(databaseTemplates);
-      }
-    } catch {}
-  }, [databaseTemplates, cacheKey]);
+    const element = loadMoreRef.current;
+    if (!element || !hasNextPage || isFetchingNextPage) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          void fetchNextPage();
+        }
+      },
+      { rootMargin: '400px' } // Start loading 400px before reaching the trigger
+    );
+
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // Classify a template into coarse categories for filtering
   const classifyCategory = useCallback((t: ExtendedTemplateDefinition): 'colors' | 'ui' | 'text' | 'other' => {
@@ -494,15 +509,7 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
 
   // Combine hardcoded and database templates (DB sorted by newest first)
   const combinedTemplates = useMemo<ExtendedTemplateDefinition[]>(() => {
-    // Prefer freshly fetched DB templates; fall back to cached when loading
-    const sourceDb = (databaseTemplates && databaseTemplates.length) ? databaseTemplates : cachedDbTemplates;
-    // Sort DB templates by createdAt desc if present
-    const dbSorted = [...(sourceDb || [])].sort((a: any, b: any) => {
-      const ad = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const bd = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return bd - ad;
-    });
-    const dbTemplatesFormatted: ExtendedTemplateDefinition[] = dbSorted.map((dbTemplate: any) => ({
+    const dbTemplatesFormatted: ExtendedTemplateDefinition[] = databaseTemplates.map((dbTemplate: any) => ({
       id: dbTemplate.id,
       name: dbTemplate.name,
       duration: dbTemplate.duration,
@@ -517,12 +524,12 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
       previewImage: dbTemplate.thumbnailUrl ?? null,
       tags: dbTemplate.tags ?? [],
     }));
-    // DB templates first (newest first), then hardcoded
-    return [...dbTemplatesFormatted, ...TEMPLATES] as ExtendedTemplateDefinition[];
-  }, [databaseTemplates, cachedDbTemplates]);
 
-  // Optional: simple skeleton to avoid jarring reorder on first open without cache
-  const isInitialLoading = isLoadingDbTemplates && cachedDbTemplates.length === 0;
+    // DB templates first (paginated), then hardcoded templates at the bottom for additional options
+    return [...dbTemplatesFormatted, ...TEMPLATES] as ExtendedTemplateDefinition[];
+  }, [databaseTemplates]);
+
+  const isInitialLoading = isLoadingDbTemplates;
   
   // Filter templates based on search and format compatibility
   const filteredTemplates = useMemo(() => {
@@ -628,7 +635,7 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
           </div>
         )}
 
-        {filteredTemplates.length === 0 && (
+        {filteredTemplates.length === 0 && !isInitialLoading && (
           <div className="text-center py-6 text-gray-500">
             <SearchIcon className="h-8 w-8 mx-auto mb-2 text-gray-300" />
             <p className="text-sm">No templates found</p>
@@ -636,6 +643,15 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
               <p className="text-xs mt-1">Try a different search term</p>
             ) : (
               <p className="text-xs mt-1">No templates available for {currentFormat} format</p>
+            )}
+          </div>
+        )}
+
+        {/* Infinite scroll trigger */}
+        {hasNextPage && (
+          <div ref={loadMoreRef} className="py-4 text-center">
+            {isFetchingNextPage && (
+              <Loader2 className="h-6 w-6 animate-spin text-gray-400 mx-auto" />
             )}
           </div>
         )}

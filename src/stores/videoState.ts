@@ -120,6 +120,7 @@ interface ProjectState {
   draftMessage?: string; // Persist chat input when panels change
   draftAttachments?: DraftAttachment[]; // Persist uploaded attachments when panels change
   playbackSpeed?: number; // Playback speed for preview and export (0.25-4.0)
+  revision?: number;
 }
 
 // Code cache entry
@@ -159,7 +160,7 @@ interface VideoState {
   undoSavedAt?: Record<string, number>;
   
   // Actions
-  setProject: (projectId: string, initialProps: InputProps, options?: { force?: boolean }) => void;
+  setProject: (projectId: string, initialProps: InputProps, options?: { force?: boolean; revision?: number }) => void;
   replace: (projectId: string, newProps: InputProps) => void;
   getCurrentProps: () => InputProps | null;
   
@@ -200,6 +201,7 @@ interface VideoState {
   updateScene: (projectId: string, sceneId: string, updatedScene: any) => void;
   deleteScene: (projectId: string, sceneId: string) => void;
   updateProjectAudio: (projectId: string, audio: AudioTrack | null) => void;
+  setProjectRevision: (projectId: string, revision: number) => void;
   
   // Audio panel auto-opening
   setShouldOpenAudioPanel: (projectId: string, shouldOpen: boolean) => void;
@@ -279,6 +281,7 @@ export const useVideoState = create<VideoState>()(
     set((state) => {
       console.log('[videoState.setProject] Called. ProjectId:', projectId, 'InitialProps:', JSON.stringify(initialProps).substring(0, 300) + (JSON.stringify(initialProps).length > 300 ? '...' : ''), 'Options:', options);
       const isProjectSwitch = state.currentProjectId && state.currentProjectId !== projectId;
+      const nextRevision = options.revision ?? state.projects[projectId]?.revision ?? 1;
       
       // If switching to a different project, clear old chat history to avoid contamination
       if (isProjectSwitch) {
@@ -317,6 +320,7 @@ export const useVideoState = create<VideoState>()(
             activeStreamingMessageId: isProjectSwitch ? null : state.projects[projectId]?.activeStreamingMessageId,
             // Always generate a new refresh token to ensure Player re-renders with new props
             refreshToken: Date.now().toString(),
+            revision: nextRevision,
           }
         }
       };
@@ -357,6 +361,7 @@ export const useVideoState = create<VideoState>()(
             dbMessagesLoaded: false,
             refreshToken: newRefreshToken,
             lastUpdated: Date.now(),
+            revision: 1,
           }
         }
       };
@@ -533,71 +538,36 @@ export const useVideoState = create<VideoState>()(
         audioUrls: dbMessage.audioUrls || undefined, // Include uploaded audio files from database
         sceneUrls: dbMessage.sceneUrls || undefined // Include scene attachments from database
       }));
-      
-
-      
-      // Helper function to check if two messages are duplicates
-      const isDuplicateMessage = (msg1: ChatMessage, msg2: ChatMessage) => {
-        // Same role/type
-        if (msg1.isUser !== msg2.isUser) return false;
-        
-        // Check if scene URLs are different - if so, they're NOT duplicates
-        const sceneUrls1 = msg1.sceneUrls || [];
-        const sceneUrls2 = msg2.sceneUrls || [];
-        if (sceneUrls1.length !== sceneUrls2.length || 
-            !sceneUrls1.every((url, index) => url === sceneUrls2[index])) {
-          return false; // Different scene attachments = not duplicates
-        }
-        
-        // Same content (trimmed and compared)
-        const content1 = msg1.message.trim();
-        const content2 = msg2.message.trim();
-        
-        // For exact matches
-        if (content1 === content2) return true;
-        
-        // For partial matches (one message might be truncated)
-        if (content1.length > 50 && content2.length > 50) {
-          // Check if beginning of messages match (at least 50 chars)
-          return content1.substring(0, 50) === content2.substring(0, 50);
-        }
-        
-        return false;
-      };
-      
       // Get current client messages
       const currentClientMessages = state.projects[projectId].chatHistory;
       
       // Use database messages as the base (they have proper UUIDs)
-      const deduplicatedHistory: ChatMessage[] = [];
-      const processedContents = new Set<string>();
-      
-      // Add all DB messages first
-      syncedMessages.forEach(dbMsg => {
-        const sceneUrlsKey = dbMsg.sceneUrls?.join(',') || 'no-scenes';
-        const contentKey = `${dbMsg.isUser ? 'user' : 'assistant'}-${dbMsg.message.substring(0, 50)}-scenes:${sceneUrlsKey}`;
-        if (!processedContents.has(contentKey)) {
-          deduplicatedHistory.push(dbMsg);
-          processedContents.add(contentKey);
-        }
+      const messagesById = new Map<string, ChatMessage>();
+
+      syncedMessages.forEach((dbMsg) => {
+        messagesById.set(dbMsg.id, dbMsg);
       });
-      
-      // Only keep client messages that don't exist in DB (rare edge cases)
-      currentClientMessages.forEach(clientMsg => {
-        // Skip if this message is a duplicate of any DB message
-        const isDuplicate = deduplicatedHistory.some(existingMsg => 
-          isDuplicateMessage(clientMsg, existingMsg)
-        );
-        
-        if (!isDuplicate) {
-          const sceneUrlsKey = clientMsg.sceneUrls?.join(',') || 'no-scenes';
-          const contentKey = `${clientMsg.isUser ? 'user' : 'assistant'}-${clientMsg.message.substring(0, 50)}-scenes:${sceneUrlsKey}`;
-          if (!processedContents.has(contentKey)) {
-            deduplicatedHistory.push(clientMsg);
-            processedContents.add(contentKey);
-          }
+
+      currentClientMessages.forEach((clientMsg) => {
+        const existing = messagesById.get(clientMsg.id);
+
+        if (!existing) {
+          messagesById.set(clientMsg.id, clientMsg);
+          return;
         }
+
+        // Merge metadata while keeping DB content authoritative
+        messagesById.set(clientMsg.id, {
+          ...existing,
+          status: existing.status || clientMsg.status,
+          jobId: existing.jobId ?? clientMsg.jobId,
+          toolName: existing.toolName ?? clientMsg.toolName,
+          toolStartTime: existing.toolStartTime ?? clientMsg.toolStartTime,
+          executionTimeSeconds: existing.executionTimeSeconds ?? clientMsg.executionTimeSeconds,
+        });
       });
+
+      const deduplicatedHistory: ChatMessage[] = Array.from(messagesById.values());
       
       // Sort messages by sequence (if available) or timestamp to maintain chronological order
       deduplicatedHistory.sort((a, b) => {
@@ -709,6 +679,7 @@ export const useVideoState = create<VideoState>()(
           start: 0,
           duration: scene.duration || 150,
           order: 0,
+          revision: scene.revision ?? 1,
           data: {
             code: scene.tsxCode,
             name: scene.name || 'Generated Scene',
@@ -746,6 +717,7 @@ export const useVideoState = create<VideoState>()(
         start: currentTotalDuration, // Start after all existing scenes
         duration: scene.duration || 150, // Use scene's actual duration
         order: project.props.scenes.length, // Append at the end by default
+        revision: scene.revision ?? 1,
         data: {
           code: scene.tsxCode,
           name: scene.name || 'Generated Scene',
@@ -796,6 +768,7 @@ export const useVideoState = create<VideoState>()(
       
       const updatedScenes = [...project.props.scenes];
       const existingScene = updatedScenes[sceneIndex];
+      const projectRevisionFromUpdate = (updatedScene as any)?.projectRevision;
       
       // Use new duration if provided, otherwise preserve existing
       const newDuration = updatedScene.duration || existingScene?.duration || 150;
@@ -809,6 +782,7 @@ export const useVideoState = create<VideoState>()(
         type: existingScene?.type || updatedScene.type || 'custom',
         start: existingScene?.start || 0,
         duration: newDuration, // Use new duration
+        revision: updatedScene.revision ?? existingScene?.revision,
         // Handle name at root level if provided
         ...(updatedScene.name !== undefined && { name: updatedScene.name }),
         data: {
@@ -879,6 +853,7 @@ export const useVideoState = create<VideoState>()(
             },
             refreshToken: newRefreshToken, // ✅ Force preview panel re-render
             lastUpdated: Date.now(), // ✅ Track when updated
+            revision: projectRevisionFromUpdate ?? project.revision,
           }
         }
       };
@@ -977,6 +952,25 @@ export const useVideoState = create<VideoState>()(
             lastUpdated: Date.now(),
           }
         }
+      };
+    }),
+
+  setProjectRevision: (projectId: string, revision: number) =>
+    set((state) => {
+      const project = state.projects[projectId];
+      if (!project || project.revision === revision) {
+        return state;
+      }
+      return {
+        ...state,
+        projects: {
+          ...state.projects,
+          [projectId]: {
+            ...project,
+            revision,
+            lastUpdated: Date.now(),
+          },
+        },
       };
     }),
     

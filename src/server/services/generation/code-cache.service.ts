@@ -70,11 +70,21 @@ class CodeCacheService {
   ): string {
     // Normalize prompt for fuzzy matching
     const normalizedPrompt = this.normalizePrompt(prompt);
-    
+
+    // Hash previous scene code if present (more stable than including full code)
+    let previousSceneHash = 'none';
+    if (context?.previousScene) {
+      previousSceneHash = crypto
+        .createHash('sha256')
+        .update(context.previousScene)
+        .digest('hex')
+        .slice(0, 16); // First 16 chars for brevity
+    }
+
     // Create context hash
     const contextString = JSON.stringify({
       images: context?.imageUrls?.sort() || [],
-      hasPrevious: !!context?.previousScene,
+      previousSceneHash,
       format: context?.format || 'landscape',
     });
 
@@ -83,6 +93,15 @@ class CodeCacheService {
       .createHash('sha256')
       .update(`${projectId}:${normalizedPrompt}:${contextString}`)
       .digest('hex');
+
+    // Debug logging
+    console.log(`🔑 Cache key generated:`, {
+      prompt: prompt.slice(0, 50),
+      normalizedPrompt: normalizedPrompt.slice(0, 50),
+      previousSceneHash,
+      format: context?.format || 'landscape',
+      finalHash: hash.slice(0, 16),
+    });
 
     return hash;
   }
@@ -120,18 +139,23 @@ class CodeCacheService {
 
     if (cached) {
       this.stats.hits++;
-      
+
       // Update hit count
       cached.hitCount++;
       this.cache.set(key, cached);
 
-      console.log(`💾 Cache HIT for prompt: "${prompt.slice(0, 50)}..." (saved ~8s)`);
+      console.log(`💾 ✅ Cache HIT for prompt: "${prompt.slice(0, 50)}..." (saved ~8s)`);
       console.log(`   Hit count: ${cached.hitCount}, Original timestamp: ${cached.timestamp}`);
-      
+      console.log(`   Scene name: ${cached.name}, Duration: ${cached.duration}f`);
+
       return cached;
     }
 
     this.stats.misses++;
+    console.log(`💾 ❌ Cache MISS for prompt: "${prompt.slice(0, 50)}..."`);
+    console.log(`   Current cache size: ${this.cache.size} entries`);
+    console.log(`   Total misses: ${this.stats.misses}, Total hits: ${this.stats.hits}`);
+
     return null;
   }
 
@@ -149,7 +173,7 @@ class CodeCacheService {
     context?: any
   ): void {
     const key = this.generateCacheKey(prompt, projectId, context);
-    
+
     const cachedCode: CachedCode = {
       ...code,
       prompt,
@@ -158,7 +182,9 @@ class CodeCacheService {
     };
 
     this.cache.set(key, cachedCode);
-    console.log(`💾 Cached code for prompt: "${prompt.slice(0, 50)}..."`);
+    console.log(`💾 ✨ Cached code for prompt: "${prompt.slice(0, 50)}..."`);
+    console.log(`   Scene name: ${code.name}, Duration: ${code.duration}f`);
+    console.log(`   Cache size now: ${this.cache.size} entries`);
   }
 
   /**

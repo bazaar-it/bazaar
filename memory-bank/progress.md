@@ -1267,3 +1267,15 @@ The core video generation pipeline is **production-ready** with:
 - Drafted and wired the fifth batch (Shazam animation, Testimonials, UI Data Visualisation, 50+ Integrations, Bar Chart) into the canonical metadata workflow.
 - Added `template-metadata-coverage.md` in Sprint 119 to track IDs, formats, and completion status for all production templates.
 - Documented Toggle, Banking App, Blur, portrait Gradient Globe, and I want to break free in canonical metadata and refreshed the coverage checklist.
+2025-09-30 – Assistant chat consistency audit
+- Investigated reports of assistant replies changing post-refresh; traced ChatPanelG optimistic updates to `decision.chatResponse` while the server overwrites the same row with `formatSceneOperationMessage` after tool execution.
+- Verified with dev DB queries that single UUIDs carry multiple payloads over their lifetime (`createdAt` vs. `updatedAt` deltas) and that `syncDbMessages` re-merges both strings because it dedups on content snippets.
+- Captured the full flow, impact, and recommended fixes (authoritative message body, ID-first reconciliation, streaming cleanup) in `sprints/sprint107_general_reliability/analysis/2025-09-30-assistant-message-consistency.md`.
+2025-10-02 – Assistant chat alignment
+- Server now returns the same formatted assistant summary it persists, so users no longer see the LLM narrative first and a different message after refresh; clarified flows use the sanitized copy too.【src/server/api/routers/generation/scene-operations.ts:380】【src/server/api/routers/generation/scene-operations.ts:708】
+- Client sync now reconciles messages by UUID with DB as the authority, eliminating the duplicate bubbles and mismatch caused by first-50-char comparisons.【src/stores/videoState.ts:522】
+- Lint run blocked by sandbox Node 16.17.1 requirement; noted for follow-up once Node ≥18 is available.
+- ChatPanel SSE flow no longer sets `modelOverride=claude-sonnet-4-20250514`; without that override the active Optimal pack keeps edits on Claude Sonnet 4.5 by default.【src/app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx:713】
+- Documented intent analyzer mis-target: attachments marked as "MUST" cause the brain to edit the wrong scene after a prior drag; analysis captured in `sprints/sprint107_general_reliability/analysis/2025-10-02-intent-analyzer-scene-target.md`.
+- Adjusted intent-analyzer attachment guidance: attachments are now treated as default targets only for ambiguous prompts; explicit scene names take precedence.【src/brain/orchestrator_functions/intentAnalyzer.ts:98】
+- ChatPanel now snapshots selected scenes before submit and clears the state immediately afterward, eliminating carry-over attachments that were polluting later prompts.【src/app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx:604】

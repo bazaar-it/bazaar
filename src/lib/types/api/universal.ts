@@ -23,6 +23,7 @@ export interface UniversalResponse<TData = unknown> {
     success: boolean;       // Did it succeed?
     affectedIds: string[];  // What IDs were created/updated/deleted
     executionTimeMs: number; // How long it took
+    revision?: number;      // Optional project revision after mutation
   };
   
   // Optional context (reasoning, suggestions, etc)
@@ -39,6 +40,9 @@ export interface UniversalResponse<TData = unknown> {
     details?: unknown;      // Technical details for debugging
     retryable: boolean;     // Can this be retried?
   };
+
+  // Optional shorthand for project revision
+  newRevision?: number;
 }
 
 // All possible operations in the system

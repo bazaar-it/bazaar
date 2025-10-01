@@ -4,7 +4,7 @@ import { db } from "~/server/db";
 import { scenes, projects, sceneIterations } from "~/server/db/schema";
 import { env } from "~/env";
 import { sceneCompiler } from "~/server/services/compilation/scene-compiler.service";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 import { messageService } from "~/server/services/data/message.service";
 import { ResponseBuilder, getErrorCode } from "~/lib/api/response-helpers";
 import { ErrorCode } from "~/lib/types/api/universal";
@@ -190,6 +190,7 @@ export const revertToIteration = protectedProcedure
             jsCode: compiledCreate.jsCode,
             jsCompiledAt: compiledCreate.jsCompiledAt,
             updatedAt: new Date(),
+            revision: sql`${scenes.revision} + 1`,
           })
           .where(eq(scenes.id, iteration.sceneId))
           .returning();
@@ -221,6 +222,7 @@ export const revertToIteration = protectedProcedure
             jsCode: compiledEdit.jsCode,
             jsCompiledAt: compiledEdit.jsCompiledAt,
             updatedAt: new Date(),
+            revision: sql`${scenes.revision} + 1`,
           })
           .where(eq(scenes.id, iteration.sceneId))
           .returning();
