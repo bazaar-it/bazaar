@@ -199,7 +199,7 @@ export function PreviewPanelG({
       const sigFrom = (list: any[]) => list.map((s: any) => {
         const order = s.order ?? 0;
         const duration = s.duration || 150;
-        const revision = s.revision ?? 0;
+        const revision = s.revision ?? 1;
         // Prefer compiled JS when present; otherwise use TSX
         const code = (s?.data?.code || (s as any).jsCode || (s as any).tsxCode || '') as string;
         const h = (typeof hashString === 'function') ? hashString(code) : String(code.length);
