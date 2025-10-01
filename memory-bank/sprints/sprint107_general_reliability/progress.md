@@ -354,3 +354,19 @@ Date: 2025-09-24 (markdown fence strip)
 - Added a first-touch UTM source filter to the admin users grid (`getAttributionSources` for options + `utmSource` filter on `getUserAnalytics`) so we can isolate direct/paid campaigns without manual CSV exports.
 - Reworked the Growth view so "All Time" pulls the real historical window (new timeframe in `admin.getAnalyticsData`), added wheel/pinch zoom plus horizontal pan directly inside each chart (no brush bar), and fixed hover behaviour so tooltips follow the cursor with delta details.
 - Introduced an "Overview ↔ Growth" toggle on the admin dashboard; growth mode renders three cumulative charts for users/prompts/scenes using the existing analytics feed (`cumulative` series) while keeping the metric cards intact.
+
+## 2025-09-30 - Assistant message source-of-truth audit
+- Traced ChatPanelG → videoState → generateScene flow; found client renders `decision.chatResponse` while server overwrites the DB row with `formatSceneOperationMessage` seconds later.
+- Captured DB evidence (`bazaar-vid_message`) showing single UUIDs with mismatched content and `updatedAt` spikes, confirming messages mutate post-delivery.
+- Logged findings + recommendations in `analysis/2025-09-30-assistant-message-consistency.md`, covering authoritative message selection, ID-first reconciliation, and streaming clean-up steps.
+
+## 2025-10-02 - Assistant message alignment shipped
+- Updated `generateScene` to track a single `assistantChatMessage` so the formatted summary returned to the client matches the value we persist; clarifications now return the sanitized text instead of the raw LLM prose.【src/server/api/routers/generation/scene-operations.ts:380】【src/server/api/routers/generation/scene-operations.ts:708】
+- Audio-only runs now reuse that same formatted message, preventing the "narrative vs. summary" flip that appeared after refreshes.【src/server/api/routers/generation/scene-operations.ts:605】
+- Reworked `videoState.syncDbMessages` to reconcile by message ID with DB rows as the source of truth while merging transient metadata, which removes the duplicate bubble flashes from content-based deduping.【src/stores/videoState.ts:522】
+- Attempted `npm run lint -- …`; run aborted because the sandbox still pins Node 16.17.1 (Next.js requires ≥18.18). Will rerun once the toolchain matches project requirements.
+- Removed the chat-panel model override so SSE requests no longer force Claude Sonnet 4; the edit tool now inherits claude-sonnet-4-5 from the active `MODEL_PACK` unless the user explicitly overrides it.【src/app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx:713】
+- Logged intent-analyzer regression where attachments override explicit scene names; see `analysis/2025-10-02-intent-analyzer-scene-target.md` for reproduction and fix plan.
+- Softened brain instructions so attached scenes are preferred only when the prompt is ambiguous; explicit scene names now override prior attachments.【src/brain/orchestrator_functions/intentAnalyzer.ts:98】
+- Snapshot scene attachments at submit time and clear `selectedScenes` immediately so the next prompt starts without stale scene URLs; prevents old drags from influencing new requests.【src/app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx:604】
+- Clarified attachment guidance again so dragged scenes are treated as explicit targets unless the user clearly redirects to a different scene.【src/brain/orchestrator_functions/intentAnalyzer.ts:98】

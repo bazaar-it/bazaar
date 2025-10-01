@@ -43,13 +43,17 @@ export default async function GeneratePage(props: { params: Promise<{ id: string
     if (existingScenes.length > 0) {
       // ✅ HAS REAL SCENES: Convert database scenes to props format
       let currentStart = 0;
-      const convertedScenes = existingScenes.map((dbScene) => {
+      const convertedScenes = existingScenes
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+        .map((dbScene) => {
         const sceneDuration = dbScene.duration || 150; // Fallback to 5s
         const scene = {
           id: dbScene.id,
           type: 'custom' as const,
           start: currentStart,
           duration: sceneDuration,
+          order: dbScene.order ?? 0,
+          revision: dbScene.revision ?? 1,
           data: {
             code: dbScene.tsxCode,
             name: dbScene.name,
@@ -87,6 +91,7 @@ export default async function GeneratePage(props: { params: Promise<{ id: string
         initialProjects={userProjects.map(p => ({ id: p.id, name: p.title }))}
         initialProps={actualInitialProps}
         initialAudio={audio}
+        initialRevision={projectResult.revision ?? 1}
       />
     );
   } catch (error) {

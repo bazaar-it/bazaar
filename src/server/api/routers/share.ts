@@ -33,7 +33,7 @@ export const shareRouter = createTRPCRouter({
       }
 
       const projectScenes = await db.query.scenes.findMany({
-        where: eq(scenes.projectId, projectId),
+        where: and(eq(scenes.projectId, projectId), isNull(scenes.deletedAt)),
       });
 
       if (projectScenes.length === 0) {

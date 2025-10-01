@@ -3,7 +3,7 @@
 
 import { db } from "~/server/db";
 import { scenes, messages } from "~/server/db/schema";
-import { eq, desc, and, inArray } from "drizzle-orm";
+import { eq, desc, and, inArray, isNull } from "drizzle-orm";
 import type { OrchestrationInput, ContextPacket } from "~/lib/types/ai/brain.types";
 import { extractFirstValidUrl, normalizeUrl, isValidWebUrl } from "~/lib/utils/url-detection";
 import { assetContext } from "~/server/services/context/assetContextService";
@@ -43,7 +43,8 @@ export class ContextBuilder {
             .from(scenes)
             .where(and(
               eq(scenes.projectId, input.projectId),
-              inArray(scenes.id, attachedSceneIds)  // Only attached scenes
+              inArray(scenes.id, attachedSceneIds),  // Only attached scenes
+              isNull(scenes.deletedAt)  // Exclude soft-deleted scenes
             ))
             .orderBy(scenes.order);
         } else {
@@ -56,7 +57,10 @@ export class ContextBuilder {
               tsxCode: scenes.tsxCode  // Full code for context
             })
             .from(scenes)
-            .where(eq(scenes.projectId, input.projectId))
+            .where(and(
+              eq(scenes.projectId, input.projectId),
+              isNull(scenes.deletedAt)  // Exclude soft-deleted scenes
+            ))
             .orderBy(scenes.order);
         }
 

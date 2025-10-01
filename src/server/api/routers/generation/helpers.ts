@@ -1,6 +1,6 @@
 import { db } from "~/server/db";
 import { scenes, sceneIterations, projects, messages } from "~/server/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { messageService } from "~/server/services/data/message.service";
 import { randomUUID } from "crypto";
 import { addTool } from "~/tools/add/add";
@@ -295,7 +295,7 @@ export async function executeToolFromDecision(
       }
       
       let sceneToEdit = await db.query.scenes.findFirst({
-        where: eq(scenes.id, decision.toolContext.targetSceneId),
+        where: and(eq(scenes.id, decision.toolContext.targetSceneId), isNull(scenes.deletedAt)),
       });
       // If not found and target looks like a position-based token (e.g., "scene-2-id"), map to storyboard order
       if (!sceneToEdit && /^scene-\d+-id$/i.test(String(decision.toolContext.targetSceneId))) {
@@ -306,7 +306,7 @@ export async function executeToolFromDecision(
             const targetSceneId = decision.toolContext.targetSceneId;
             if (targetSceneId) {
               sceneToEdit = await db.query.scenes.findFirst({
-                where: eq(scenes.id, targetSceneId),
+                where: and(eq(scenes.id, targetSceneId), isNull(scenes.deletedAt)),
               });
             }
           }
@@ -500,6 +500,7 @@ export async function executeToolFromDecision(
         name: editResult.data.name || sceneToEdit.name, // Preserve scene name
         props: editResult.data.props || sceneToEdit.props,
         updatedAt: new Date(),
+        revision: sql`${scenes.revision} + 1`,
       };
       let durationChanged = false;
       if (decision.toolContext.requestedDurationFrames && typeof editResult.data.duration === 'number') {
@@ -528,7 +529,7 @@ export async function executeToolFromDecision(
       
       const [updatedScene] = await db.update(scenes)
         .set(setFields)
-        .where(eq(scenes.id, targetSceneIdForUpdate))
+        .where(and(eq(scenes.id, targetSceneIdForUpdate), isNull(scenes.deletedAt)))
         .returning();
       
       if (!updatedScene) {
@@ -574,7 +575,7 @@ export async function executeToolFromDecision(
       }
       
       const sceneToTrim = await db.query.scenes.findFirst({
-        where: eq(scenes.id, decision.toolContext.targetSceneId),
+        where: and(eq(scenes.id, decision.toolContext.targetSceneId), isNull(scenes.deletedAt)),
       });
       
       if (!sceneToTrim) {
@@ -613,8 +614,9 @@ export async function executeToolFromDecision(
         .set({
           duration: trimResult.data.duration,
           updatedAt: new Date(),
+          revision: sql`${scenes.revision} + 1`,
         })
-        .where(eq(scenes.id, decision.toolContext.targetSceneId))
+        .where(and(eq(scenes.id, decision.toolContext.targetSceneId), isNull(scenes.deletedAt)))
         .returning();
       
       if (!trimmedScene) {
@@ -670,7 +672,7 @@ export async function executeToolFromDecision(
       
       // For delete, get the scene first for the response
       const sceneToDelete = await db.query.scenes.findFirst({
-        where: eq(scenes.id, decision.toolContext.targetSceneId),
+        where: and(eq(scenes.id, decision.toolContext.targetSceneId), isNull(scenes.deletedAt)),
       });
       
       if (!sceneToDelete) {
@@ -709,8 +711,10 @@ export async function executeToolFromDecision(
         });
       }
       
-      // Delete from database AFTER tracking the iteration
-      await db.delete(scenes).where(eq(scenes.id, decision.toolContext.targetSceneId));
+      // Soft delete from database AFTER tracking the iteration (consistent with scene-operations.ts)
+      await db.update(scenes)
+        .set({ deletedAt: new Date(), updatedAt: new Date() })
+        .where(eq(scenes.id, decision.toolContext.targetSceneId));
       
       return {
         success: true,
@@ -948,7 +952,7 @@ export async function executeToolFromDecision(
       
       // Return multiple scenes that were created
       const generatedScenes = await db.query.scenes.findMany({
-        where: eq(scenes.projectId, projectId),
+        where: and(eq(scenes.projectId, projectId), isNull(scenes.deletedAt)),
         orderBy: [scenes.order],
       });
       

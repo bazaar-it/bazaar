@@ -4,7 +4,7 @@ import { db } from "~/server/db";
 import { getProdTemplatesDb } from "~/server/db/templates-prod";
 import { env } from "~/env";
 import { templates, scenes, projects, templateUsages } from "~/server/db/schema";
-import { eq, and, desc, inArray, sql } from "drizzle-orm";
+import { eq, and, desc, inArray, sql, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 // Input schemas
@@ -34,8 +34,8 @@ const getTemplatesSchema = z.object({
   category: z.string().optional(),
   isOfficial: z.boolean().optional(),
   format: z.enum(['landscape', 'portrait', 'square']).optional(),
-  limit: z.number().min(1).max(100).default(50),
-  offset: z.number().min(0).default(0),
+  limit: z.number().min(1).max(100).default(10), // Changed default to 10 for pagination
+  cursor: z.number().min(0).optional(), // Changed from offset to cursor for infinite queries
 });
 
 export const templatesRouter = createTRPCRouter({
@@ -61,7 +61,8 @@ export const templatesRouter = createTRPCRouter({
       const scene = await db.query.scenes.findFirst({
         where: and(
           eq(scenes.id, sceneId),
-          eq(scenes.projectId, projectId)
+          eq(scenes.projectId, projectId),
+          isNull(scenes.deletedAt)
         ),
       });
       
@@ -102,22 +103,25 @@ export const templatesRouter = createTRPCRouter({
   getAll: publicProcedure
     .input(getTemplatesSchema)
     .query(async ({ input }) => {
-      const { category, isOfficial, format, limit, offset } = input;
-      
+      const { category, isOfficial, format, limit, cursor = 0 } = input;
+
       // Build where conditions
       const conditions = [eq(templates.isActive, true)];
-      
+
       if (category) {
         conditions.push(eq(templates.category, category));
       }
-      
+
       if (isOfficial !== undefined) {
         conditions.push(eq(templates.isOfficial, isOfficial));
       }
-      
+
       // Select data source (local by default, prod RO when enabled)
       const prodDb = getProdTemplatesDb();
       const sourceDb = prodDb || db;
+
+      // Fetch limit + 1 to determine if there's a next page
+      const fetchLimit = limit + 1;
 
       // Get templates (explicit columns to support prod schema without js_code)
       const allTemplates = await sourceDb.query.templates.findMany({
@@ -143,8 +147,8 @@ export const templatesRouter = createTRPCRouter({
         },
         where: and(...conditions),
         orderBy: [desc(templates.isOfficial), desc(templates.usageCount), desc(templates.createdAt)],
-        limit,
-        offset,
+        limit: fetchLimit,
+        offset: cursor,
         with: {
           creator: {
             columns: {
@@ -154,7 +158,7 @@ export const templatesRouter = createTRPCRouter({
           },
         },
       });
-      
+
       // Filter by format if specified
       let filteredTemplates = allTemplates;
       if (format) {
@@ -163,8 +167,16 @@ export const templatesRouter = createTRPCRouter({
           return formats.includes(format);
         });
       }
-      
-      return filteredTemplates.map((t: any) => ({ ...t, __source: prodDb ? 'prod' : 'local' }));
+
+      // Check if there's a next page
+      const hasNextPage = filteredTemplates.length > limit;
+      const items = hasNextPage ? filteredTemplates.slice(0, limit) : filteredTemplates;
+      const nextCursor = hasNextPage ? cursor + limit : undefined;
+
+      return {
+        items: items.map((t: any) => ({ ...t, __source: prodDb ? 'prod' : 'local' })),
+        nextCursor,
+      };
     }),
 
   // Get template by ID (Public - for preview)
