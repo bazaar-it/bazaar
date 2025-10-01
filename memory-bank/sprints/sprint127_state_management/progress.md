@@ -55,3 +55,20 @@
 ## Next
 - Manual UI verification: delete scene → run website-to-video + chat edit to confirm no resurrection.  
 - Author integration test covering delete→LLM edit flow.
+
+---
+
+**Date**: 2025-10-02 (evening)  
+**Engineer**: Codex
+
+## ✅ Today
+- Debugged why preview audio never played: the Remotion player autoplays unmuted and violates Chrome's gesture gate, plus the portal-based controls never triggered our container listener.  
+- Added global gesture detection to unmute the player only after the first user interaction, start playback muted by default, and ensure the chat panel’s play handler no longer forces unmute prematurely.
+
+## Notes
+- Preview now mirrors browser policies: first click enables audio, afterwards the player un-mutes and resumes without console spam.  
+- Export pipeline unaffected (audio already present in rendered files).
+
+## Next
+- Consider persisting the “audio unlocked” flag per session so the player can start unmuted after the first interaction.  
+- Add automated coverage for playback mute/unmute transitions if we expand Jest + jsdom audio mocks.

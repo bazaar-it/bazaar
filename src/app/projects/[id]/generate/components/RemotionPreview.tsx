@@ -5,7 +5,7 @@
 import React, { useEffect, useMemo, Suspense, useState, useRef, useCallback } from 'react';
 import { Player, type PlayerRef } from '@remotion/player';
 import { ErrorBoundary } from 'react-error-boundary';
-import { enableAudioWithGesture } from '~/lib/utils/audioContext';
+import { enableAudioWithGesture, canCreateAudioContext } from '~/lib/utils/audioContext';
 import { useIsTouchDevice } from '~/hooks/use-is-touch';
 
 // Error fallback component to display when component loading fails
@@ -179,10 +179,12 @@ export default function RemotionPreview({
   // Note: Frame update events are dispatched from PreviewPanelG to avoid duplication.
 
   // Simple state for current frame display
+  const initialAudioUnlocked = typeof window !== 'undefined' && canCreateAudioContext();
   const [currentFrame, setCurrentFrame] = useState<number>(0);
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const hasAudio = !!(inputProps?.audio?.url);
-  const audioUnlockRef = useRef<boolean>(false);
+  const audioUnlockRef = useRef<boolean>(initialAudioUnlocked);
+  const [isAudioUnlocked, setIsAudioUnlocked] = useState<boolean>(initialAudioUnlocked);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const [renderSize, setRenderSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
   const isTouchDevice = useIsTouchDevice();
@@ -226,6 +228,15 @@ export default function RemotionPreview({
       }
     } catch {}
   }, []);
+
+  const ensureAudioReady = useCallback(() => {
+    try {
+      const api: any = playerRef?.current as any;
+      if (api?.setMuted) api.setMuted(false);
+      if (api?.setVolume) api.setVolume(1);
+    } catch {}
+    resumeMediaElements();
+  }, [playerRef, resumeMediaElements]);
 
   const unlockAudioContext = useCallback(() => {
     try {
@@ -311,6 +322,8 @@ export default function RemotionPreview({
       if (audioUnlockRef.current) return;
       audioUnlockRef.current = true;
       unlockAudioContext();
+      setIsAudioUnlocked(true);
+      ensureAudioReady();
       try {
         document.removeEventListener('pointerdown', handleFirstInteraction, true);
         document.removeEventListener('keydown', handleFirstInteraction, true);
@@ -327,33 +340,36 @@ export default function RemotionPreview({
         document.removeEventListener('touchstart', handleFirstInteraction, true);
       } catch {}
     };
-  }, [hasAudio, unlockAudioContext]);
+  }, [hasAudio, unlockAudioContext, ensureAudioReady]);
 
   useEffect(() => {
     if (!hasAudio) return;
     const el = playerContainerRef.current;
     if (!el) return;
     const onPointerDown = () => {
-      unlockAudioContext();
-      audioUnlockRef.current = true;
-      try {
-        const api: any = playerRef?.current as any;
-        if (api?.setMuted) api.setMuted(false);
-        if (api?.setVolume) api.setVolume(1);
-        const playPromise = api?.play?.();
-        if (playPromise && typeof playPromise.catch === 'function') {
-          playPromise.catch((err: any) => {
-            try { console.warn('[RemotionPreview] Player play() blocked or failed:', err); } catch {}
-          });
-        }
-      } catch {}
-      try { resumeMediaElements(); } catch {}
+      if (!audioUnlockRef.current) {
+        audioUnlockRef.current = true;
+        unlockAudioContext();
+        setIsAudioUnlocked(true);
+      }
+      ensureAudioReady();
     };
     el.addEventListener('pointerdown', onPointerDown, true);
     return () => {
       try { el.removeEventListener('pointerdown', onPointerDown, true); } catch {}
     };
-  }, [hasAudio, playerRef, unlockAudioContext, resumeMediaElements]);
+  }, [hasAudio, unlockAudioContext, ensureAudioReady]);
+
+  // Keep player muted until audio is unlocked
+  useEffect(() => {
+    if (!hasAudio || !playerRef?.current) return;
+    try {
+      const api: any = playerRef.current as any;
+      if (api?.setMuted) {
+        api.setMuted(!isAudioUnlocked);
+      }
+    } catch {}
+  }, [hasAudio, isAudioUnlocked, playerRef]);
 
   
   return (
@@ -386,6 +402,7 @@ export default function RemotionPreview({
               clickToPlay
               loop={loop}
               autoPlay={true}
+              initiallyMuted={!isAudioUnlocked}
               playbackRate={playbackRate}
               inFrame={inFrame}
               outFrame={outFrame}
