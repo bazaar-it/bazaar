@@ -346,16 +346,24 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
     };
   }, [previewTemplate]);
 
-  const {data: databaseTemplates = [], isLoading} = api.templates.getAll.useQuery(
-    {format: currentFormat, limit: 100},
+  const {
+    data: templatesData,
+    isLoading,
+  } = api.templates.getAll.useInfiniteQuery(
+    { format: currentFormat, limit: 10 },
     {
+      getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
       staleTime: 5 * 60 * 1000,
       refetchOnWindowFocus: false,
     }
   );
 
+  const databaseTemplates = useMemo(() => {
+    return templatesData?.pages.flatMap((page) => page.items) ?? [];
+  }, [templatesData]);
+
   const combinedTemplates = useMemo<MobileTemplate[]>(() => {
-    const dbFormatted: MobileTemplate[] = (databaseTemplates || []).map((t: any) => ({
+    const dbFormatted: MobileTemplate[] = databaseTemplates.map((t: any) => ({
       id: t.id,
       name: t.name,
       duration: t.duration ?? 150,
@@ -370,6 +378,7 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
       compiledCode: t.jsCode ?? null,
     }));
 
+    // Add hardcoded templates at the bottom for additional options
     const registryFormatted: MobileTemplate[] = TEMPLATES.map((t) => ({
       id: t.id,
       name: t.name,
