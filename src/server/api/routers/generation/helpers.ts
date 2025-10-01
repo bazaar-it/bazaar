@@ -711,8 +711,10 @@ export async function executeToolFromDecision(
         });
       }
       
-      // Delete from database AFTER tracking the iteration
-      await db.delete(scenes).where(eq(scenes.id, decision.toolContext.targetSceneId));
+      // Soft delete from database AFTER tracking the iteration (consistent with scene-operations.ts)
+      await db.update(scenes)
+        .set({ deletedAt: new Date(), updatedAt: new Date() })
+        .where(eq(scenes.id, decision.toolContext.targetSceneId));
       
       return {
         success: true,
