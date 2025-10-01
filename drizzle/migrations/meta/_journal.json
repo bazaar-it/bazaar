@@ -120,6 +120,13 @@
       "when": 1759146120416,
       "tag": "0020_add_template_scenes",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1759324913000,
+      "tag": "0021_shared_brand_repository",
+      "breakpoints": true
     }
   ]
 }

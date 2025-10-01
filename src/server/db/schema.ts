@@ -1850,7 +1850,95 @@ export const brandProfileVersionsRelations = relations(brandProfileVersions, ({ 
     fields: [brandProfileVersions.changedBy],
     references: [users.id],
   }),
-}))
+}));
+
+// Shared brand repository storing normalized URLs reusable across projects
+export const brandRepository = createTable("brand_repository", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  normalizedUrl: d.text("normalized_url").notNull(),
+  originalUrl: d.text("original_url").notNull(),
+  firstExtractedBy: d
+    .varchar("first_extracted_by", { length: 255 })
+    .references(() => users.id, { onDelete: "set null" }),
+  latestExtractionId: d.uuid("latest_extraction_id"),
+  brandData: d.jsonb("brand_data").notNull(),
+  colors: d.jsonb("colors").$default(() => ({})),
+  typography: d.jsonb("typography").$default(() => ({})),
+  logos: d.jsonb("logos").$default(() => ({})),
+  copyVoice: d.jsonb("copy_voice").$default(() => ({})),
+  productNarrative: d.jsonb("product_narrative").$default(() => ({})),
+  socialProof: d.jsonb("social_proof").$default(() => ({})),
+  screenshots: d.jsonb("screenshots").$default(() => []),
+  mediaAssets: d.jsonb("media_assets").$default(() => []),
+  personality: d.jsonb("personality"),
+  confidenceScore: d.real("confidence_score").default(0.95),
+  reviewStatus: d.text("review_status").default("automated"),
+  extractionVersion: d.text("extraction_version").default("1.0.0"),
+  usageCount: d.integer("usage_count").default(0),
+  lastUsedAt: d.timestamp("last_used_at", { withTimezone: true }),
+  lastExtractedAt: d.timestamp("last_extracted_at", { withTimezone: true }),
+  ttl: d.timestamp("ttl", { withTimezone: true }),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: d.timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  uniqueIndex("brand_repo_url_unique_idx").on(t.normalizedUrl),
+  index("brand_repo_url_idx").on(t.normalizedUrl),
+  index("brand_repo_usage_idx").on(t.usageCount),
+  index("brand_repo_quality_idx").on(t.reviewStatus, t.confidenceScore),
+  index("brand_repo_ttl_idx").on(t.ttl),
+]);
+
+export const brandRepositoryRelations = relations(brandRepository, ({ one, many }) => ({
+  firstExtractor: one(users, {
+    fields: [brandRepository.firstExtractedBy],
+    references: [users.id],
+  }),
+  usages: many(() => projectBrandUsage),
+}));
+
+export const projectBrandUsage = createTable("project_brand_usage", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  projectId: d
+    .uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  brandRepositoryId: d
+    .uuid("brand_repository_id")
+    .notNull()
+    .references(() => brandRepository.id, { onDelete: "cascade" }),
+  usedAt: d.timestamp("used_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  uniqueIndex("project_brand_unique_idx").on(t.projectId, t.brandRepositoryId),
+  index("project_brand_project_idx").on(t.projectId),
+  index("project_brand_repo_idx").on(t.brandRepositoryId),
+]);
+
+export const projectBrandUsageRelations = relations(projectBrandUsage, ({ one }) => ({
+  project: one(projects, {
+    fields: [projectBrandUsage.projectId],
+    references: [projects.id],
+  }),
+  brand: one(brandRepository, {
+    fields: [projectBrandUsage.brandRepositoryId],
+    references: [brandRepository.id],
+  }),
+}));
+
+export const brandExtractionCache = createTable("brand_extraction_cache", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  normalizedUrl: d.text("normalized_url").notNull(),
+  cacheKey: d.text("cache_key").notNull(),
+  rawHtml: d.text("raw_html"),
+  screenshotUrls: d.jsonb("screenshot_urls").$default(() => []),
+  colorSwatches: d.jsonb("color_swatches").$default(() => []),
+  ttl: d.timestamp("ttl", { withTimezone: true }).notNull(),
+  extractedAt: d.timestamp("extracted_at", { withTimezone: true }).defaultNow().notNull(),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  uniqueIndex("brand_cache_url_unique_idx").on(t.normalizedUrl),
+  uniqueIndex("brand_cache_key_unique_idx").on(t.cacheKey),
+  index("brand_cache_ttl_idx").on(t.ttl),
+]);
 
 // Personalization targets table (per-company brand themes for bulk personalization)
 export const personalizationTargets = createTable("personalization_target", (d) => ({
@@ -1892,6 +1980,7 @@ export const projectsRelations = relations(projects, ({ many }) => ({
   scenes: many(scenes),
   sharedVideos: many(sharedVideos),
   personalizationTargets: many(personalizationTargets),
+  brandUsages: many(projectBrandUsage),
 }));
 
 // Auto-fix metrics table for tracking error corrections

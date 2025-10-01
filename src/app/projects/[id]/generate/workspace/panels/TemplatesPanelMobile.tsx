@@ -547,7 +547,20 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
 
         setPreviewTemplate(null);
       } else {
-        toast.error('Failed to add template');
+        const fallback = 'Failed to add template';
+        const rawMessage = result.message?.trim();
+        const errorMessage = (() => {
+          switch (rawMessage) {
+            case 'Template scenes missing':
+              return 'Template scenes are missing. Please recreate or delete this template.';
+            case 'Template code missing for non-database template':
+              return 'Template is incomplete (no code available). Delete and recreate it from a project.';
+            default:
+              return rawMessage || fallback;
+          }
+        })();
+        console.warn('[TemplatesPanelMobile] Template add returned without scenes:', result);
+        toast.error(errorMessage);
       }
     },
     onError: (error) => {

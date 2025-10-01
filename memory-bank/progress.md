@@ -1323,3 +1323,19 @@ The core video generation pipeline is **production-ready** with:
 - Backend getAll now accepts cursor/search, filtering by name server-side instead of pulling 100 rows every time.
 - Implemented client-side template cache (memory + localStorage) with hashed modules so compiled templates reuse instantly in desktop panel.
 - Skip missing brand profile table in personalize page (return null instead of 404 when migration not applied).
+2025-09-30 – Shared brand dataset audit
+- Production still lacks the Sprint 99.5 brand tables; only `bazaar-vid_personalization_target` is live and it scopes entries by `(project_id, website_url)` so nothing is shared.
+- Dev schema requires `user_id` on `bazaar-vid_brand_extraction` and `project_id` on `bazaar-vid_brand_profile`, generating duplicate rows for the same domain (four copies of `https://ramp.com`, several screenshot URLs stored as brands).
+- Captured recommended data model shift (normalized domain key + project linkage table + real cache) in `sprints/sprint107_general_reliability/analysis/2025-09-30-shared-brand-dataset.md`.
+2025-09-30 – Multi-scene selector integration
+- Added shared multi-scene template metadata + personality scoring to unlock URL→video pipeline.
+- Build selector that derives brand personality/keywords from extracted data and picks the best template with reasoning.
+- Website-to-video flow now streams 8-scene builds driven by the new selector, replacing the hero-journey + single-scene mapping.
+
+- 2025-10-01: Refreshed sprint126 documentation to reflect the new shared brand repo + selector pipeline, noting outstanding multi-template coverage and SSE UI work (`sprints/sprint126_url_to_perfect_video/MASTER_PLAN.md`, `sprints/sprint126_url_to_perfect_video/PIPELINE_FLOW.md`, `sprints/sprint126_url_to_perfect_video/UX_FLOW.md`).
+- 2025-10-01: Applied migration `0021_shared_brand_repository.sql` to the dev database and confirmed the new shared tables/indexes exist (awaiting backfill + prod rollout plan).
+- 2025-10-01: Authored the URL onboarding modal implementation plan detailing trigger mechanics, form UX, SSE wiring, and handler updates (`sprints/sprint126_url_to_perfect_video/url-to-video-modal-plan.md`).
+- 2025-10-01: Implemented the first-run URL onboarding modal; generating a project now redirects with `?onboarding=1`, opens the modal for URL/duration/music inputs, and passes those selections through SSE into `WebsiteToVideoHandler` for automatic multi-scene generation.
+- 2025-10-01: Added live assistant progress messages (template selection → per-scene completion → summary) so users see the streaming status even after the modal closes.
+- 2025-10-01: Added 5s music previews in the URL modal and auto-applied the selected soundtrack via the AddAudio tool so generated videos come with the chosen vibe.
+- 2025-09-30: Investigating unnecessary media plan resolutions when only user-library assets exist; drafted skip heuristics for zero project media.

@@ -6,6 +6,7 @@ import { personalizationTargets, projects } from "~/server/db/schema";
 import { WebAnalysisAgentV4 } from "~/tools/webAnalysis/WebAnalysisAgentV4";
 import { convertV4ToSimplified } from "~/tools/webAnalysis/brandDataAdapter";
 import { createBrandThemeFromExtraction } from "~/lib/theme/brandTheme";
+import { normalizeBrandUrl } from "~/lib/utils/brand-url";
 
 const listInput = z.object({
   projectId: z.string().uuid(),
@@ -26,20 +27,6 @@ const isMissingTableError = (error: unknown) => {
   const code = (error as { code?: string }).code;
   return code === '42P01';
 };
-
-function normalizeUrl(rawUrl: string): string {
-  const trimmed = rawUrl.trim();
-  if (!trimmed) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "Website URL is required" });
-  }
-  try {
-    const url = new URL(trimmed.startsWith("http") ? trimmed : `https://${trimmed}`);
-    url.hash = "";
-    return url.toString();
-  } catch {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid website URL" });
-  }
-}
 
 export const personalizationTargetRouter = createTRPCRouter({
   list: protectedProcedure
@@ -87,7 +74,13 @@ export const personalizationTargetRouter = createTRPCRouter({
         });
       }
 
-      const normalizedUrl = normalizeUrl(input.websiteUrl);
+      const normalizedUrl = normalizeBrandUrl(input.websiteUrl);
+      if (!normalizedUrl) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Invalid or unsupported website URL",
+        });
+      }
       const now = new Date();
 
       try {

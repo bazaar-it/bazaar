@@ -6,6 +6,7 @@
 import type { SimplifiedBrandData } from "~/tools/webAnalysis/brandDataAdapter";
 import type { SelectedTemplate } from "./template-selector";
 import type { HeroJourneyScene } from "~/tools/narrative/herosJourney";
+import type { UrlToVideoUserInputs } from '~/lib/types/url-to-video';
 import { toolsLogger } from '~/lib/utils/logger';
 
 export interface CustomizedScene {
@@ -19,6 +20,7 @@ export interface TemplateCustomizationInput {
   brandStyle: any; // Will be created from SimplifiedBrandData
   websiteData: SimplifiedBrandData;
   narrativeScenes: HeroJourneyScene[];
+  userInputs?: UrlToVideoUserInputs;
 }
 
 export class TemplateCustomizerAI {
@@ -43,7 +45,8 @@ export class TemplateCustomizerAI {
         input.brandStyle,
         input.websiteData,
         narrativeScene,
-        template
+        template,
+        input.userInputs
       );
       
       customizedScenes.push({
@@ -81,7 +84,8 @@ export class TemplateCustomizerAI {
         input.brandStyle,
         input.websiteData,
         narrativeScene,
-        template
+        template,
+        input.userInputs
       );
       
       const scene: CustomizedScene = {
@@ -106,16 +110,17 @@ export class TemplateCustomizerAI {
     brandStyle: any,
     websiteData: SimplifiedBrandData,
     narrativeScene: HeroJourneyScene,
-    template: SelectedTemplate
+    template: SelectedTemplate,
+    userInputs?: UrlToVideoUserInputs
   ): Promise<string> {
     
     // Build comprehensive edit prompt with ALL brand data as JSON
     const brandDataJson = JSON.stringify({
+      page: websiteData.page,
       brand: websiteData.brand,
       product: websiteData.product,
-      socialProof: websiteData.socialProof, // Note: correct property name
+      socialProof: websiteData.social_proof,
       ctas: websiteData.ctas,
-      layoutMotion: websiteData.layoutMotion
     }, null, 2);
     
     const editPrompt = `Transform this template for ${websiteData.page.title} with the following requirements:
@@ -132,7 +137,7 @@ BRAND STYLE:
 - Secondary Font: ${brandStyle.typography.headingFont || brandStyle.typography.primaryFont}
 - Animation Style: ${brandStyle.animation.style}
 - Button Radius: ${websiteData.brand?.buttons?.radius || '8px'}
-- Shadow Style: ${websiteData.brand?.shadows?.md || '0 4px 6px rgba(0,0,0,0.1)'}
+- Animation Style Source: ${brandStyle.animation.style}
 
 NARRATIVE CONTEXT:
 - Scene Title: ${narrativeScene.title}
@@ -148,8 +153,13 @@ PRODUCT INFO:
 - CTAs: ${websiteData.ctas?.map((c: any) => c.label).join(', ') || 'Get Started'}
 
 SOCIAL PROOF:
-- Users: ${websiteData.socialProof?.stats?.users || '1000+'}
-- Rating: ${websiteData.socialProof?.stats?.rating || '5.0'}
+- Users: ${websiteData.social_proof?.stats?.users || '1000+'}
+- Rating: ${websiteData.social_proof?.stats?.rating || '5.0'}
+
+USER INPUTS:
+- Problem Statement: ${userInputs?.problemStatement || 'Not provided'}
+- Differentiators: ${userInputs?.differentiators || 'Not provided'}
+- Preferred Music Style: ${userInputs?.musicPreferenceName || userInputs?.musicPreferenceId || 'Not provided'}
 
 CUSTOMIZATION REQUIREMENTS:
 1. Replace ALL placeholder colors with brand colors

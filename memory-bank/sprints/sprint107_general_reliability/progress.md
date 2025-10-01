@@ -349,3 +349,8 @@ Date: 2025-09-24 (markdown fence strip)
 - Added a first-touch UTM source filter to the admin users grid (`getAttributionSources` for options + `utmSource` filter on `getUserAnalytics`) so we can isolate direct/paid campaigns without manual CSV exports.
 - Reworked the Growth view so "All Time" pulls the real historical window (new timeframe in `admin.getAnalyticsData`), added wheel/pinch zoom plus horizontal pan directly inside each chart (no brush bar), and fixed hover behaviour so tooltips follow the cursor with delta details.
 - Introduced an "Overview ↔ Growth" toggle on the admin dashboard; growth mode renders three cumulative charts for users/prompts/scenes using the existing analytics feed (`cumulative` series) while keeping the metric cards intact.
+
+## 2025-09-30 – Shared brand dataset audit
+- Confirmed production lacks the Sprint 99.5 brand tables; only `bazaar-vid_personalization_target` exists with `(project_id, website_url)` uniqueness so brand extracts stay project-scoped.
+- Queried dev: `bazaar-vid_brand_extraction` (3 rows) enforces `user_id` while `bazaar-vid_brand_profile` requires `project_id`, leading to four duplicate `https://ramp.com` profiles and screenshot URLs treated as websites.
+- Logged the schema drift + dedupe issues plus a plan for a global `normalized_url` repository and linkage table in `analysis/2025-09-30-shared-brand-dataset.md`.

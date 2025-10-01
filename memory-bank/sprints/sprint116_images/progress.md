@@ -142,3 +142,4 @@ Date: 2025-09-24 (duration extractor literal support)
 Date: 2025-09-24 (media-plan skip for non-media edits)
 - Short-circuited `Orchestrator` so `mediaPlanService.resolvePlan` runs only when the brain actually returns plan data (images, videos, directives). Pure text edits now bypass the heavy media orchestration path, cutting unnecessary compute when users tweak copy/colors.
 - Added lightweight logging to confirm the skip path; tools still receive any attachments via `userContext` when no plan is present.
+- 2025-09-30: Analysis logged for media-plan resolution skipping when project media absent; plan to refine shouldResolveMediaPlan heuristics.

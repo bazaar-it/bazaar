@@ -4,7 +4,7 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useSession } from "next-auth/react";
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useVideoState } from '~/stores/videoState';
 import { api } from "~/trpc/react";
 import AppHeader from "~/components/AppHeader";
@@ -18,6 +18,7 @@ import { useIsTouchDevice } from '~/hooks/use-is-touch';
 import MobileAppHeader from '~/components/MobileAppHeader';
 import { CreateTemplateModal } from '~/components/CreateTemplateModal';
 import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
+import { URLToVideoModal } from '~/components/url-to-video';
 import TimelinePanel from './panels/TimelinePanel';
 
 // ✅ NEW: Debug flag for production logging
@@ -36,9 +37,12 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
   const [isCreateTemplateModalOpen, setIsCreateTemplateModalOpen] = useState(false);
   const [isTimelineVisible, setIsTimelineVisible] = useState(false);
   const [isTimelineMounted, setIsTimelineMounted] = useState(false);
+  const [isUrlModalOpen, setIsUrlModalOpen] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const TIMELINE_ANIM_MS = 320;
   const [timelineAnim, setTimelineAnim] = useState<'enter' | 'exit' | null>(null);
+  const initialSceneCount = initialProps?.scenes?.length ?? 0;
   useEffect(() => {
     let t: number | null = null;
     if (isTimelineVisible) {
@@ -57,6 +61,36 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
     return () => { if (t) window.clearTimeout(t); };
   }, [isTimelineVisible, isTimelineMounted]);
   const workspaceContentAreaRef = useRef<WorkspaceContentAreaGHandle>(null);
+
+  useEffect(() => {
+    if (!searchParams) return;
+    if (typeof window === 'undefined') return;
+
+    const onboardingFlag = searchParams.get('onboarding');
+    if (onboardingFlag === '1' && initialSceneCount === 0) {
+      const storageKey = `bazaar:url-modal-dismissed:${projectId}`;
+      let dismissed = false;
+      try {
+        dismissed = sessionStorage.getItem(storageKey) === '1';
+      } catch {}
+      if (!dismissed) {
+        setIsUrlModalOpen(true);
+      }
+    }
+  }, [searchParams, initialSceneCount, projectId]);
+
+  useEffect(() => {
+    if (!searchParams) return;
+    if (typeof window === 'undefined') return;
+
+    if (searchParams.get('onboarding')) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete('onboarding');
+      const nextQuery = params.toString();
+      const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}`;
+      router.replace(nextUrl, { scroll: false });
+    }
+  }, [searchParams, router]);
   
   // Persist/restore timeline visibility with the same workspace key
   useEffect(() => {
@@ -313,6 +347,16 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
 
   const isMobile = forcedMobile || breakpoint === 'mobile' || (isTouchDevice && breakpoint !== 'desktop');
 
+  const handleUrlModalOpenChange = useCallback((open: boolean) => {
+    setIsUrlModalOpen(open);
+    if (!open) {
+      try {
+        const storageKey = `bazaar:url-modal-dismissed:${projectId}`;
+        sessionStorage.setItem(storageKey, '1');
+      } catch {}
+    }
+  }, [projectId]);
+
   // Desktop/Tablet layout
   // Prevent two-finger horizontal swipe from triggering browser Back/Forward
   useEffect(() => {
@@ -425,10 +469,11 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
         {/* Sidebar with fixed positioning */}
         <div 
           className="absolute left-[10px] top-0 bottom-[10px] z-40">
-          <GenerateSidebar
-            onAddPanel={handleAddPanel}
-            isAdmin={user?.isAdmin}
-          />
+      <GenerateSidebar
+        onAddPanel={handleAddPanel}
+        isAdmin={user?.isAdmin}
+        onShowUrlModal={() => handleUrlModalOpenChange(true)}
+      />
         </div>
       </div>
       
@@ -452,6 +497,11 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
       />
         </>
       )}
+      <URLToVideoModal
+        projectId={projectId}
+        isOpen={isUrlModalOpen}
+        onOpenChange={handleUrlModalOpenChange}
+      />
     </div>
   );
 }

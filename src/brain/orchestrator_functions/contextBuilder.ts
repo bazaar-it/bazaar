@@ -375,7 +375,12 @@ export class ContextBuilder {
       // Save to brand profile table
       try {
         const { saveBrandProfile } = await import('~/server/services/website/save-brand-profile');
-        await saveBrandProfile(input.projectId, targetUrl, analysis);
+        await saveBrandProfile({
+          projectId: input.projectId,
+          websiteUrl: targetUrl,
+          extractedData: analysis,
+          userId: input.userId,
+        });
         console.log(`📚 [CONTEXT BUILDER] 💾 Brand profile saved to database`);
       } catch (error) {
         console.error(`📚 [CONTEXT BUILDER] Failed to save brand profile:`, error);

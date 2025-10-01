@@ -31,6 +31,7 @@ import { useSSEGeneration } from "~/hooks/use-sse-generation";
 import { PurchaseModal } from "~/components/purchase/PurchaseModal";
 import { extractYouTubeUrl } from "~/brain/tools/youtube-analyzer";
 import { useIsMobile } from "~/hooks/use-breakpoint";
+import { FEATURES } from "~/config/features";
 
 
 // Component message representation for UI display
@@ -695,23 +696,38 @@ export default function ChatPanelG({
     // Use finalMessage if it's a YouTube follow-up, otherwise use trimmedMessage (which includes icon info for backend)
     const backendMessage = finalMessage !== trimmedMessage ? finalMessage : trimmedMessage;
     
-    // Website-to-video pipeline is temporarily disabled.
-    // Keep URL extraction commented for future re-enable.
-    // const urlRegex = /https?:\/\/[^\s]+/g;
-    // const urls = backendMessage.match(urlRegex);
-    // const websiteUrl = urls?.find(url => 
-    //   !url.includes('youtube.com') && 
-    //   !url.includes('youtu.be') &&
-    //   !url.includes('localhost') &&
-    //   !url.includes('127.0.0.1')
-    // );
-    const websiteUrl = undefined;
+    let websiteUrl: string | undefined;
+    if (FEATURES.WEBSITE_TO_VIDEO_ENABLED) {
+      const urlRegex = /https?:\/\/[^\s]+/g;
+      const urls = backendMessage.match(urlRegex);
+      websiteUrl = urls?.find((candidate) => {
+        const lowered = candidate.toLowerCase();
+        return (
+          !lowered.includes('youtube.com') &&
+          !lowered.includes('youtu.be') &&
+          !lowered.includes('localhost') &&
+          !lowered.includes('127.0.0.1')
+        );
+      });
+    }
     
     // Pass both GitHub and Figma modes to generation, plus website URL
     // Use backendMessage which contains icon information for the LLM
     console.log('[ChatPanelG] Backend message with icon info:', backendMessage);
-    // Do not pass websiteUrl while the pipeline is disabled
-    generateSSE(backendMessage, imageUrls, videoUrls, audioUrls, sceneUrls, selectedModel, isGitHubMode || isFigmaMode, undefined);
+    if (websiteUrl) {
+      generateSSE(
+        backendMessage,
+        imageUrls,
+        videoUrls,
+        audioUrls,
+        sceneUrls,
+        selectedModel,
+        isGitHubMode || isFigmaMode,
+        { websiteUrl }
+      );
+    } else {
+      generateSSE(backendMessage, imageUrls, videoUrls, audioUrls, sceneUrls, selectedModel, isGitHubMode || isFigmaMode);
+    }
     
     // Create display message for chat that includes icon information
     let userDisplayMessage = originalMessage;

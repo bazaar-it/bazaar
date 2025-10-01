@@ -2,13 +2,14 @@ import { z } from "zod";
 import { protectedProcedure, createTRPCRouter } from "~/server/api/trpc";
 import { TRPCError } from "@trpc/server";
 import { db } from "~/server/db";
-import { projects, scenes, brandProfiles, brandProfileVersions } from "~/server/db/schema";
-import { eq } from "drizzle-orm";
+import { brandRepository, projectBrandUsage, projects, scenes } from "~/server/db/schema";
+import { desc, eq } from "drizzle-orm";
 import { EnhancedWebAnalyzer } from "~/tools/webAnalysis/WebAnalysisEnhanced";
 import { HeroJourneyGenerator } from "~/tools/narrative/herosJourney";
 import { TemplateSelector } from "~/server/services/website/template-selector-v2";
 import { TemplateCustomizer } from "~/server/services/website/template-customizer";
 import { BrandFormatter } from "~/server/services/website/brand-formatter";
+import { saveBrandProfile } from "~/server/services/website/save-brand-profile";
 
 const analyzeWebsiteSchema = z.object({
   url: z.string().url(),
@@ -173,6 +174,7 @@ export const websitePipelineRouter = createTRPCRouter({
     }),
     
   // Extract and save brand profile from website
+  // Extract and save brand profile from website
   extractBrandProfile: protectedProcedure
     .input(z.object({
       url: z.string().url(),
@@ -181,141 +183,58 @@ export const websitePipelineRouter = createTRPCRouter({
     .mutation(async ({ input, ctx }) => {
       const { url, projectId } = input;
       const userId = ctx.session.user.id;
-      
+
       console.log('🎨 [BRAND EXTRACTION] Starting for:', url);
-      
+
       try {
-        // 1. Verify project ownership
         const project = await db.query.projects.findFirst({
           where: eq(projects.id, projectId),
         });
-        
+
         if (!project || project.userId !== userId) {
           throw new TRPCError({
             code: "FORBIDDEN",
             message: "Project not found or access denied",
           });
         }
-        
-        // 2. Check if brand profile already exists for this project
-        const existingProfile = await db.query.brandProfiles.findFirst({
-          where: eq(brandProfiles.projectId, projectId),
-        });
-        
-        // 3. Analyze website and extract brand
-        console.log('🎨 [BRAND EXTRACTION] Analyzing website...');
+
         const analyzer = new EnhancedWebAnalyzer();
         const websiteData = await analyzer.analyzeWebsite(url, projectId, userId);
-        
-        // 4. Prepare brand profile data
-        const brandProfileData = {
+
+        const brandRecord = await saveBrandProfile({
           projectId,
           websiteUrl: url,
-          brandData: {
-            colors: websiteData.brand.colors,
-            typography: websiteData.brand.typography,
-            buttons: websiteData.brand.buttons,
-            shadows: websiteData.brand.shadows,
-            borderRadius: websiteData.brand.borderRadius,
-            iconography: websiteData.brand.iconography,
-            imageryStyle: websiteData.brand.imageryStyle,
-            backgroundEffects: websiteData.brand.backgroundEffects,
-            logo: websiteData.brand.logo,
-          },
-          colors: websiteData.brand.colors,
-          typography: websiteData.brand.typography,
-          logos: websiteData.brand.logo,
-          copyVoice: websiteData.copy,
-          productNarrative: websiteData.product,
-          socialProof: websiteData.socialProof,
-          screenshots: websiteData.media.screenshots || [],
-          mediaAssets: websiteData.media.videos.concat(websiteData.media.animations) || [],
-          extractionVersion: "1.0.0",
-          extractionConfidence: websiteData.extractionMeta.confidence,
-          lastAnalyzedAt: new Date(),
-          updatedAt: new Date(),
-        };
-        
-        // 5. Save or update brand profile
-        let brandProfileId: string;
-        
-        if (existingProfile) {
-          console.log('🎨 [BRAND EXTRACTION] Updating existing profile...');
-          
-          // Save current version before updating
-          const currentVersion = await db.query.brandProfileVersions.findFirst({
-            where: eq(brandProfileVersions.brandProfileId, existingProfile.id),
-            orderBy: (versions, { desc }) => [desc(versions.versionNumber)],
-          });
-          
-          const nextVersionNumber = (currentVersion?.versionNumber || 0) + 1;
-          
-          await db.insert(brandProfileVersions).values({
-            brandProfileId: existingProfile.id,
-            versionNumber: nextVersionNumber,
-            brandData: existingProfile.brandData,
-            changedBy: userId,
-            changeReason: `Re-analyzed website on ${new Date().toISOString()}`,
-          });
-          
-          // Update the profile
-          await db.update(brandProfiles)
-            .set(brandProfileData)
-            .where(eq(brandProfiles.id, existingProfile.id));
-          
-          brandProfileId = existingProfile.id;
-        } else {
-          console.log('🎨 [BRAND EXTRACTION] Creating new profile...');
-          
-          // Insert new profile
-          const [newProfile] = await db.insert(brandProfiles)
-            .values({
-              ...brandProfileData,
-              createdAt: new Date(),
-            })
-            .returning({ id: brandProfiles.id });
-          
-          brandProfileId = newProfile.id;
-          
-          // Create initial version
-          await db.insert(brandProfileVersions).values({
-            brandProfileId,
-            versionNumber: 1,
-            brandData: brandProfileData.brandData,
-            changedBy: userId,
-            changeReason: 'Initial extraction',
-          });
-        }
-        
-        console.log('🎨 [BRAND EXTRACTION] Complete! Profile ID:', brandProfileId);
-        
+          extractedData: websiteData,
+          userId,
+        });
+
         return {
           success: true,
-          brandProfileId,
+          brandRepositoryId: brandRecord.id,
           data: {
             title: websiteData.title,
             description: websiteData.description,
-            colors: websiteData.brand.colors,
-            typography: websiteData.brand.typography,
-            logo: websiteData.brand.logo,
-            screenshots: brandProfileData.screenshots,
+            colors: brandRecord.colors,
+            typography: brandRecord.typography,
+            logo: brandRecord.logos,
+            screenshots: brandRecord.screenshots,
           },
         };
-        
       } catch (error) {
         console.error("🎨 [BRAND EXTRACTION] Error:", error);
-        
+
         if (error instanceof TRPCError) {
           throw error;
         }
-        
+
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: error instanceof Error ? error.message : "Failed to extract brand profile",
         });
       }
     }),
-    
+
+  // Get brand profile for a project
   // Get brand profile for a project
   getBrandProfile: protectedProcedure
     .input(z.object({
@@ -324,30 +243,32 @@ export const websitePipelineRouter = createTRPCRouter({
     .query(async ({ input, ctx }) => {
       const { projectId } = input;
       const userId = ctx.session.user.id;
-      
-      // Verify project ownership
+
       const project = await db.query.projects.findFirst({
         where: eq(projects.id, projectId),
       });
-      
+
       if (!project || project.userId !== userId) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Project not found or access denied",
         });
       }
-      
-      // Get brand profile
-      const brandProfile = await db.query.brandProfiles.findFirst({
-        where: eq(brandProfiles.projectId, projectId),
-        with: {
-          versions: {
-            orderBy: (versions, { desc }) => [desc(versions.versionNumber)],
-            limit: 5,
-          },
-        },
-      });
-      
-      return brandProfile;
+
+      const result = await ctx.db
+        .select({
+          brand: brandRepository,
+          usage: projectBrandUsage,
+        })
+        .from(projectBrandUsage)
+        .innerJoin(
+          brandRepository,
+          eq(projectBrandUsage.brandRepositoryId, brandRepository.id),
+        )
+        .where(eq(projectBrandUsage.projectId, projectId))
+        .orderBy(desc(projectBrandUsage.usedAt))
+        .limit(1);
+
+      return result[0]?.brand ?? null;
     }),
 });

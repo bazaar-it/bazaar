@@ -9,10 +9,10 @@ import type { PanelTypeG } from './WorkspaceContentAreaG';
 import { Button } from "~/components/ui/button";
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from "~/components/ui/tooltip";
 import SidebarFeedbackButton from "~/components/ui/SidebarFeedbackButton";
-import { 
-  MessageSquareIcon, 
-  PlayIcon, 
-  Code2Icon, 
+import {
+  MessageSquareIcon,
+  PlayIcon,
+  Code2Icon,
   PlusIcon,
   FolderIcon,
   LayoutTemplateIcon,
@@ -20,13 +20,15 @@ import {
   Zap,
   Film,
   ShieldCheck,
+  Images,
+  Globe2,
 } from "lucide-react";
-import { Images } from "lucide-react";
 
 
 interface GenerateSidebarProps {
   onAddPanel?: (panelType: PanelTypeG | 'timeline') => void;
   isAdmin?: boolean;
+  onShowUrlModal?: () => void;
 }
 
 interface WorkspacePanelG {
@@ -64,7 +66,8 @@ const navItems: WorkspacePanelG[] = [
 
 export function GenerateSidebar({ 
   onAddPanel,
-  isAdmin = false
+  isAdmin = false,
+  onShowUrlModal,
 }: GenerateSidebarProps) {
   const router = useRouter();
   const [isDragging, setIsDragging] = useState(false);
@@ -170,6 +173,20 @@ export function GenerateSidebar({
             <span className="text-[10px] text-gray-500 dark:text-gray-500 group-hover:text-gray-700 dark:group-hover:text-gray-300 font-light leading-tight transition-colors">New</span>
           </div>
         </div>
+
+        {onShowUrlModal ? (
+          <div className="w-full flex flex-col items-center mb-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10 rounded-lg text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800"
+              onClick={onShowUrlModal}
+            >
+              <Globe2 className="h-5 w-5" />
+            </Button>
+            <span className="text-[10px] text-gray-500 dark:text-gray-500 leading-tight">URL</span>
+          </div>
+        ) : null}
 
         {/* Panel Navigation */}
         <nav 
