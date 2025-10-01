@@ -1,7 +1,7 @@
 //src/server/api/routers/scenes.ts
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, isNull } from "drizzle-orm";
 import { scenes, sceneIterations, messages, projects, sceneOperations } from "~/server/db/schema";
 import { TRPCError } from "@trpc/server";
 import { messageService } from "~/server/services/data/message.service";
@@ -449,7 +449,8 @@ export const scenesRouter = createTRPCRouter({
       const existingScene = await ctx.db.query.scenes.findFirst({
         where: and(
           eq(scenes.id, input.sceneId),
-          eq(scenes.projectId, input.projectId)
+          eq(scenes.projectId, input.projectId),
+          isNull(scenes.deletedAt)
         ),
         with: {
           project: true
@@ -556,7 +557,8 @@ export const scenesRouter = createTRPCRouter({
       const existingScene = await ctx.db.query.scenes.findFirst({
         where: and(
           eq(scenes.id, input.sceneId),
-          eq(scenes.projectId, input.projectId)
+          eq(scenes.projectId, input.projectId),
+          isNull(scenes.deletedAt)
         ),
         with: {
           project: true

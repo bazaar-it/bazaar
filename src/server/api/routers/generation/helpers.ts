@@ -1,6 +1,6 @@
 import { db } from "~/server/db";
 import { scenes, sceneIterations, projects, messages } from "~/server/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { messageService } from "~/server/services/data/message.service";
 import { randomUUID } from "crypto";
 import { addTool } from "~/tools/add/add";
@@ -295,7 +295,7 @@ export async function executeToolFromDecision(
       }
       
       let sceneToEdit = await db.query.scenes.findFirst({
-        where: eq(scenes.id, decision.toolContext.targetSceneId),
+        where: and(eq(scenes.id, decision.toolContext.targetSceneId), isNull(scenes.deletedAt)),
       });
       // If not found and target looks like a position-based token (e.g., "scene-2-id"), map to storyboard order
       if (!sceneToEdit && /^scene-\d+-id$/i.test(String(decision.toolContext.targetSceneId))) {
@@ -306,7 +306,7 @@ export async function executeToolFromDecision(
             const targetSceneId = decision.toolContext.targetSceneId;
             if (targetSceneId) {
               sceneToEdit = await db.query.scenes.findFirst({
-                where: eq(scenes.id, targetSceneId),
+                where: and(eq(scenes.id, targetSceneId), isNull(scenes.deletedAt)),
               });
             }
           }
@@ -575,7 +575,7 @@ export async function executeToolFromDecision(
       }
       
       const sceneToTrim = await db.query.scenes.findFirst({
-        where: eq(scenes.id, decision.toolContext.targetSceneId),
+        where: and(eq(scenes.id, decision.toolContext.targetSceneId), isNull(scenes.deletedAt)),
       });
       
       if (!sceneToTrim) {
@@ -672,7 +672,7 @@ export async function executeToolFromDecision(
       
       // For delete, get the scene first for the response
       const sceneToDelete = await db.query.scenes.findFirst({
-        where: eq(scenes.id, decision.toolContext.targetSceneId),
+        where: and(eq(scenes.id, decision.toolContext.targetSceneId), isNull(scenes.deletedAt)),
       });
       
       if (!sceneToDelete) {

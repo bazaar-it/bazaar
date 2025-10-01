@@ -66,7 +66,7 @@ export const generateScene = protectedProcedure
         
         // Existing scenes
         db.query.scenes.findMany({
-          where: eq(scenes.projectId, projectId),
+          where: and(eq(scenes.projectId, projectId), isNull(scenes.deletedAt)),
           orderBy: [scenes.order],
         }),
         
@@ -832,7 +832,7 @@ export const removeScene = protectedProcedure
 
       // 1. Verify project ownership and scene existence
       const scene = await db.query.scenes.findFirst({
-        where: eq(scenes.id, sceneId),
+        where: and(eq(scenes.id, sceneId), isNull(scenes.deletedAt)),
         with: {
           project: true,
         },
@@ -1027,7 +1027,7 @@ export const updateSceneName = protectedProcedure
     try {
       // 1. Verify project ownership and scene existence
       const scene = await db.query.scenes.findFirst({
-        where: eq(scenes.id, sceneId),
+        where: and(eq(scenes.id, sceneId), isNull(scenes.deletedAt)),
         with: {
           project: true,
         },
@@ -1069,7 +1069,7 @@ export const updateSceneName = protectedProcedure
           updatedAt: new Date(),
           revision: sql`${scenes.revision} + 1`,
         })
-        .where(eq(scenes.id, sceneId))
+        .where(and(eq(scenes.id, sceneId), isNull(scenes.deletedAt)))
         .returning();
 
       console.log(`[updateSceneName] Scene name updated successfully`);
@@ -1137,7 +1137,7 @@ export const trimLeft = protectedProcedure
 
     // Ownership and scene fetch
     const scene = await db.query.scenes.findFirst({
-      where: eq(scenes.id, sceneId),
+      where: and(eq(scenes.id, sceneId), isNull(scenes.deletedAt)),
       with: { project: true },
     });
     if (!scene || scene.project.userId !== userId) {

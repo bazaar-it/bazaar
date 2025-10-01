@@ -4,7 +4,7 @@ import { db } from "~/server/db";
 import { getProdTemplatesDb } from "~/server/db/templates-prod";
 import { env } from "~/env";
 import { templates, scenes, projects, templateUsages } from "~/server/db/schema";
-import { eq, and, desc, inArray, sql } from "drizzle-orm";
+import { eq, and, desc, inArray, sql, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 // Input schemas
@@ -61,7 +61,8 @@ export const templatesRouter = createTRPCRouter({
       const scene = await db.query.scenes.findFirst({
         where: and(
           eq(scenes.id, sceneId),
-          eq(scenes.projectId, projectId)
+          eq(scenes.projectId, projectId),
+          isNull(scenes.deletedAt)
         ),
       });
       

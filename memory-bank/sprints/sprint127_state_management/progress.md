@@ -19,3 +19,21 @@
 - Update remaining timeline drag/trim flows to use the helper & revision increments.  
 - Plumb `revision` through API responses and surface optimistic-lock errors to the UI.  
 - Instrument helper telemetry (Sentry/analytics) once behaviour is stable.
+
+---
+
+**Date**: 2025-10-02 (later)  
+**Engineer**: Codex
+
+## ✅ Today
+- Investigated "deleted scene resurrects after chat edit" regression; root cause was soft-deleted rows still loaded into orchestration/storyboard queries.  
+- Added `deletedAt IS NULL` guard to all scene fetches used by Brain orchestration, scene tools, and manual timeline mutations (`scene-operations.ts`, `helpers.ts`, `scenes.ts`, `templates.ts`).  
+- Updated delete mutation to refuse operating on already-soft-deleted rows; prevents downstream edits from targeting stale scene IDs.
+
+## Notes
+- Restore flow still reuses soft-deleted payload as intended; other queries now ignore deleted rows by default.  
+- Need to verify multi-scene templates and iteration revert flows continue to function with the stricter filters.
+
+## Next
+- Manual QA pass: delete via timeline, issue chat edits, confirm scene remains removed after orchestration completes.  
+- Add regression test (integration) that simulates delete→edit to ensure filters stay in place.
