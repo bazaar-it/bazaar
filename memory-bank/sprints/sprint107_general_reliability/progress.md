@@ -369,3 +369,4 @@ Date: 2025-09-24 (markdown fence strip)
 - Logged intent-analyzer regression where attachments override explicit scene names; see `analysis/2025-10-02-intent-analyzer-scene-target.md` for reproduction and fix plan.
 - Softened brain instructions so attached scenes are preferred only when the prompt is ambiguous; explicit scene names now override prior attachments.【src/brain/orchestrator_functions/intentAnalyzer.ts:98】
 - Snapshot scene attachments at submit time and clear `selectedScenes` immediately so the next prompt starts without stale scene URLs; prevents old drags from influencing new requests.【src/app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx:604】
+- Clarified attachment guidance again so dragged scenes are treated as explicit targets unless the user clearly redirects to a different scene.【src/brain/orchestrator_functions/intentAnalyzer.ts:98】

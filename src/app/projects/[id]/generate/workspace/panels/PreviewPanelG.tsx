@@ -2675,13 +2675,6 @@ export default function FallbackComposition() {
                 onPlay={() => {
                   setIsPlaying(true);
                   try {
-                    // Ensure player is unmuted and volume up if API available
-                    try {
-                      const api: any = playerRef.current as any;
-                      if (api?.setMuted) api.setMuted(false);
-                      if (api?.setVolume) api.setVolume(1);
-                    } catch {}
-
                     // Ensure audio starts at offset for immediate sound if project has audio
                     const pa = (playerProps.inputProps as any)?.audio;
                     const fps = playerProps.fps || 30;

@@ -19,3 +19,56 @@
 - Update remaining timeline drag/trim flows to use the helper & revision increments.  
 - Plumb `revision` through API responses and surface optimistic-lock errors to the UI.  
 - Instrument helper telemetry (Sentry/analytics) once behaviour is stable.
+
+---
+
+**Date**: 2025-10-02 (later)  
+**Engineer**: Codex
+
+## ✅ Today
+- Investigated "deleted scene resurrects after chat edit" regression; root cause was soft-deleted rows still loaded into orchestration/storyboard queries.  
+- Added `deletedAt IS NULL` guard to all scene fetches used by Brain orchestration, scene tools, and manual timeline mutations (`scene-operations.ts`, `helpers.ts`, `scenes.ts`, `templates.ts`).  
+- Updated delete mutation to refuse operating on already-soft-deleted rows; prevents downstream edits from targeting stale scene IDs.
+
+## Notes
+- Restore flow still reuses soft-deleted payload as intended; other queries now ignore deleted rows by default.  
+- Need to verify multi-scene templates and iteration revert flows continue to function with the stricter filters.
+
+## Next
+- Manual QA pass: delete via timeline, issue chat edits, confirm scene remains removed after orchestration completes.  
+- Add regression test (integration) that simulates delete→edit to ensure filters stay in place.
+
+---
+
+**Date**: 2025-10-02 (later still)  
+**Engineer**: Codex
+
+## ✅ Today
+- Expanded the soft-delete guards to every remaining scene query (template imports, website-to-video, add-audio, create-scene-from-plan, timeline duplicate/split/reorder/duration) so orchestrator or utility jobs cannot resurrect removed scenes.  
+- Tightened iteration revert logic to ignore deleted scenes when calculating order or applying edits, avoiding accidental restores.  
+- Documented the audit results and outstanding QA steps for the deletion regression.
+
+## Notes
+- Restore/undo paths intentionally bypass the filter; all other mutations now assume `deletedAt` = active.  
+- Need to monitor performance of the additional `isNull` predicates—no noticeable impact expected.
+
+## Next
+- Manual UI verification: delete scene → run website-to-video + chat edit to confirm no resurrection.  
+- Author integration test covering delete→LLM edit flow.
+
+---
+
+**Date**: 2025-10-02 (evening)  
+**Engineer**: Codex
+
+## ✅ Today
+- Debugged why preview audio never played: the Remotion player autoplays unmuted and violates Chrome's gesture gate, plus the portal-based controls never triggered our container listener.  
+- Added global gesture detection to unmute the player only after the first user interaction, start playback muted by default, and ensure the chat panel’s play handler no longer forces unmute prematurely.
+
+## Notes
+- Preview now mirrors browser policies: first click enables audio, afterwards the player un-mutes and resumes without console spam.  
+- Export pipeline unaffected (audio already present in rendered files).
+
+## Next
+- Consider persisting the “audio unlocked” flag per session so the player can start unmuted after the first interaction.  
+- Add automated coverage for playback mute/unmute transitions if we expand Jest + jsdom audio mocks.
