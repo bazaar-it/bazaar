@@ -1,6 +1,6 @@
 import { db } from "~/server/db";
 import { scenes, sceneIterations, projects, messages } from "~/server/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { messageService } from "~/server/services/data/message.service";
 import { randomUUID } from "crypto";
 import { addTool } from "~/tools/add/add";
@@ -500,6 +500,7 @@ export async function executeToolFromDecision(
         name: editResult.data.name || sceneToEdit.name, // Preserve scene name
         props: editResult.data.props || sceneToEdit.props,
         updatedAt: new Date(),
+        revision: sql`${scenes.revision} + 1`,
       };
       let durationChanged = false;
       if (decision.toolContext.requestedDurationFrames && typeof editResult.data.duration === 'number') {
@@ -613,6 +614,7 @@ export async function executeToolFromDecision(
         .set({
           duration: trimResult.data.duration,
           updatedAt: new Date(),
+          revision: sql`${scenes.revision} + 1`,
         })
         .where(eq(scenes.id, decision.toolContext.targetSceneId))
         .returning();

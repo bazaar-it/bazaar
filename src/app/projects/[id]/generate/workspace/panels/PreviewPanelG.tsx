@@ -171,6 +171,7 @@ export function PreviewPanelG({
           jsCodeLength: hasCompiled ? ((dbScene as any).jsCode?.length || 0) : 0,
           duration: sceneDuration,
           order: dbScene.order ?? 0,
+          revision: dbScene.revision ?? localScene?.revision ?? 1,
         });
         const scene = {
           id: dbScene.id,
@@ -178,6 +179,7 @@ export function PreviewPanelG({
           start: currentStart,
           duration: sceneDuration,
           order: dbScene.order ?? 0,
+          revision: dbScene.revision ?? localScene?.revision ?? 1,
           name: localName || dbScene.name,
           data: {
             // Prefer pre-compiled JS if available; fallback to TSX
@@ -197,10 +199,11 @@ export function PreviewPanelG({
       const sigFrom = (list: any[]) => list.map((s: any) => {
         const order = s.order ?? 0;
         const duration = s.duration || 150;
+        const revision = s.revision ?? 0;
         // Prefer compiled JS when present; otherwise use TSX
         const code = (s?.data?.code || (s as any).jsCode || (s as any).tsxCode || '') as string;
         const h = (typeof hashString === 'function') ? hashString(code) : String(code.length);
-        return `${s.id}:${order}:${duration}:${h}`;
+        return `${s.id}:${order}:${duration}:${revision}:${h}`;
       }).join('|');
       const serverSig = sigFrom(convertedScenes);
       const localSig = sigFrom((currentProps.scenes || []) as any[]);
