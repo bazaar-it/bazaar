@@ -12,6 +12,7 @@ import { useVideoState } from "~/stores/videoState";
 import { transform } from 'sucrase';
 import { useIsTouchDevice } from "~/hooks/use-is-touch";
 import { useIntersectionObserver } from "~/hooks/use-intersection-observer";
+import { TemplateAdminMenu } from "~/components/templates/TemplateAdminMenu";
 
 type ExtendedTemplateDefinition = TemplateDefinition & {
   previewImage?: string | null;
@@ -157,14 +158,17 @@ const TemplateVideoPlayer = ({ template, format }: { template: ExtendedTemplateD
 };
 
 // Template preview component with thumbnail/video toggle
-const TemplatePreview = ({ template, onClick, isLoading, format, isTouchDevice }: { 
-  template: ExtendedTemplateDefinition; 
+const TemplatePreview = ({ template, onClick, isLoading, format, isTouchDevice, projectId, isAdmin }: {
+  template: ExtendedTemplateDefinition;
   onClick: () => void;
   isLoading: boolean;
   format: string;
   isTouchDevice: boolean;
+  projectId: string;
+  isAdmin: boolean;
 }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const utils = api.useUtils();
 
   const handleMouseEnter = useCallback(() => {
     if (!isTouchDevice) {
@@ -178,6 +182,11 @@ const TemplatePreview = ({ template, onClick, isLoading, format, isTouchDevice }
     }
   }, [isTouchDevice]);
 
+  const handleAdminUpdate = useCallback(() => {
+    // Invalidate queries to refresh templates list
+    utils.templates.getAll.invalidate();
+  }, [utils]);
+
   const className = `relative w-full ${getAspectRatioClass(format)} bg-black rounded-lg overflow-hidden cursor-pointer transition-all duration-200 group${isTouchDevice ? '' : ' hover:scale-[1.01]'}`;
   const showVideo = !isTouchDevice && isHovered;
   const showInfo = false;
@@ -185,7 +194,7 @@ const TemplatePreview = ({ template, onClick, isLoading, format, isTouchDevice }
   const formattedDuration = `${Math.round((template.duration / 30) * 10) / 10}s`;
 
   return (
-    <div 
+    <div
       className={className}
       onClick={onClick}
       onMouseEnter={!isTouchDevice ? handleMouseEnter : undefined}
@@ -199,6 +208,22 @@ const TemplatePreview = ({ template, onClick, isLoading, format, isTouchDevice }
           <div className="bg-gray-900/80 text-white text-[10px] sm:text-xs px-2 py-1 rounded-full font-medium">
             {formattedDuration}
           </div>
+        </div>
+      )}
+
+      {/* Admin Menu - Top Right */}
+      {isAdmin && template.isFromDatabase && (
+        <div className="absolute top-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
+          <TemplateAdminMenu
+            template={{
+              id: template.id,
+              name: template.name,
+              duration: template.duration,
+              category: template.category || null,
+            }}
+            projectId={projectId}
+            onUpdate={handleAdminUpdate}
+          />
         </div>
       )}
 
@@ -372,6 +397,10 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
   
   // Get current project format
   const currentFormat = getCurrentProps()?.meta?.format ?? 'landscape';
+
+  // Check if user is admin
+  const { data: adminCheck } = api.admin.checkAdminAccess.useQuery();
+  const isAdmin = adminCheck?.isAdmin === true;
 
   // Use infinite query for pagination - only loads 10 at a time
   const {
@@ -627,12 +656,14 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
             {filteredTemplates.map((template) => (
               <Card key={template.id} className="overflow-hidden hover:shadow-lg transition-shadow p-0">
                 {/* Clickable Full-Size Preview with correct aspect ratio */}
-                <TemplatePreview 
-                  template={template} 
+                <TemplatePreview
+                  template={template}
                   onClick={() => handleAddTemplate(template)}
                   isLoading={loadingTemplateId === template.id}
                   format={currentFormat}
                   isTouchDevice={isTouchDevice}
+                  projectId={projectId}
+                  isAdmin={isAdmin}
                 />
               </Card>
             ))}
