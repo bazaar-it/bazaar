@@ -507,7 +507,7 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
     addTemplateMutation.mutate(mutationParams);
   }, [projectId, addTemplateMutation, trackUsageMutation]);
 
-  // Combine hardcoded and database templates (DB sorted by newest first)
+  // Combine hardcoded and database templates (DB first, then hardcoded after all pages loaded)
   const combinedTemplates = useMemo<ExtendedTemplateDefinition[]>(() => {
     const dbTemplatesFormatted: ExtendedTemplateDefinition[] = databaseTemplates.map((dbTemplate: any) => ({
       id: dbTemplate.id,
@@ -525,9 +525,13 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
       tags: dbTemplate.tags ?? [],
     }));
 
-    // DB templates first (paginated), then hardcoded templates at the bottom for additional options
-    return [...dbTemplatesFormatted, ...TEMPLATES] as ExtendedTemplateDefinition[];
-  }, [databaseTemplates]);
+    // Only append hardcoded templates AFTER all DB templates are loaded (no more pages)
+    // This ensures DB templates (newest first) appear before hardcoded ones
+    const shouldShowHardcoded = !hasNextPage && !isFetchingNextPage;
+    return shouldShowHardcoded
+      ? [...dbTemplatesFormatted, ...TEMPLATES] as ExtendedTemplateDefinition[]
+      : dbTemplatesFormatted as ExtendedTemplateDefinition[];
+  }, [databaseTemplates, hasNextPage, isFetchingNextPage]);
 
   const isInitialLoading = isLoadingDbTemplates;
   

@@ -5,6 +5,7 @@ CRITICAL TECHNICAL RULES (APPLY ALWAYS):
 - Export exact duration: export const durationInFrames_[ID] = <number>; do not default to 180.
 - Keep all elements within canvas bounds using useVideoConfig() width/height.
 - Clamp interpolations (extrapolateLeft/Right: 'clamp').
+- Default easing is cubic: when you add springs or interpolations, destructure Easing from window.Remotion and use "Easing.bezier(0.4, 0, 0.2, 1)" unless the user explicitly asks for a different feel.
 - For every interpolate() call, the inputRange and outputRange arrays MUST be the same length; never provide mismatched lengths.
 - Use a single transform property per element (compose translate/scale/rotate in one string).
 - Ensure responsive styles; avoid fixed pixel layouts when possible.
