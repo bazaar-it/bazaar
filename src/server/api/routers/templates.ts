@@ -106,7 +106,10 @@ export const templatesRouter = createTRPCRouter({
       const { category, isOfficial, format, limit, cursor = 0 } = input;
 
       // Build where conditions
-      const conditions = [eq(templates.isActive, true)];
+      const conditions = [
+        eq(templates.isActive, true),
+        eq(templates.adminOnly, false), // Don't show admin-only templates to regular users
+      ];
 
       if (category) {
         conditions.push(eq(templates.category, category));
@@ -146,7 +149,7 @@ export const templatesRouter = createTRPCRouter({
           updatedAt: true,
         },
         where: and(...conditions),
-        orderBy: [desc(templates.isOfficial), desc(templates.usageCount), desc(templates.createdAt)],
+        orderBy: [desc(templates.createdAt), desc(templates.isOfficial), desc(templates.usageCount)],
         limit: fetchLimit,
         offset: cursor,
         with: {
