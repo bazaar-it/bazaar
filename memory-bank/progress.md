@@ -1,5 +1,8 @@
 # 🏆 Bazaar-Vid Progress Summary
 
+## 📝 Latest Update (Oct 02, 2025)
+- Sprint 107: Unified cubic easing guidance across add/edit prompts so generated scenes default to `Easing.bezier(0.4, 0, 0.2, 1)` unless users ask otherwise, keeping motion curves consistent between new content and tweaks.【src/config/prompts/active/bases/technical-guardrails.ts:8】
+
 ## 📝 Latest Update (Sep 29, 2025)
 - Sprint 140: Refactored `NewProjectButton` to reuse the shared `useIsMobile` hook, fixing the mobile TDZ crash and aligning project creation with the central breakpoint system.【src/components/client/NewProjectButton.tsx:11】【src/components/client/NewProjectButton.tsx:41】
 - Sprint 140: Synced the mobile format picker sheet with breakpoint changes so it auto-closes when dropdowns are disabled or the viewport shifts back to desktop layouts.【src/components/client/NewProjectButton.tsx:108】【memory-bank/sprints/sprint140_mobile/progress.md:39】
