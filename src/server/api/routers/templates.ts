@@ -120,7 +120,11 @@ export const templatesRouter = createTRPCRouter({
       const prodDb = getProdTemplatesDb();
       const sourceDb = prodDb || db;
 
-      // Fetch limit + 1 to determine if there's a next page
+      // Format filter using SQL JSONB operator for proper pagination
+      if (format) {
+        conditions.push(sql`${templates.supportedFormats}::jsonb @> ${JSON.stringify([format])}::jsonb`);
+      }
+
       const fetchLimit = limit + 1;
 
       // Get templates (explicit columns to support prod schema without js_code)
@@ -159,18 +163,14 @@ export const templatesRouter = createTRPCRouter({
         },
       });
 
-      // Filter by format if specified
-      let filteredTemplates = allTemplates;
-      if (format) {
-        filteredTemplates = allTemplates.filter(template => {
-          const formats = template.supportedFormats as string[];
-          return formats.includes(format);
-        });
+      console.log('[TemplatesRouter] Query returned', allTemplates.length, 'templates from', prodDb ? 'PROD' : 'LOCAL');
+      if (allTemplates.length > 0) {
+        console.log('[TemplatesRouter] First 3 template names:', allTemplates.slice(0, 3).map(t => t.name));
       }
 
-      // Check if there's a next page
-      const hasNextPage = filteredTemplates.length > limit;
-      const items = hasNextPage ? filteredTemplates.slice(0, limit) : filteredTemplates;
+      // Check if there's a next page (format already filtered in SQL)
+      const hasNextPage = allTemplates.length > limit;
+      const items = hasNextPage ? allTemplates.slice(0, limit) : allTemplates;
       const nextCursor = hasNextPage ? cursor + limit : undefined;
 
       return {

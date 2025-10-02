@@ -370,3 +370,4 @@ Date: 2025-09-24 (markdown fence strip)
 - Softened brain instructions so attached scenes are preferred only when the prompt is ambiguous; explicit scene names now override prior attachments.【src/brain/orchestrator_functions/intentAnalyzer.ts:98】
 - Snapshot scene attachments at submit time and clear `selectedScenes` immediately so the next prompt starts without stale scene URLs; prevents old drags from influencing new requests.【src/app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx:604】
 - Clarified attachment guidance again so dragged scenes are treated as explicit targets unless the user clearly redirects to a different scene.【src/brain/orchestrator_functions/intentAnalyzer.ts:98】
+- Standardized default cubic easing across add/edit prompts so new scenes and edits automatically apply `Easing.bezier(0.4, 0, 0.2, 1)` unless the user requests otherwise, keeping motion curves consistent.【src/config/prompts/active/bases/technical-guardrails.ts:8】

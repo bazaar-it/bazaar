@@ -291,8 +291,7 @@ ANIMATION AND CSS ESSENTIALS
 
 • Reveal grouped/list elements with a 1–4 frame stagger (≈40–120ms at 30fps), consistent per group.
 • Apply subtle depth: background parallax (scale 1.03–1.08 or 4–8px slow translate over the scene); optional 1–3px micro-motion on foreground elements.
-• DEFAULT EASING: Unless the user explicitly requests another feel, use cubic easing everywhere. Destructure Easing from window.Remotion and apply `Easing.bezier(0.4, 0, 0.2, 1)` inside spring configs (`spring({ frame, fps, config: { … }, easing: Easing.bezier(...) })`) or pass it as the easing option to interpolate.
-• Use easing presets by role: hero elements spring config { damping: 20, stiffness: 170, easing: Easing.bezier(0.4, 0, 0.2, 1) }; secondary elements { damping: 18, stiffness: 140, easing: Easing.bezier(0.4, 0, 0.2, 1) }. Always clamp interpolate outputs.
+• Use easing presets by role: hero elements spring config { damping: 20, stiffness: 170 }; secondary elements { damping: 18, stiffness: 140 }. Always clamp interpolate outputs.
 
 
 ⸻
