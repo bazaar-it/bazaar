@@ -12,6 +12,7 @@ import { useVideoState } from "~/stores/videoState";
 import { transform } from 'sucrase';
 import { useIsTouchDevice } from "~/hooks/use-is-touch";
 import { useIntersectionObserver } from "~/hooks/use-intersection-observer";
+import { TemplateAdminMenu } from "~/components/templates/TemplateAdminMenu";
 
 type ExtendedTemplateDefinition = TemplateDefinition & {
   previewImage?: string | null;
@@ -157,14 +158,17 @@ const TemplateVideoPlayer = ({ template, format }: { template: ExtendedTemplateD
 };
 
 // Template preview component with thumbnail/video toggle
-const TemplatePreview = ({ template, onClick, isLoading, format, isTouchDevice }: { 
-  template: ExtendedTemplateDefinition; 
+const TemplatePreview = ({ template, onClick, isLoading, format, isTouchDevice, projectId, isAdmin }: {
+  template: ExtendedTemplateDefinition;
   onClick: () => void;
   isLoading: boolean;
   format: string;
   isTouchDevice: boolean;
+  projectId: string;
+  isAdmin: boolean;
 }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const utils = api.useUtils();
 
   const handleMouseEnter = useCallback(() => {
     if (!isTouchDevice) {
@@ -178,6 +182,11 @@ const TemplatePreview = ({ template, onClick, isLoading, format, isTouchDevice }
     }
   }, [isTouchDevice]);
 
+  const handleAdminUpdate = useCallback(() => {
+    // Invalidate queries to refresh templates list
+    utils.templates.getAll.invalidate();
+  }, [utils]);
+
   const className = `relative w-full ${getAspectRatioClass(format)} bg-black rounded-lg overflow-hidden cursor-pointer transition-all duration-200 group${isTouchDevice ? '' : ' hover:scale-[1.01]'}`;
   const showVideo = !isTouchDevice && isHovered;
   const showInfo = false;
@@ -185,7 +194,7 @@ const TemplatePreview = ({ template, onClick, isLoading, format, isTouchDevice }
   const formattedDuration = `${Math.round((template.duration / 30) * 10) / 10}s`;
 
   return (
-    <div 
+    <div
       className={className}
       onClick={onClick}
       onMouseEnter={!isTouchDevice ? handleMouseEnter : undefined}
@@ -199,6 +208,22 @@ const TemplatePreview = ({ template, onClick, isLoading, format, isTouchDevice }
           <div className="bg-gray-900/80 text-white text-[10px] sm:text-xs px-2 py-1 rounded-full font-medium">
             {formattedDuration}
           </div>
+        </div>
+      )}
+
+      {/* Admin Menu - Top Right */}
+      {isAdmin && template.isFromDatabase && (
+        <div className="absolute top-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
+          <TemplateAdminMenu
+            template={{
+              id: template.id,
+              name: template.name,
+              duration: template.duration,
+              category: template.category || null,
+            }}
+            projectId={projectId}
+            onUpdate={handleAdminUpdate}
+          />
         </div>
       )}
 
@@ -360,18 +385,25 @@ const useCompiledTemplate = (
 
 export default function TemplatesPanelG({ projectId, onSceneGenerated }: TemplatesPanelGProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<'all' | 'colors' | 'ui' | 'text' | 'other'>("all");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [loadingTemplateId, setLoadingTemplateId] = useState<string | null>(null);
   const isTouchDevice = useIsTouchDevice();
-  
+
   // Get tRPC utils for cache invalidation
   const utils = api.useUtils();
-  
+
   // Get video state methods
   const { addScene, getCurrentProps } = useVideoState();
-  
+
   // Get current project format
   const currentFormat = getCurrentProps()?.meta?.format ?? 'landscape';
+
+  // Check if user is admin
+  const { data: adminCheck } = api.admin.checkAdminAccess.useQuery();
+  const isAdmin = adminCheck?.isAdmin === true;
+
+  // Get categories from database
+  const { data: categoriesData } = api.templates.getCategories.useQuery();
 
   // Use infinite query for pagination - only loads 10 at a time
   const {
@@ -414,16 +446,6 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
     return () => observer.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  // Classify a template into coarse categories for filtering
-  const classifyCategory = useCallback((t: ExtendedTemplateDefinition): 'colors' | 'ui' | 'text' | 'other' => {
-    const raw = (t.category || '').toLowerCase();
-    const name = (t.name || '').toLowerCase();
-    const hay = `${raw} ${name}`;
-    if (/color|gradient|bg|background/.test(hay)) return 'colors';
-    if (/ui|app|card|button|form|login|signup|screen/.test(hay)) return 'ui';
-    if (/text|word|type|typography/.test(hay)) return 'text';
-    return 'other';
-  }, []);
   
   // Direct template addition mutation - bypasses LLM pipeline
   const addTemplateMutation = api.generation.addTemplate.useMutation({
@@ -540,7 +562,7 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
     let templates = combinedTemplates;
     // Category filter
     if (selectedCategory !== 'all') {
-      templates = templates.filter(t => classifyCategory(t) === selectedCategory);
+      templates = templates.filter(t => (t.category || '').toLowerCase() === selectedCategory.toLowerCase());
     }
     // Format compatibility
     templates = templates.filter(template => {
@@ -553,7 +575,7 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
       templates = templates.filter(template => template.name.toLowerCase().includes(q));
     }
     return templates;
-  }, [searchQuery, currentFormat, combinedTemplates, selectedCategory, classifyCategory]);
+  }, [searchQuery, currentFormat, combinedTemplates, selectedCategory]);
 
   // Get grid columns based on format for better layout
   const getGridColumns = (format: string) => {
@@ -586,21 +608,26 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
         </div>
         {/* Category chips */}
         <div className="flex flex-wrap items-center gap-2">
-          {[
-            { key: 'all', label: 'All' },
-            { key: 'colors', label: 'Colors' },
-            { key: 'ui', label: 'UI' },
-            { key: 'text', label: 'Text' },
-            { key: 'other', label: 'Other' },
-          ].map((c: any) => (
-            <button
-              key={c.key}
-              onClick={() => setSelectedCategory(c.key)}
-              className={`px-2 py-1 text-xs rounded-full border ${selectedCategory === c.key ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
-            >
-              {c.label}
-            </button>
-          ))}
+          <button
+            onClick={() => setSelectedCategory('all')}
+            className={`px-2 py-1 text-xs rounded-full border ${selectedCategory === 'all' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+          >
+            All
+          </button>
+          {(categoriesData || []).map((c) => {
+            const categoryLabel = c.category
+              ? c.category.charAt(0).toUpperCase() + c.category.slice(1)
+              : 'Uncategorized';
+            return (
+              <button
+                key={c.category}
+                onClick={() => setSelectedCategory(c.category || '')}
+                className={`px-2 py-1 text-xs rounded-full border ${selectedCategory === c.category ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+              >
+                {categoryLabel} ({c.count})
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -627,12 +654,14 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
             {filteredTemplates.map((template) => (
               <Card key={template.id} className="overflow-hidden hover:shadow-lg transition-shadow p-0">
                 {/* Clickable Full-Size Preview with correct aspect ratio */}
-                <TemplatePreview 
-                  template={template} 
+                <TemplatePreview
+                  template={template}
                   onClick={() => handleAddTemplate(template)}
                   isLoading={loadingTemplateId === template.id}
                   format={currentFormat}
                   isTouchDevice={isTouchDevice}
+                  projectId={projectId}
+                  isAdmin={isAdmin}
                 />
               </Card>
             ))}
