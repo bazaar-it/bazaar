@@ -50,26 +50,26 @@ export function TemplateAdminMenu({ template, projectId, onUpdate }: TemplateAdm
             <MoreVertical className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48">
-          <DropdownMenuItem onClick={() => setIsRenameOpen(true)}>
+        <DropdownMenuContent align="end" className="w-48" onClick={(e) => e.stopPropagation()}>
+          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setIsRenameOpen(true); }}>
             <Edit className="h-4 w-4 mr-2" />
             Rename
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setIsDurationOpen(true)}>
+          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setIsDurationOpen(true); }}>
             <Clock className="h-4 w-4 mr-2" />
             Edit Duration
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setIsCategoryOpen(true)}>
+          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setIsCategoryOpen(true); }}>
             <FolderTree className="h-4 w-4 mr-2" />
             Re-categorize
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setIsEditCodeOpen(true)}>
+          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setIsEditCodeOpen(true); }}>
             <Code className="h-4 w-4 mr-2" />
             Edit Code
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
-            onClick={() => setIsDeleteOpen(true)}
+            onClick={(e) => { e.stopPropagation(); setIsDeleteOpen(true); }}
             className="text-red-600 focus:text-red-600 focus:bg-red-50"
           >
             <Trash2 className="h-4 w-4 mr-2" />
