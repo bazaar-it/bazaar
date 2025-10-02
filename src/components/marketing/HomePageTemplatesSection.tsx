@@ -202,11 +202,13 @@ export default function HomePageTemplatesSection({ marketingHeaderRef }: HomePag
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   
   // Fetch 6 most recent templates - use same query structure as TemplatesPanelG
-  const { data: databaseTemplates = [], isLoading } = api.templates.getAll.useQuery({
+  const { data: templatesData, isLoading } = api.templates.getAll.useQuery({
     format: 'landscape', // Default to landscape for homepage
     limit: 6,
-    offset: 0,
   });
+
+  // Extract items from paginated response
+  const databaseTemplates = templatesData?.items || [];
 
   // Combine hardcoded and database templates (same as TemplatesPanelG)
   const combinedTemplates = React.useMemo(() => {
@@ -229,7 +231,7 @@ export default function HomePageTemplatesSection({ marketingHeaderRef }: HomePag
     }));
     
     // Convert hardcoded templates to HomePageTemplate format
-    const hardcodedTemplatesFormatted: HomePageTemplate[] = TEMPLATES.map((template, index) => {
+    const hardcodedTemplatesFormatted: HomePageTemplate[] = TEMPLATES.map((template) => {
       // Deterministic usage count based on template name hash
       const hash = template.name.split('').reduce((a, b) => {
         a = ((a << 5) - a) + b.charCodeAt(0);
