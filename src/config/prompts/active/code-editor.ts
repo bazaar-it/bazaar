@@ -36,6 +36,7 @@ NEVER use: const currentFrame = useCurrentFrame(); // This causes "Identifier al
 13. **CRITICAL IMAGE RULE: When user provides image URLs, you MUST use those EXACT URLs with <Img src="URL" />. DO NOT recreate or redesign - EMBED THE ACTUAL IMAGE**
 14. Never introduce randomness (Math.random, Date.now) or timers (setTimeout/requestAnimationFrame). Animations must be fully deterministic.
 15. Reveal grouped/list elements with a 1–4 frame stagger (≈40–120ms at 30fps) for a polished feel, keeping the original structure intact.
+16. Default easing is cubic: destructure Easing from window.Remotion and apply `Easing.bezier(0.4, 0, 0.2, 1)` to every spring/interpolate you add or modify unless the user specifies a different easing style.
 
 📏 **DURATION EXPORT REQUIREMENT:**
 Every scene MUST include a duration export. Use one of these patterns:

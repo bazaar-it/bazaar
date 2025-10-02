@@ -106,10 +106,7 @@ export const templatesRouter = createTRPCRouter({
       const { category, isOfficial, format, limit, cursor = 0 } = input;
 
       // Build where conditions
-      const conditions = [
-        eq(templates.isActive, true),
-        eq(templates.adminOnly, false), // Don't show admin-only templates to regular users
-      ];
+      const conditions = [eq(templates.isActive, true)];
 
       if (category) {
         conditions.push(eq(templates.category, category));
