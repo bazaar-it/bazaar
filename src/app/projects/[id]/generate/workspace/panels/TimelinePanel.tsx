@@ -33,6 +33,7 @@ import { extractSceneColors } from '~/lib/utils/extract-scene-colors';
 import { PlaybackSpeedSlider } from "~/components/ui/PlaybackSpeedSlider";
 import { computeSceneRanges, findSceneAtFrame } from '~/lib/utils/scene-ranges';
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
+import { sceneSyncHelpers } from "~/lib/sync/sceneSync";
 
 // Constants from React Video Editor Pro
 const ROW_HEIGHT = 60;
@@ -367,10 +368,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       // Invalidate iterations query to ensure restore button updates
       await utils.generation.getBatchMessageIterations.invalidate();
       // Invalidate project scenes so PreviewPanelG syncs latest durations
-      await utils.generation.getProjectScenes.invalidate({ projectId });
-      if (res?.newRevision != null) {
-        try { (useVideoState.getState().projects as any)[projectId].revision = res.newRevision; } catch {}
-      }
+      await sceneSyncHelpers.syncScenesChanged({ projectId, utils, source: 'timeline-duration-update', projectRevision: res?.newRevision });
     },
     onError: (error: any, vars: any) => {
       if (error?.data?.code === 'CONFLICT' && vars && vars.clientRevision !== undefined) {
@@ -389,10 +387,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   const updateSceneNameMutation = api.generation.updateSceneName.useMutation({
     onSuccess: async (res: any) => {
       console.log('[Timeline] Scene name persisted to database');
-      await utils.generation.getProjectScenes.invalidate({ projectId });
-      if (res?.newRevision != null) {
-        try { (useVideoState.getState().projects as any)[projectId].revision = res.newRevision; } catch {}
-      }
+      await sceneSyncHelpers.syncScenesChanged({ projectId, utils, source: 'timeline-rename', projectRevision: res?.newRevision });
     },
     onError: (error: any, vars: any) => {
       if (error?.data?.code === 'CONFLICT' && vars && vars.clientRevision !== undefined) {
@@ -409,8 +404,20 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   
   // API mutation for deleting scenes
   const restoreSceneMutation = api.generation.restoreScene.useMutation({
-    onSuccess: async () => {
-      await utils.generation.getProjectScenes.invalidate({ projectId });
+    onSuccess: async (payload) => {
+      const restoredScene = (payload as any)?.scene;
+      const newRevision = (payload as any)?.newRevision;
+      if (restoredScene) {
+        await sceneSyncHelpers.syncSceneRestored({
+          projectId,
+          utils,
+          scene: restoredScene,
+          source: 'timeline-restore',
+          projectRevision: newRevision,
+        });
+      } else {
+        await sceneSyncHelpers.syncScenesChanged({ projectId, utils, source: 'timeline-restore', projectRevision: newRevision });
+      }
       toast.success('Undo complete');
     },
     onError: () => toast.error('Failed to undo delete')
@@ -420,6 +427,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
       console.log('[Timeline] Scene deleted from database');
       setPendingDeleteSceneId(null); // Clear pending state
       const deleted = res?.data?.deletedScene || res?.deletedScene;
+      const newRevision = res?.data?.newRevision ?? res?.newRevision;
       toast.success('Scene deleted', {
         action: {
           label: 'Undo',
@@ -430,9 +438,16 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
           }
         }
       } as any);
-      await utils.generation.getProjectScenes.invalidate({ projectId });
-      if (res?.data?.newRevision != null) {
-        try { (useVideoState.getState().projects as any)[projectId].revision = res.data.newRevision; } catch {}
+      if (deleted?.id) {
+        await sceneSyncHelpers.syncSceneDeleted({
+          projectId,
+          utils,
+          sceneId: deleted.id,
+          source: 'timeline-delete',
+          projectRevision: newRevision,
+        });
+      } else {
+        await sceneSyncHelpers.syncScenesChanged({ projectId, utils, source: 'timeline-delete', projectRevision: newRevision });
       }
     },
     onError: (error: any, vars: any) => {
@@ -454,10 +469,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
     onSuccess: async (res: any) => {
       console.log('[Timeline] Scene order persisted to database');
       // Ensure all panels see new order
-      await utils.generation.getProjectScenes.invalidate({ projectId });
-      if (res?.newRevision != null) {
-        try { (useVideoState.getState().projects as any)[projectId].revision = res.newRevision; } catch {}
-      }
+      await sceneSyncHelpers.syncScenesChanged({ projectId, utils, source: 'timeline-reorder', projectRevision: res?.newRevision });
     },
     onError: (error: any, vars: any) => {
       if (error?.data?.code === 'CONFLICT' && vars && vars.clientRevision !== undefined) {
@@ -478,13 +490,18 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
         if (res?.newScene) {
           // Record undo (delete the duplicate on undo)
           pushAction(projectId, { type: 'duplicate', scene: res.newScene });
+          await sceneSyncHelpers.syncSceneCreated({
+            projectId,
+            utils,
+            scene: res.newScene,
+            source: 'timeline-duplicate',
+            projectRevision: res?.newRevision,
+          });
+        } else {
+          await sceneSyncHelpers.syncScenesChanged({ projectId, utils, source: 'timeline-duplicate', projectRevision: res?.newRevision });
         }
       } catch {}
-      await utils.generation.getProjectScenes.invalidate({ projectId });
       toast.success('Scene duplicated');
-      if (res?.newRevision != null) {
-        try { (useVideoState.getState().projects as any)[projectId].revision = res.newRevision; } catch {}
-      }
     },
     onError: (error) => {
       console.error('[Timeline] Failed to duplicate scene:', error);
@@ -493,8 +510,8 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   });
   // API mutation for splitting scenes
   const splitSceneMutation = api.scenes.splitScene.useMutation({
-    onSuccess: async () => {
-      await utils.generation.getProjectScenes.invalidate({ projectId });
+    onSuccess: async (res: any) => {
+      await sceneSyncHelpers.syncScenesChanged({ projectId, utils, source: 'timeline-split', projectRevision: res?.newRevision });
       toast.success('Scene split');
     },
     onError: (error: any, vars: any) => {
@@ -1690,31 +1707,6 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                 } catch {}
                 removeSceneMutation.mutate({ projectId, sceneId: dragInfo.sceneId! });
                 setSelectedSceneId(res.rightSceneId);
-                // Force-fetch latest scenes and replace VideoState to keep timeline and preview in sync
-                try {
-                  await utils.generation.getProjectScenes.invalidate({ projectId });
-                  const latest = await (utils.generation.getProjectScenes as any).fetch({ projectId });
-                  if (latest && Array.isArray(latest)) {
-                    const currentProps = useVideoState.getState().getCurrentProps();
-                    if (currentProps) {
-                      let start = 0;
-                      const converted = latest.map((db: any) => {
-                        const duration = db.duration || 150;
-                        const out = {
-                          id: db.id,
-                          type: 'custom' as const,
-                          start,
-                          duration,
-                          name: db.name,
-                          data: { code: db.tsxCode, name: db.name, componentId: db.id, props: db.props || {} }
-                        };
-                        start += duration;
-                        return out;
-                      });
-                      useVideoState.getState().replace(projectId, { ...currentProps, scenes: converted, meta: { ...currentProps.meta, duration: start } } as any);
-                    }
-                  }
-                } catch {}
                 toast.success('Trimmed from start');
               }
             } catch (err) {
@@ -1959,37 +1951,13 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
               // Push undo for split-only (restore left duration and remove right)
               const infoNow = getSceneStartById(sceneId);
               if (infoNow) {
-              try { pushAction(projectId, { type: 'split', sceneId, offset, leftBeforeDuration: info.duration, rightSceneId: res.rightSceneId }); } catch {}
+                try {
+                  pushAction(projectId, { type: 'split', sceneId, offset, leftBeforeDuration: info.duration, rightSceneId: res.rightSceneId });
+                } catch {}
               }
             }
-            // Force-fetch latest scenes and replace state to keep UI in sync immediately
-            await utils.generation.getProjectScenes.invalidate({ projectId });
-            try {
-            const latest = await (utils.generation.getProjectScenes as any).fetch({ projectId });
-            if (latest && Array.isArray(latest)) {
-              const currentProps = useVideoState.getState().getCurrentProps();
-              if (currentProps) {
-                let start = 0;
-                const ordered = [...latest].sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0));
-                const converted = ordered.map((db: any) => {
-                  const duration = db.duration || 150;
-                  const out = {
-                    id: db.id,
-                    type: 'custom' as const,
-                    start,
-                    duration,
-                    order: db.order ?? 0,
-                    name: db.name,
-                    data: { code: db.tsxCode, name: db.name, componentId: db.id, props: db.props || {} }
-                  };
-                  start += duration;
-                  return out;
-                });
-                useVideoState.getState().replace(projectId, { ...currentProps, scenes: converted, meta: { ...currentProps.meta, duration: start } } as any);
-              }
-            }
-          } catch {}
-          toast.success('Scene split at playhead');
+            await sceneSyncHelpers.syncScenesChanged({ projectId, utils, source: 'timeline-split-playhead', projectRevision: res?.newRevision });
+            toast.success('Scene split at playhead');
         } catch (err) {
           console.error('Context split error', err);
           toast.error('Failed to split scene');
@@ -2003,7 +1971,6 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
   // Trim-left button: atomic server-side split+delete-left
   const trimLeftMutation = api.generation.trimLeft.useMutation({
     onSuccess: async (res: any) => {
-      await utils.generation.getProjectScenes.invalidate({ projectId });
       if (res?.rightSceneId) {
         setSelectedSceneId(res.rightSceneId);
         try {
@@ -2011,9 +1978,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
           window.dispatchEvent(ev);
         } catch {}
       }
-      if (res?.newRevision != null) {
-        try { (useVideoState.getState().projects as any)[projectId].revision = res.newRevision; } catch {}
-      }
+      await sceneSyncHelpers.syncScenesChanged({ projectId, utils, source: 'timeline-trim-left', projectRevision: res?.newRevision });
       toast.success('Trimmed from start');
     },
     onError: (error: any, vars: any) => {
@@ -2239,7 +2204,7 @@ export default function TimelinePanel({ projectId, userId, onClose }: TimelinePa
                 } catch {}
                 removeSceneMutation.mutate({ projectId, sceneId: scene.id });
                 setSelectedSceneId(res.rightSceneId);
-                await utils.generation.getProjectScenes.invalidate({ projectId });
+                await sceneSyncHelpers.syncScenesChanged({ projectId, utils, source: 'timeline-key-trim-left', projectRevision: res?.newRevision });
                 toast.success('Trimmed from start');
               }
             } catch (err) {

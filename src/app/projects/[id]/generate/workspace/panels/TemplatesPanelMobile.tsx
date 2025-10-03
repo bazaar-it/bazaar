@@ -377,7 +377,7 @@ const MobileTemplateCard: React.FC<{
 
 const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, onSceneGenerated}) => {
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<'all' | 'colors' | 'ui' | 'text' | 'other' | 'multi'>("all");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [loadingTemplateId, setLoadingTemplateId] = useState<string | null>(null);
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
   const [previewTemplate, setPreviewTemplate] = useState<MobileTemplate | null>(null);
@@ -404,39 +404,78 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
     }
   }, [isAdmin, selectedCategory]);
 
-  const {data: databaseTemplates = [], isLoading} = api.templates.getAll.useQuery(
-    {format: currentFormat, limit: 100},
+  const { data: categoriesData } = api.templates.getCategories.useQuery();
+
+  const categoryOptions = useMemo(
+    () => {
+      const base: Array<{ key: string; label: string; value?: string }> = [
+        { key: 'all', label: 'All', value: undefined },
+      ];
+
+      if (categoriesData) {
+        for (const category of categoriesData) {
+          const rawValue = category.category ?? 'uncategorized';
+          const normalizedKey = rawValue.toLowerCase();
+          const labelName = category.category
+            ? category.category.charAt(0).toUpperCase() + category.category.slice(1)
+            : 'Uncategorized';
+          base.push({
+            key: normalizedKey,
+            label: `${labelName} (${category.count})`,
+            value: rawValue,
+          });
+        }
+      }
+
+      if (isAdmin) {
+        base.push({ key: 'multi', label: 'Multi-scene', value: undefined });
+      }
+
+      return base;
+    },
+    [categoriesData, isAdmin]
+  );
+
+  const selectedCategoryOption = useMemo(
+    () => categoryOptions.find((option) => option.key === selectedCategory),
+    [categoryOptions, selectedCategory]
+  );
+
+  const templatesQueryInput = useMemo(
+    () => ({
+      format: currentFormat,
+      limit: 10,
+      category:
+        selectedCategoryOption &&
+        selectedCategoryOption.key !== 'all' &&
+        selectedCategoryOption.key !== 'multi'
+          ? selectedCategoryOption.value
+          : undefined,
+    }),
+    [currentFormat, selectedCategoryOption]
+  );
+
+  const {
+    data: templatesData,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = api.templates.getAll.useInfiniteQuery(
+    templatesQueryInput,
     {
+      getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
       staleTime: 5 * 60 * 1000,
       refetchOnWindowFocus: false,
     }
   );
 
-  const categoryOptions = useMemo(() => {
-    const base = [
-      {key: 'all', label: 'All'},
-      {key: 'colors', label: 'Colors'},
-      {key: 'ui', label: 'UI'},
-      {key: 'text', label: 'Text'},
-      {key: 'other', label: 'Other'},
-    ];
-
-    if (isAdmin) {
-      return [
-        {key: 'all', label: 'All'},
-        {key: 'multi', label: 'Multi-scene'},
-        {key: 'colors', label: 'Colors'},
-        {key: 'ui', label: 'UI'},
-        {key: 'text', label: 'Text'},
-        {key: 'other', label: 'Other'},
-      ];
-    }
-
-    return base;
-  }, [isAdmin]);
+  const databaseTemplates = useMemo(() => {
+    return templatesData?.pages.flatMap((page) => page.items) ?? [];
+  }, [templatesData]);
 
   const combinedTemplates = useMemo<MobileTemplate[]>(() => {
-    const dbFormatted: MobileTemplate[] = (databaseTemplates || []).map((t: any) => ({
+    const dbFormatted: MobileTemplate[] = databaseTemplates.map((t: any) => ({
       id: t.id,
       name: t.name,
       duration: t.duration ?? 150,
@@ -454,6 +493,7 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
       adminOnly: t.adminOnly ?? false,
     }));
 
+    // Add hardcoded templates at the bottom for additional options
     const registryFormatted: MobileTemplate[] = TEMPLATES.map((t) => ({
       id: t.id,
       name: t.name,
@@ -469,8 +509,10 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
       compiledCode: getCompiledTemplate(t.id) ?? null,
     }));
 
-    return [...dbFormatted, ...registryFormatted];
-  }, [databaseTemplates]);
+    const shouldIncludeRegistry = !hasNextPage && !isFetchingNextPage;
+
+    return shouldIncludeRegistry ? [...dbFormatted, ...registryFormatted] : dbFormatted;
+  }, [databaseTemplates, hasNextPage, isFetchingNextPage]);
 
   const filteredTemplates = useMemo(() => {
     let templates = combinedTemplates;
@@ -479,22 +521,14 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
       templates = templates.filter((t) => (t.sceneCount ?? 1) <= 1);
     }
 
-    if (selectedCategory !== 'all') {
-      if (selectedCategory === 'multi') {
+    if (selectedCategoryOption && selectedCategoryOption.key !== 'all') {
+      if (selectedCategoryOption.key === 'multi') {
         templates = templates.filter((t) => (t.sceneCount ?? 1) > 1);
       } else {
+        const normalizedSelected = (selectedCategoryOption.value ?? selectedCategoryOption.key).toLowerCase();
         templates = templates.filter((t) => {
-          const hay = `${t.category || ''} ${t.name || ''}`.toLowerCase();
-          switch (selectedCategory) {
-            case 'colors':
-              return /color|gradient|bg|background/.test(hay);
-            case 'ui':
-              return /ui|app|card|button|form|login|signup|screen/.test(hay);
-            case 'text':
-              return /text|type|word|typography/.test(hay);
-            default:
-              return true;
-          }
+          const templateCategory = (t.category ?? 'uncategorized').toLowerCase();
+          return templateCategory === normalizedSelected;
         });
       }
     }
@@ -510,14 +544,15 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
     }
 
     return templates;
-  }, [combinedTemplates, selectedCategory, currentFormat, searchQuery, isAdmin]);
+  }, [combinedTemplates, selectedCategoryOption, currentFormat, searchQuery, isAdmin]);
 
   const visibleTemplates = filteredTemplates.slice(0, visibleCount);
-  const hasMore = visibleCount < filteredTemplates.length;
+  const hasMore = visibleCount < filteredTemplates.length || Boolean(hasNextPage);
 
   useEffect(() => {
-    setVisibleCount(Math.min(MOBILE_PAGE_SIZE, filteredTemplates.length));
-  }, [filteredTemplates.length, searchQuery, selectedCategory, isAdmin]);
+    const base = Math.min(MOBILE_PAGE_SIZE, filteredTemplates.length);
+    setVisibleCount((count) => Math.min(base, count));
+  }, [filteredTemplates.length, searchQuery, selectedCategoryOption?.key, isAdmin, currentFormat]);
 
   const trackUsageMutation = api.templates.trackUsage.useMutation();
 
@@ -543,6 +578,7 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
 
         setTimeout(async () => {
           await utils.chat.getMessages.invalidate({projectId});
+          await utils.templates.getCategories.invalidate();
         }, 100);
 
         setPreviewTemplate(null);
@@ -575,6 +611,7 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
       toast.success('Template deleted');
       setPreviewTemplate((current) => (current?.id === templateId ? null : current));
       await utils.templates.getAll.invalidate();
+      await utils.templates.getCategories.invalidate();
     },
     onError: (error) => {
       setDeletingTemplateId(null);
@@ -662,7 +699,7 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
           {categoryOptions.map((chip) => (
             <button
               key={chip.key}
-              onClick={() => setSelectedCategory(chip.key as typeof selectedCategory)}
+              onClick={() => setSelectedCategory(chip.key)}
               className={`px-2 py-1 text-xs rounded-full border ${selectedCategory === chip.key ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
             >
               {chip.label}
@@ -710,9 +747,16 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
               <div className="mt-4 flex justify-center">
                 <Button
                   variant="secondary"
-                  onClick={() => setVisibleCount((count) => Math.min(count + MOBILE_PAGE_SIZE, filteredTemplates.length))}
+                  disabled={isFetchingNextPage}
+                  onClick={async () => {
+                    const nextCount = visibleCount + MOBILE_PAGE_SIZE;
+                    if (nextCount > filteredTemplates.length && hasNextPage) {
+                      await fetchNextPage();
+                    }
+                    setVisibleCount((count) => Math.max(count, nextCount));
+                  }}
                 >
-                  Load more templates
+                  {isFetchingNextPage ? 'Loading…' : 'Load more templates'}
                 </Button>
               </div>
             )}

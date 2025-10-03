@@ -2,10 +2,8 @@
 
 import { z } from 'zod';
 
-// =============================================================================
-// RUNTIME VALIDATION SCHEMAS
-// =============================================================================
-
+// ======================================================================// RUNTIME VALIDATION SCHEMAS
+// ======================================================================
 export const ModelProviderSchema = z.enum(['openai', 'anthropic']);
 
 export const ModelConfigSchema = z.object({
@@ -35,26 +33,24 @@ export const ModelPackSchema = z.object({
   }),
 });
 
-// =============================================================================
-// TYPE DEFINITIONS
-// =============================================================================
-
+// ======================================================================// TYPE DEFINITIONS
+// ======================================================================
 export type ModelProvider = z.infer<typeof ModelProviderSchema>;
 export type ModelConfig = z.infer<typeof ModelConfigSchema>;
 export type ModelPack = z.infer<typeof ModelPackSchema>;
 
-// =============================================================================
-// MODEL PACKS (Only what we actually use)
-// =============================================================================
-
+// ======================================================================// MODEL PACKS (Only what we actually use)
+// ======================================================================
 // 🎯 OPTIMAL PACK: Best balance of speed, cost, and quality
 const optimalPack: ModelPack = {
   name: 'Optimal Pack',
   description: 'Best balance of speed, cost, and quality',
   models: {
     brain: { provider: 'openai', model: 'gpt-5-mini', temperature: 0.4 },
-    codeGenerator: { provider: 'anthropic', model: 'claude-sonnet-4-5-20250929', temperature: 0.3, maxTokens: 16000 },
-    editScene: { provider: 'anthropic', model: 'claude-sonnet-4-5-20250929', temperature: 0.3, maxTokens: 16000 },
+    codeGenerator: { provider: 'anthropic', model: 'claude-sonnet-4-5-20250929', temperature: 0.4, maxTokens: 16000 },
+    editScene: { provider: 'anthropic', model: 'claude-sonnet-4-5-20250929', temperature: 0.4, maxTokens: 16000 },
+    codeGenerator: { provider: 'anthropic', model: 'claude-sonnet-4-5-20250929', temperature: 0.4, maxTokens: 16000 },
+    editScene: { provider: 'anthropic', model: 'claude-sonnet-4-5-20250929', temperature: 0.4, maxTokens: 16000 },
     // Temporarily use gpt-4o-mini for these until GPT-5 reasoning issue is resolved
     titleGenerator: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.9, maxTokens: 400 },
     promptEnhancer: { provider: 'openai', model: 'gpt-4o-mini', temperature: 0.4, maxTokens: 300 },
@@ -95,10 +91,8 @@ export const MODEL_PACKS: Record<string, ModelPack> = {
   'openai-pack': ModelPackSchema.parse(openaiPack),
 };
 
-// =============================================================================
-// ENVIRONMENT-DRIVEN ACTIVE PACK
-// =============================================================================
-
+// ======================================================================// ENVIRONMENT-DRIVEN ACTIVE PACK
+// ======================================================================
 export const ACTIVE_MODEL_PACK = process.env.MODEL_PACK ?? 'openai-pack';
 
 // Get the currently active model configuration
@@ -117,10 +111,8 @@ export function getActiveModelPack(): ModelPack {
   return pack;
 }
 
-// =============================================================================
-// GENERIC MODEL GETTER WITH TYPE SAFETY
-// =============================================================================
-
+// ======================================================================// GENERIC MODEL GETTER WITH TYPE SAFETY
+// ======================================================================
 export type ModelKey = keyof ModelPack['models'];
 
 export function getModel<K extends ModelKey>(key: K): ModelPack['models'][K] {
@@ -131,10 +123,8 @@ export function getModel<K extends ModelKey>(key: K): ModelPack['models'][K] {
   return model;
 }
 
-// =============================================================================
-// PER-REQUEST OVERRIDE HOOK
-// =============================================================================
-
+// ======================================================================// PER-REQUEST OVERRIDE HOOK
+// ======================================================================
 export function resolveModel(
   key: ModelKey,
   overrides?: Partial<ModelConfig>,
@@ -143,10 +133,8 @@ export function resolveModel(
   return { ...base, ...overrides };
 }
 
-// =============================================================================
-// INDIVIDUAL MODEL CONFIGURATIONS
-// =============================================================================
-
+// ======================================================================// INDIVIDUAL MODEL CONFIGURATIONS
+// ======================================================================
 // Map of available models that can be selected for overrides
 export const INDIVIDUAL_MODELS: Record<string, ModelConfig> = {
   // Anthropic models
@@ -166,6 +154,7 @@ export const INDIVIDUAL_MODELS: Record<string, ModelConfig> = {
     provider: 'anthropic',
     model: 'claude-sonnet-4-5-20250929',
     temperature: 0.3,
+    temperature: 0.4,
     maxTokens: 16000
   },
   
@@ -189,10 +178,8 @@ export function getIndividualModel(modelId: string): ModelConfig | null {
   return INDIVIDUAL_MODELS[modelId] || null;
 }
 
-// =============================================================================
-// PROVIDER CLIENT REGISTRY
-// =============================================================================
-
+// ======================================================================// PROVIDER CLIENT REGISTRY
+// ======================================================================
 import "openai/shims/node";
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
@@ -223,10 +210,8 @@ export function getClient(provider: ModelProvider): LLMClient {
   return clientCache.get(provider)!;
 }
 
-// =============================================================================
-// UTILITY FUNCTIONS
-// =============================================================================
-
+// ======================================================================// UTILITY FUNCTIONS
+// ======================================================================
 export function listAvailablePacks(): string[] {
   return Object.keys(MODEL_PACKS);
 }
@@ -236,10 +221,8 @@ export function getPackDescription(packName: string): string {
   return pack ? pack.description : 'Pack not found';
 }
 
-// =============================================================================
-// OBSERVABILITY & HEALTH CHECK
-// =============================================================================
-
+// ======================================================================// OBSERVABILITY & HEALTH CHECK
+// ======================================================================
 export function getModelManifest() {
   const pack = getActiveModelPack();
   return {

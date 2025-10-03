@@ -300,6 +300,7 @@ useEffect(() => {
           variantApplied: !!variant,
           duration: sceneDuration,
           order: dbScene.order ?? 0,
+          revision: dbScene.revision ?? localScene?.revision ?? 1,
         });
         const scene = {
           id: dbScene.id,
@@ -307,6 +308,7 @@ useEffect(() => {
           start: currentStart,
           duration: sceneDuration,
           order: dbScene.order ?? 0,
+          revision: dbScene.revision ?? localScene?.revision ?? 1,
           name: localName || dbScene.name,
           data: {
             // Keep TSX as canonical editing source; expose compiled JS separately
@@ -326,12 +328,14 @@ useEffect(() => {
       const sigFrom = (list: any[]) => list.map((s: any) => {
         const order = s.order ?? 0;
         const duration = s.duration || 150;
-        // Prefer compiled JS when present; otherwise use TSX
+        const revision = s.revision ?? 1;
         const tsx = (s?.data?.tsxCode || s?.data?.code || (s as any).tsxCode || '') as string;
         const js = ((s?.data as any)?.jsCode || (s as any).jsCode || '') as string;
         const combined = `${tsx}::${js}`;
-        const h = (typeof hashString === 'function') ? hashString(combined) : String(combined.length);
-        return `${s.id}:${order}:${duration}:${h}`;
+        const hashed = (typeof hashString === 'function')
+          ? hashString(combined)
+          : String(combined.length);
+        return `${s.id}:${order}:${duration}:${revision}:${hashed}`;
       }).join('|');
       const serverSig = sigFrom(convertedScenes);
       const localSig = sigFrom((currentProps.scenes || []) as any[]);
@@ -2902,13 +2906,6 @@ export default function FallbackComposition() {
                 onPlay={() => {
                   setIsPlaying(true);
                   try {
-                    // Ensure player is unmuted and volume up if API available
-                    try {
-                      const api: any = playerRef.current as any;
-                      if (api?.setMuted) api.setMuted(false);
-                      if (api?.setVolume) api.setVolume(1);
-                    } catch {}
-
                     // Ensure audio starts at offset for immediate sound if project has audio
                     const pa = (playerProps.inputProps as any)?.audio;
                     const fps = playerProps.fps || 30;

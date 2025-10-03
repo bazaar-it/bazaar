@@ -32,6 +32,7 @@ import { PurchaseModal } from "~/components/purchase/PurchaseModal";
 import { extractYouTubeUrl } from "~/brain/tools/youtube-analyzer";
 import { useIsMobile } from "~/hooks/use-breakpoint";
 import { FEATURES } from "~/config/features";
+import { sceneSyncHelpers } from "~/lib/sync/sceneSync";
 
 
 // Component message representation for UI display
@@ -98,9 +99,9 @@ export default function ChatPanelG({
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationPhase, setGenerationPhase] = useState<'thinking' | 'generating'>('thinking');
   const [generationComplete, setGenerationComplete] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<string>('claude-sonnet-4-20250514'); // Default model
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
+  const [selectedModel] = useState<string>('claude-sonnet-4-20250514'); // Default model for personalization flow
   
   // Asset mention state
   const [mentionSuggestions, setMentionSuggestions] = useState<AssetMention[]>([]);
@@ -253,7 +254,7 @@ export default function ChatPanelG({
   );
 
   // Get video state and current scenes
-  const { getCurrentProps, replace, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene, deleteScene, removeMessage, setSceneGenerating, updateProjectAudio, syncDbMessages } = useVideoState();
+  const { getCurrentProps, replace, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene, removeMessage, setSceneGenerating, updateProjectAudio, syncDbMessages } = useVideoState();
   const currentProps = getCurrentProps();
   const scenes = currentProps?.scenes || [];
   
@@ -588,9 +589,11 @@ export default function ChatPanelG({
       .map(img => img.url!);
     
     // If scenes were attached via drag, append a friendly reference for the model and machine tokens (not shown in UI)
-    if (selectedScenes.length > 0) {
-      const humanRefs = selectedScenes.map(s => `@scene ${s.index}`).join(', ');
-      const idTokens = selectedScenes.map(s => `[scene:${s.id}]`).join(' ');
+    const selectedScenesSnapshot = [...selectedScenes];
+
+    if (selectedScenesSnapshot.length > 0) {
+      const humanRefs = selectedScenesSnapshot.map(s => `@scene ${s.index}`).join(', ');
+      const idTokens = selectedScenesSnapshot.map(s => `[scene:${s.id}]`).join(' ');
       trimmedMessage = `${trimmedMessage}\n\nUse these specific scenes: ${humanRefs}\n${idTokens}`.trim();
     }
     
@@ -650,7 +653,7 @@ export default function ChatPanelG({
     }
     
     // Get scene URLs from selected scenes
-    let sceneUrls = selectedScenes.map(s => s.id);
+    let sceneUrls = selectedScenesSnapshot.map(s => s.id);
     
     // Clear input immediately for better UX
     setMessage("");
@@ -658,7 +661,7 @@ export default function ChatPanelG({
     setUploadedImages([]);
     setDraftAttachments(projectId, []); // Clear draft attachments in store too
     setSelectedIcons([]); // Clear icon previews after sending
-    setSelectedScenes([]); // Clear scene mentions after sending
+    setSelectedScenes([]); // Clear scene mentions immediately for next prompt
     setHiddenAttachments([]); // Clear hidden attachments after sending
     setIsGenerating(true);
     setGenerationPhase('thinking'); // Start in thinking phase
@@ -714,20 +717,17 @@ export default function ChatPanelG({
     // Pass both GitHub and Figma modes to generation, plus website URL
     // Use backendMessage which contains icon information for the LLM
     console.log('[ChatPanelG] Backend message with icon info:', backendMessage);
-    if (websiteUrl) {
-      generateSSE(
-        backendMessage,
-        imageUrls,
-        videoUrls,
-        audioUrls,
-        sceneUrls,
-        selectedModel,
-        isGitHubMode || isFigmaMode,
-        { websiteUrl }
-      );
-    } else {
-      generateSSE(backendMessage, imageUrls, videoUrls, audioUrls, sceneUrls, selectedModel, isGitHubMode || isFigmaMode);
-    }
+    const generationOptions = websiteUrl ? { websiteUrl } : undefined;
+    generateSSE(
+      backendMessage,
+      imageUrls,
+      videoUrls,
+      audioUrls,
+      sceneUrls,
+      selectedModel,
+      isGitHubMode || isFigmaMode,
+      generationOptions,
+    );
     
     // Create display message for chat that includes icon information
     let userDisplayMessage = originalMessage;
@@ -1370,40 +1370,19 @@ export default function ChatPanelG({
         // Handle the reverted scene based on operation
         const responseData = result as any;
         const revertedScene = responseData.data;
-        const operation = responseData.meta?.operation;
-        
         if (revertedScene) {
-          if (operation === 'scene.create') {
-            // Scene was restored (was deleted)
-            const currentScenes = getCurrentProps()?.scenes || [];
-            const lastScene = currentScenes[currentScenes.length - 1];
-            const startTime = lastScene ? (lastScene.start + lastScene.duration) : 0;
-            
-            const transformedScene = {
-              id: revertedScene.id,
-              type: 'custom' as const,
-              start: startTime,
-              duration: revertedScene.duration || 150,
-              data: {
-                code: revertedScene.tsxCode,
-                name: revertedScene.name || 'Restored Scene',
-                componentId: revertedScene.id,
-                props: revertedScene.props || {}
-              }
-            };
-            // Removed optimistic replace for stability.
-            // Rely on DB invalidation + PreviewPanelG sync to prevent transient duplicates.
-            // See memory-bank/sprints/sprint98_autofix_analysis/progress.md
-            await utils.generation.getProjectScenes.invalidate({ projectId });
-          } else {
-            // Scene was updated
-            updateScene(projectId, revertedScene.id, revertedScene);
-          }
+          const newRevision = responseData.meta?.newRevision ?? responseData?.newRevision;
+          await sceneSyncHelpers.syncSceneRestored({
+            projectId,
+            utils,
+            scene: revertedScene,
+            source: 'chat-revert',
+            projectRevision: newRevision,
+          });
         }
       }
       
       // Refresh and show success
-      await updateAndRefresh(projectId, (props) => props);
       toast.success('Successfully reverted to previous version');
       
     } catch (error) {
@@ -1412,7 +1391,7 @@ export default function ChatPanelG({
     } finally {
       setIsReverting(false);
     }
-  }, [projectId, revertMutation, utils, getCurrentProps, replace, updateScene, updateAndRefresh]);
+  }, [projectId, revertMutation, utils]);
 
   // Enhance prompt mutation
   const enhancePromptMutation = api.generation.enhancePrompt.useMutation({
@@ -1437,7 +1416,19 @@ export default function ChatPanelG({
 
   // Restore scene mutation
   const restoreSceneMutation = api.generation.restoreScene.useMutation({
-    onSuccess: () => {
+    onSuccess: async (payload) => {
+      const restoredScene = (payload as any)?.scene;
+      if (restoredScene) {
+        await sceneSyncHelpers.syncSceneRestored({
+          projectId,
+          utils,
+          scene: restoredScene,
+          source: 'chat-restore',
+          projectRevision: (payload as any)?.newRevision,
+        });
+      } else {
+        await sceneSyncHelpers.syncScenesChanged({ projectId, utils, source: 'chat-restore', projectRevision: (payload as any)?.newRevision });
+      }
       toast.success('Scene restored');
     },
     onError: (error) => {
@@ -1481,7 +1472,18 @@ export default function ChatPanelG({
       
       // Now trigger the actual generation using data from SSE
       if (data?.userMessage) {
-        const { userMessage, imageUrls = [], videoUrls = [], audioUrls = [], modelOverride, useGitHub } = data;
+          const {
+            userMessage,
+            imageUrls = [],
+            videoUrls = [],
+            audioUrls = [],
+            modelOverride: rawModelOverride,
+            useGitHub
+          } = data;
+
+          const effectiveModelOverride = typeof rawModelOverride === 'string' && rawModelOverride.length > 0
+            ? rawModelOverride
+            : undefined;
         
         // Switch to generating phase when SSE is ready and we start the mutation
         setGenerationPhase('generating');
@@ -1498,7 +1500,7 @@ export default function ChatPanelG({
               videoUrls: videoUrls.length > 0 ? videoUrls : undefined,
               audioUrls: audioUrls.length > 0 ? audioUrls : undefined,
               sceneUrls: attachedSceneIds.length > 0 ? attachedSceneIds : undefined, // Pass attached scene IDs
-              modelOverride: modelOverride,
+              ...(effectiveModelOverride ? { modelOverride: effectiveModelOverride } : {}),
               useGitHub: useGitHub,
             },
             // Don't pass assistantMessageId - let mutation create it
@@ -1593,100 +1595,63 @@ export default function ChatPanelG({
           // Process scene normally
           const actualScene = responseData.data;
           const operation = responseData.meta?.operation;
-          
+          const projectRevision = responseData.newRevision ?? responseData.meta?.revision;
+
           if (actualScene) {
-              // Get current scenes to calculate start time
-              const currentScenes = getCurrentProps()?.scenes || [];
-              
-              if (operation === 'scene.delete') {
-                // For delete operations, remove the scene from VideoState
-                deleteScene(projectId, actualScene.id);
-                
-                console.log('[ChatPanelG] ✅ Deleted scene from VideoState:', {
-                  sceneId: actualScene.id,
-                  sceneName: actualScene.name
-                });
-                
-                // Invalidate the scenes query to ensure fresh data
-                await utils.generation.getProjectScenes.invalidate({ projectId });
-                // Offer undo using scene payload
-                try {
-                  toast.success('Scene deleted', {
-                    action: {
-                      label: 'Undo',
-                      onClick: () => restoreSceneMutation.mutate({
-                        projectId,
-                        scene: {
-                          id: actualScene.id,
-                          name: actualScene.name,
-                          tsxCode: (actualScene as any).tsxCode,
-                          duration: actualScene.duration || 150,
-                          order: (actualScene as any).order ?? 0,
-                          props: (actualScene as any).props,
-                          layoutJson: (actualScene as any).layoutJson,
-                        }
-                      })
-                    }
-                  } as any);
-                } catch {}
-                
-              } else if (operation === 'scene.edit' || operation === 'scene.update' || operation === 'scene.trim') {
-                // For edits and trims, use the updateScene method from VideoState
-                updateScene(projectId, actualScene.id, actualScene);
-                
-                console.log('[ChatPanelG] ✅ Updated scene via updateScene:', {
-                  sceneId: actualScene.id,
-                  operation,
-                  isTrim: operation === 'scene.trim' || responseData.meta?.editComplexity === 'duration'
-                });
-                
-                // Invalidate the scenes query to ensure fresh data
-                await utils.generation.getProjectScenes.invalidate({ projectId });
-                
-                // Call the callback if provided
-                if (onSceneGenerated) {
-                  onSceneGenerated(actualScene.id);
-                }
-              } else if (operation === 'scene.create' || !operation) {
-                // For create operations
-                const lastScene = currentScenes[currentScenes.length - 1];
-                const startTime = lastScene ? (lastScene.start + lastScene.duration) : 0;
-                
-                // Transform database format to InputProps format
-                const transformedScene = {
-                  id: actualScene.id,
-                  type: 'custom' as const,
-                  start: startTime,
-                  duration: actualScene.duration || 180,
-                  data: {
-                    code: actualScene.tsxCode,
-                    name: actualScene.name || 'Generated Scene',
-                    componentId: actualScene.id,
-                    props: actualScene.props || {}
-                  }
-                };
-                
-                // Check if this is a welcome project
-                const isWelcomeProject = currentScenes.length === 1 && 
-                  (currentScenes[0]?.data?.name === 'Welcome Scene' ||
-                   currentScenes[0]?.data?.isWelcomeScene === true ||
-                   currentScenes[0]?.type === 'welcome');
-                
-                // If welcome project, replace the welcome scene; otherwise append
-                const updatedScenes = isWelcomeProject 
-                  ? [transformedScene]
-                  : [...currentScenes, transformedScene];
-                
-                // Removed optimistic replace.
-                // Rely on DB invalidation + PreviewPanelG sync for canonical ordering.
-                // See memory-bank/sprints/sprint98_autofix_analysis/progress.md
-                await utils.generation.getProjectScenes.invalidate({ projectId });
-                // Callback can still be invoked with the new ID if needed
-                if (onSceneGenerated) {
-                  onSceneGenerated(transformedScene.id);
-                }
+            if (operation === 'scene.delete') {
+              await sceneSyncHelpers.syncSceneDeleted({
+                projectId,
+                utils,
+                sceneId: actualScene.id,
+                source: 'chat-delete',
+                projectRevision,
+              });
+
+              try {
+                toast.success('Scene deleted', {
+                  action: {
+                    label: 'Undo',
+                    onClick: () => restoreSceneMutation.mutate({
+                      projectId,
+                      scene: {
+                        id: actualScene.id,
+                        name: actualScene.name,
+                        tsxCode: (actualScene as any).tsxCode,
+                        duration: actualScene.duration || 150,
+                        order: (actualScene as any).order ?? 0,
+                        props: (actualScene as any).props,
+                        layoutJson: (actualScene as any).layoutJson,
+                      },
+                    }),
+                  },
+                } as any);
+              } catch {}
+            } else if (operation === 'scene.edit' || operation === 'scene.update' || operation === 'scene.trim') {
+              await sceneSyncHelpers.syncSceneUpdated({
+                projectId,
+                utils,
+                scene: actualScene,
+                source: 'chat-edit',
+                projectRevision,
+              });
+
+              if (onSceneGenerated) {
+                onSceneGenerated(actualScene.id);
+              }
+            } else {
+              await sceneSyncHelpers.syncSceneCreated({
+                projectId,
+                utils,
+                scene: actualScene,
+                source: 'chat-create',
+                projectRevision,
+              });
+
+              if (onSceneGenerated) {
+                onSceneGenerated(actualScene.id);
               }
             }
+          }
           
         } catch (error: any) {
           console.error('[ChatPanelG] Generation failed:', error);

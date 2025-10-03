@@ -3,7 +3,7 @@ import { z } from "zod";
 import { protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
 import { scenes, projects, templates, templateScenes, templateUsages } from "~/server/db/schema";
-import { eq, and, asc } from "drizzle-orm";
+import { eq, and, asc, isNull } from "drizzle-orm";
 import { messageService } from "~/server/services/data/message.service";
 import { ResponseBuilder } from "~/lib/api/response-helpers";
 import { generateTemplateSuffix } from "~/lib/utils/uniquifyTemplateCode";
@@ -51,7 +51,7 @@ export const addTemplate = protectedProcedure
 
       // 2. Fetch existing scenes for compilation context
       const existingScenes = await db.query.scenes.findMany({
-        where: eq(scenes.projectId, projectId),
+        where: and(eq(scenes.projectId, projectId), isNull(scenes.deletedAt)),
         columns: {
           id: true,
           name: true,

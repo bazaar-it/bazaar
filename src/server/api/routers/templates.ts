@@ -4,7 +4,7 @@ import { db } from "~/server/db";
 import { getProdTemplatesDb } from "~/server/db/templates-prod";
 import { env } from "~/env";
 import { templates, scenes, projects, templateUsages, templateScenes } from "~/server/db/schema";
-import { eq, and, desc, inArray, sql, asc } from "drizzle-orm";
+import { eq, and, desc, inArray, sql, asc, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 // Input schemas
@@ -29,6 +29,7 @@ const updateTemplateSchema = z.object({
   supportedFormats: z.array(z.enum(['landscape', 'portrait', 'square'])).optional(),
   isActive: z.boolean().optional(),
   isOfficial: z.boolean().optional(),
+  duration: z.number().int().positive().optional(),
 });
 
 const getTemplatesSchema = z.object({
@@ -36,8 +37,7 @@ const getTemplatesSchema = z.object({
   isOfficial: z.boolean().optional(),
   format: z.enum(['landscape', 'portrait', 'square']).optional(),
   search: z.string().trim().min(1).max(255).optional(),
-  limit: z.number().min(1).max(100).default(50),
-  offset: z.number().min(0).default(0),
+  limit: z.number().min(1).max(100).default(10),
   cursor: z.number().min(0).optional(),
 });
 
@@ -73,7 +73,8 @@ export const templatesRouter = createTRPCRouter({
         },
         where: and(
           eq(scenes.projectId, projectId),
-          inArray(scenes.id, uniqueSceneIds)
+          inArray(scenes.id, uniqueSceneIds),
+          isNull(scenes.deletedAt)
         ),
         orderBy: asc(scenes.order),
       });
@@ -154,7 +155,7 @@ export const templatesRouter = createTRPCRouter({
   getAll: publicProcedure
     .input(getTemplatesSchema)
     .query(async ({ input, ctx }) => {
-      const { category, isOfficial, format, search, limit, offset, cursor } = input;
+      const { category, isOfficial, format, search, limit, cursor = 0 } = input;
       const isAdmin = ctx.session?.user?.isAdmin ?? false;
 
       const conditions = [eq(templates.isActive, true)];
@@ -173,16 +174,18 @@ export const templatesRouter = createTRPCRouter({
       }
 
       if (format) {
-        conditions.push(sql`${templates.supportedFormats} @> ${sql.raw(`'["${format}"]'::jsonb`)}`);
+        conditions.push(sql`${templates.supportedFormats}::jsonb @> ${JSON.stringify([format])}::jsonb`);
       }
 
       if (!isAdmin) {
         conditions.push(eq(templates.adminOnly, false));
         conditions.push(eq(templates.sceneCount, 1));
       }
-      
+
       const prodDb = getProdTemplatesDb();
       const sourceDb = prodDb || db;
+
+      const fetchLimit = limit + 1;
 
       const allTemplates = await sourceDb.query.templates.findMany({
         columns: {
@@ -209,9 +212,9 @@ export const templatesRouter = createTRPCRouter({
           updatedAt: true,
         },
         where: and(...conditions),
-        orderBy: [desc(templates.isOfficial), desc(templates.usageCount), desc(templates.createdAt)],
-        limit,
-        offset: cursor ?? offset,
+        orderBy: [desc(templates.createdAt), desc(templates.isOfficial), desc(templates.usageCount)],
+        limit: fetchLimit,
+        offset: cursor,
         with: {
           creator: {
             columns: {
@@ -222,9 +225,17 @@ export const templatesRouter = createTRPCRouter({
         },
       });
 
-      return allTemplates.map((t: any) => ({ ...t, __source: prodDb ? 'prod' : 'local' }));
+      const hasNextPage = allTemplates.length > limit;
+      const items = hasNextPage ? allTemplates.slice(0, limit) : allTemplates;
+      const nextCursor = hasNextPage ? cursor + limit : undefined;
+
+      return {
+        items: items.map((t: any) => ({ ...t, __source: prodDb ? 'prod' : 'local' })),
+        nextCursor,
+      };
     }),
 
+  // Get template with scenes (Admin only)
   // Get template with scenes (Admin only)
   getWithScenes: adminProcedure
     .input(z.string().uuid())
@@ -256,19 +267,26 @@ export const templatesRouter = createTRPCRouter({
     .input(updateTemplateSchema)
     .mutation(async ({ ctx, input }) => {
       const { id, ...updateData } = input;
-      
+
+      if (env.TEMPLATES_READ_FROM === 'prod') {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Cannot edit templates in development mode. Please use production environment to manage templates.',
+        });
+      }
+
       // Verify the template exists
       const existingTemplate = await db.query.templates.findFirst({
         where: eq(templates.id, id),
       });
-      
+
       if (!existingTemplate) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Template not found",
         });
       }
-      
+
       // Only allow creator or admin to update
       if (existingTemplate.createdBy !== ctx.session.user.id && !ctx.session.user.isAdmin) {
         throw new TRPCError({
@@ -276,7 +294,7 @@ export const templatesRouter = createTRPCRouter({
           message: "You don't have permission to update this template",
         });
       }
-      
+
       // Update the template
       const [updatedTemplate] = await db.update(templates)
         .set({
@@ -285,7 +303,7 @@ export const templatesRouter = createTRPCRouter({
         })
         .where(eq(templates.id, id))
         .returning();
-      
+
       return updatedTemplate;
     }),
 
@@ -293,17 +311,25 @@ export const templatesRouter = createTRPCRouter({
   delete: adminProcedure
     .input(z.string().uuid())
     .mutation(async ({ ctx, input }) => {
+      // Block edits when reading from prod (read-only mode)
+      if (env.TEMPLATES_READ_FROM === 'prod') {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Cannot delete templates in development mode. Please use production environment to manage templates.",
+        });
+      }
+
       const existingTemplate = await db.query.templates.findFirst({
         where: eq(templates.id, input),
       });
-      
+
       if (!existingTemplate) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Template not found",
         });
       }
-      
+
       // Soft delete by setting isActive to false
       await db.update(templates)
         .set({
@@ -311,7 +337,7 @@ export const templatesRouter = createTRPCRouter({
           updatedAt: new Date(),
         })
         .where(eq(templates.id, input));
-      
+
       return { success: true };
     }),
 
@@ -374,9 +400,78 @@ export const templatesRouter = createTRPCRouter({
         },
       },
     });
-    
+
     return userTemplates;
   }),
 
+  // Update template code from a project scene (Admin only)
+  updateCode: adminProcedure
+    .input(z.object({
+      templateId: z.string().uuid(),
+      projectId: z.string().uuid(),
+      sceneId: z.string().uuid(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { templateId, projectId, sceneId } = input;
+
+      // Block edits when reading from prod (read-only mode)
+      if (env.TEMPLATES_READ_FROM === 'prod') {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Cannot edit template code in development mode. Please use production environment to manage templates.",
+        });
+      }
+
+      // 1. Verify template exists
+      const existingTemplate = await db.query.templates.findFirst({
+        where: eq(templates.id, templateId),
+      });
+
+      if (!existingTemplate) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Template not found",
+        });
+      }
+
+      // 2. Get the scene to extract code
+      const scene = await db.query.scenes.findFirst({
+        where: and(
+          eq(scenes.id, sceneId),
+          eq(scenes.projectId, projectId),
+          isNull(scenes.deletedAt)
+        ),
+      });
+
+      if (!scene) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Scene not found in specified project",
+        });
+      }
+
+      // 3. Process the scene code to make it template-ready
+      let templateCode = scene.tsxCode;
+
+      // Remove any scene-specific IDs or references
+      templateCode = templateCode.replace(/Scene_[a-zA-Z0-9]{8}/g, 'TemplateScene');
+
+      // 4. Update the template with new code
+      const [updatedTemplate] = await db.update(templates)
+        .set({
+          tsxCode: templateCode,
+          duration: scene.duration,
+          jsCode: null, // Clear compiled JS (will be recompiled on next use)
+          jsCompiledAt: null,
+          compilationError: null,
+          sourceProjectId: projectId,
+          sourceSceneId: sceneId,
+          updatedAt: new Date(),
+        })
+        .where(eq(templates.id, templateId))
+        .returning();
+
+      return updatedTemplate;
+    }),
 
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useSession } from "next-auth/react";
 import { Input } from "~/components/ui/input";
 import { Card } from "~/components/ui/card";
@@ -13,6 +13,8 @@ import { Player } from "@remotion/player";
 import { useVideoState } from "~/stores/videoState";
 import { transform } from 'sucrase';
 import { useIsTouchDevice } from "~/hooks/use-is-touch";
+import { useIntersectionObserver } from "~/hooks/use-intersection-observer";
+import { TemplateAdminMenu } from "~/components/templates/TemplateAdminMenu";
 
 type ExtendedTemplateDefinition = TemplateDefinition & {
   previewImage?: string | null;
@@ -55,13 +57,19 @@ const getAspectRatioClass = (format: string) => {
 
 // Template thumbnail showing frame 15 by default
 const TemplateThumbnail = ({ template, format, isTouchDevice = false }: { template: ExtendedTemplateDefinition; format: string; isTouchDevice?: boolean }) => {
-  const shouldCompile = !template.isFromDatabase || !template.previewImage;
+  // Use intersection observer to only compile when visible
+  const { ref, hasBeenVisible } = useIntersectionObserver({
+    rootMargin: '300px', // Start compiling 300px before visible
+    enabled: true,
+  });
+
+  const shouldCompile = (!template.isFromDatabase || !template.previewImage) && hasBeenVisible;
   const { component, isCompiling, compilationError, playerProps } = useCompiledTemplate(template, format, { enableCompilation: shouldCompile });
 
   if (!shouldCompile) {
     if (template.previewImage) {
       return (
-        <div className="w-full h-full bg-black">
+        <div ref={ref} className="w-full h-full bg-black">
           <img
             src={template.previewImage}
             alt={`${template.name} preview`}
@@ -72,13 +80,23 @@ const TemplateThumbnail = ({ template, format, isTouchDevice = false }: { templa
       );
     }
 
-    // Should not happen because shouldCompile would be true when previewImage missing
-    return null;
+    // Not visible yet - show placeholder
+    if (!hasBeenVisible) {
+      return (
+        <div ref={ref} className="w-full h-full bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-gray-400 text-xs sm:text-sm">Loading...</div>
+          </div>
+        </div>
+      );
+    }
+
+    return <div ref={ref} />;
   }
 
   if (compilationError) {
     return (
-      <div className="w-full h-full bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
+      <div ref={ref} className="w-full h-full bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
         <div className="text-center">
           <div className="text-red-500 text-xs sm:text-sm font-medium">Template Error</div>
           <div className="text-gray-500 text-[10px] sm:text-xs mt-1">Failed to compile</div>
@@ -89,7 +107,7 @@ const TemplateThumbnail = ({ template, format, isTouchDevice = false }: { templa
 
   if (isCompiling || !component) {
     return (
-      <div className="w-full h-full bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
+      <div ref={ref} className="w-full h-full bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-4 sm:h-6 w-4 sm:w-6 animate-spin text-gray-400 mx-auto mb-1 sm:mb-2" />
           <div className="text-gray-500 text-xs sm:text-sm">Compiling...</div>
@@ -101,7 +119,7 @@ const TemplateThumbnail = ({ template, format, isTouchDevice = false }: { templa
   const safeInitialFrame = Math.min(15, Math.floor(template.duration / 2));
 
   return (
-    <div className="w-full h-full">
+    <div ref={ref} className="w-full h-full">
       <Player
         component={playerProps?.component || component}
         durationInFrames={playerProps?.durationInFrames || 150}
@@ -151,7 +169,8 @@ const TemplatePreview = ({
   isLoading,
   format,
   isTouchDevice,
-  adminView = false,
+  projectId,
+  isAdmin,
   onDelete,
   isDeleting = false,
 }: {
@@ -160,11 +179,13 @@ const TemplatePreview = ({
   isLoading: boolean;
   format: string;
   isTouchDevice: boolean;
-  adminView?: boolean;
+  projectId: string;
+  isAdmin: boolean;
   onDelete?: () => void;
   isDeleting?: boolean;
 }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const utils = api.useUtils();
   const isMultiScene = (template.sceneCount ?? 1) > 1;
   const totalDurationFrames = template.totalDuration ?? template.duration;
 
@@ -180,15 +201,20 @@ const TemplatePreview = ({
     }
   }, [isTouchDevice]);
 
+  const handleAdminUpdate = useCallback(() => {
+    void utils.templates.getAll.invalidate();
+    void utils.templates.getCategories.invalidate();
+  }, [utils]);
+
   const className = `relative w-full ${getAspectRatioClass(format)} bg-black rounded-lg overflow-hidden cursor-pointer transition-all duration-200 group${isTouchDevice ? '' : ' hover:scale-[1.01]'}`;
   const showVideo = !isTouchDevice && isHovered;
-  const showInfo = adminView && isMultiScene;
-  const showFooter = adminView || isMultiScene;
+  const showInfo = isAdmin && isMultiScene;
+  const showFooter = isAdmin || isMultiScene;
   const formattedDuration = `${Math.round((template.duration / 30) * 10) / 10}s`;
   const formattedTotalDuration = `${Math.round(((totalDurationFrames ?? template.duration) / 30) * 10) / 10}s`;
 
   return (
-    <div 
+    <div
       className={className}
       onClick={onClick}
       onMouseEnter={!isTouchDevice ? handleMouseEnter : undefined}
@@ -205,29 +231,41 @@ const TemplatePreview = ({
         </div>
       )}
 
-      {adminView && isMultiScene && onDelete && (
-        <div className="absolute top-2 right-2 z-10">
-          <Button
-            variant="destructive"
-            size="sm"
-            className="h-7 px-3 text-[11px]"
-            onClick={(event) => {
-              event.stopPropagation();
-              if (!isDeleting) {
-                onDelete();
-              }
+      {isAdmin && template.isFromDatabase && (
+        <div className="absolute top-2 right-2 z-20 flex items-center gap-2">
+          <TemplateAdminMenu
+            template={{
+              id: template.id,
+              name: template.name,
+              duration: template.duration,
+              category: template.category || null,
             }}
-            disabled={isDeleting}
-          >
-            {isDeleting ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <div className="flex items-center gap-1">
-                <Trash2 className="h-3 w-3" />
-                <span>Delete</span>
-              </div>
-            )}
-          </Button>
+            projectId={projectId}
+            onUpdate={handleAdminUpdate}
+          />
+          {onDelete && isMultiScene && (
+            <Button
+              variant="destructive"
+              size="sm"
+              className="h-7 px-3 text-[11px]"
+              onClick={(event) => {
+                event.stopPropagation();
+                if (!isDeleting) {
+                  onDelete();
+                }
+              }}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <div className="flex items-center gap-1">
+                  <Trash2 className="h-3 w-3" />
+                  <span>Delete</span>
+                </div>
+              )}
+            </Button>
+          )}
         </div>
       )}
 
@@ -255,7 +293,7 @@ const TemplatePreview = ({
           <div className="text-white/70 text-[10px] sm:text-xs font-medium">
             {isMultiScene ? `${template.sceneCount ?? 1} scenes • ${formattedTotalDuration}` : formattedDuration}
           </div>
-          {adminView && template.adminOnly && (
+          {isAdmin && template.adminOnly && (
             <div className="text-amber-300 text-[10px] sm:text-xs font-medium">Admin only</div>
           )}
         </div>
@@ -264,7 +302,6 @@ const TemplatePreview = ({
     </div>
   );
 };
-
 // Real template compilation component  
 const useCompiledTemplate = (
   template: ExtendedTemplateDefinition,
@@ -395,76 +432,122 @@ const useCompiledTemplate = (
 
 export default function TemplatesPanelG({ projectId, onSceneGenerated }: TemplatesPanelGProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<'all' | 'colors' | 'ui' | 'text' | 'other' | 'multi'>("all");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [loadingTemplateId, setLoadingTemplateId] = useState<string | null>(null);
   const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
   const isTouchDevice = useIsTouchDevice();
   const { data: session } = useSession();
-  const isAdmin = session?.user?.isAdmin ?? false;
-  
+  const sessionIsAdmin = session?.user?.isAdmin ?? false;
   // Get tRPC utils for cache invalidation
   const utils = api.useUtils();
-  
+
   // Get video state methods
   const { addScene, getCurrentProps } = useVideoState();
-  
+
   // Get current project format
   const currentFormat = getCurrentProps()?.meta?.format ?? 'landscape';
-  
-  // Client-side cache for DB templates to prevent flicker and speed up initial paint
-  const cacheKey = `templates-cache-${currentFormat}`;
-  const [cachedDbTemplates, setCachedDbTemplates] = useState<any[]>([]);
 
-  useEffect(() => {
-    try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem(cacheKey) : null;
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          setCachedDbTemplates(parsed);
+  // Check if user is admin (fallback to API if session not definitive)
+  const { data: adminCheck } = api.admin.checkAdminAccess.useQuery(undefined, {
+    enabled: !sessionIsAdmin,
+  });
+  const apiIsAdmin = adminCheck?.isAdmin === true;
+  const isAdmin = sessionIsAdmin || apiIsAdmin;
+
+  // Fetch template categories from server for dynamic chips
+  const { data: categoriesData } = api.templates.getCategories.useQuery();
+
+  const categoryOptions = useMemo(
+    () => {
+      const base: Array<{ key: string; label: string; value?: string }> = [
+        { key: 'all', label: 'All', value: undefined },
+      ];
+
+      if (categoriesData) {
+        for (const category of categoriesData) {
+          const rawValue = category.category ?? 'uncategorized';
+          const normalizedKey = rawValue.toLowerCase();
+          const labelName = category.category
+            ? category.category.charAt(0).toUpperCase() + category.category.slice(1)
+            : 'Uncategorized';
+
+          base.push({
+            key: normalizedKey,
+            label: `${labelName} (${category.count})`,
+            value: rawValue,
+          });
         }
       }
-    } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cacheKey]);
 
-  // Fetch database templates with a generous stale time; use cached as placeholder to avoid reorder flash
-  const placeholderFromCache = useMemo(
-    () => (cachedDbTemplates.length ? cachedDbTemplates : undefined),
-    [cachedDbTemplates]
+      if (isAdmin) {
+        base.push({ key: 'multi', label: 'Multi-scene', value: undefined });
+      }
+
+      return base;
+    },
+    [categoriesData, isAdmin]
   );
 
-  const { data: databaseTemplates = [], isLoading: isLoadingDbTemplates } = api.templates.getAll.useQuery(
-    { format: currentFormat, limit: 100 },
+  const selectedCategoryOption = useMemo(
+    () => categoryOptions.find((option) => option.key === selectedCategory),
+    [categoryOptions, selectedCategory]
+  );
+
+  const templatesQueryInput = useMemo(
+    () => ({
+      format: currentFormat,
+      limit: 10,
+      category:
+        selectedCategoryOption &&
+        selectedCategoryOption.key !== 'all' &&
+        selectedCategoryOption.key !== 'multi'
+          ? selectedCategoryOption.value
+          : undefined,
+    }),
+    [currentFormat, selectedCategoryOption]
+  );
+
+  // Use infinite query for pagination - only loads 10 at a time
+  const {
+    data: templatesData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: isLoadingDbTemplates,
+  } = api.templates.getAll.useInfiniteQuery(
+    templatesQueryInput,
     {
+      getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
       staleTime: 5 * 60 * 1000,
       refetchOnWindowFocus: false,
-      placeholderData: (previousData) => previousData ?? placeholderFromCache,
     }
   );
 
-  // Persist latest DB templates to cache
-  useEffect(() => {
-    try {
-      if (databaseTemplates && databaseTemplates.length) {
-        localStorage.setItem(cacheKey, JSON.stringify(databaseTemplates));
-        // Update in-memory cache too so next re-render uses the same ordering
-        setCachedDbTemplates(databaseTemplates);
-      }
-    } catch {}
-  }, [databaseTemplates, cacheKey]);
+  // Flatten all pages into a single array
+  const databaseTemplates = useMemo(() => {
+    return templatesData?.pages.flatMap((page) => page.items) ?? [];
+  }, [templatesData]);
 
-  // Classify a template into coarse categories for filtering
-  const classifyCategory = useCallback((t: ExtendedTemplateDefinition): 'colors' | 'ui' | 'text' | 'other' | 'multi' => {
-    if ((t.sceneCount ?? 1) > 1) return 'multi';
-    const raw = (t.category || '').toLowerCase();
-    const name = (t.name || '').toLowerCase();
-    const hay = `${raw} ${name}`;
-    if (/color|gradient|bg|background/.test(hay)) return 'colors';
-    if (/ui|app|card|button|form|login|signup|screen/.test(hay)) return 'ui';
-    if (/text|word|type|typography/.test(hay)) return 'text';
-    return 'other';
-  }, []);
+  // Infinite scroll trigger - fetch more when scrolling near bottom
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const element = loadMoreRef.current;
+    if (!element || !hasNextPage || isFetchingNextPage) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          void fetchNextPage();
+        }
+      },
+      { rootMargin: '400px' } // Start loading 400px before reaching the trigger
+    );
+
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
   
   // Direct template addition mutation - bypasses LLM pipeline
   const addTemplateMutation = api.generation.addTemplate.useMutation({
@@ -494,6 +577,7 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
         setTimeout(async () => {
           console.log('[TemplatesPanelG] Invalidating chat messages after template add');
           await utils.chat.getMessages.invalidate({ projectId });
+          await utils.templates.getCategories.invalidate();
         }, 100);
 
         console.log('[TemplatesPanelG] ✅ Video state updated and caches invalidated');
@@ -525,10 +609,8 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
     onSuccess: async (_data, templateId) => {
       setDeletingTemplateId(null);
       toast.success('Template deleted');
-      try {
-        setCachedDbTemplates((prev) => prev.filter((item: any) => item.id !== templateId));
-      } catch {}
       await utils.templates.getAll.invalidate();
+      await utils.templates.getCategories.invalidate();
     },
     onError: (error) => {
       setDeletingTemplateId(null);
@@ -620,17 +702,9 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
     deleteTemplateMutation.mutate(template.id);
   }, [isAdmin, deleteTemplateMutation]);
 
-  // Combine hardcoded and database templates (DB sorted by newest first)
+  // Combine hardcoded and database templates (DB first, then hardcoded after all pages loaded)
   const combinedTemplates = useMemo<ExtendedTemplateDefinition[]>(() => {
-    // Prefer freshly fetched DB templates; fall back to cached when loading
-    const sourceDb = (databaseTemplates && databaseTemplates.length) ? databaseTemplates : cachedDbTemplates;
-    // Sort DB templates by createdAt desc if present
-    const dbSorted = [...(sourceDb || [])].sort((a: any, b: any) => {
-      const ad = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const bd = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return bd - ad;
-    });
-    const dbTemplatesFormatted: ExtendedTemplateDefinition[] = dbSorted.map((dbTemplate: any) => ({
+    const dbTemplatesFormatted: ExtendedTemplateDefinition[] = databaseTemplates.map((dbTemplate: any) => ({
       id: dbTemplate.id,
       name: dbTemplate.name,
       duration: dbTemplate.duration,
@@ -656,48 +730,30 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
       adminOnly: template.adminOnly ?? false,
     }));
 
-    return [...dbTemplatesFormatted, ...staticTemplatesFormatted];
-  }, [databaseTemplates, cachedDbTemplates]);
+    const shouldShowHardcoded = !hasNextPage && !isFetchingNextPage;
+    return shouldShowHardcoded
+      ? [...dbTemplatesFormatted, ...staticTemplatesFormatted]
+      : dbTemplatesFormatted;
+  }, [databaseTemplates, hasNextPage, isFetchingNextPage]);
 
-  // Optional: simple skeleton to avoid jarring reorder on first open without cache
-  const categoryOptions = useMemo(() => {
-    const base = [
-      { key: 'all', label: 'All' },
-      { key: 'colors', label: 'Colors' },
-      { key: 'ui', label: 'UI' },
-      { key: 'text', label: 'Text' },
-      { key: 'other', label: 'Other' },
-    ];
+  const isInitialLoading = isLoadingDbTemplates && databaseTemplates.length === 0;
 
-    if (isAdmin) {
-      return [
-        { key: 'all', label: 'All' },
-        { key: 'multi', label: 'Multi-scene' },
-        { key: 'colors', label: 'Colors' },
-        { key: 'ui', label: 'UI' },
-        { key: 'text', label: 'Text' },
-        { key: 'other', label: 'Other' },
-      ];
-    }
-
-    return base;
-  }, [isAdmin]);
-
-  const isInitialLoading = isLoadingDbTemplates && cachedDbTemplates.length === 0;
-  
   // Filter templates based on search and format compatibility
   const filteredTemplates = useMemo(() => {
     let templates = combinedTemplates;
-
     if (!isAdmin) {
       templates = templates.filter((template) => (template.sceneCount ?? 1) <= 1 && !template.adminOnly);
     }
 
-    if (selectedCategory !== 'all') {
-      if (selectedCategory === 'multi') {
+    if (selectedCategoryOption && selectedCategoryOption.key !== 'all') {
+      if (selectedCategoryOption.key === 'multi') {
         templates = templates.filter((t) => (t.sceneCount ?? 1) > 1);
       } else {
-        templates = templates.filter((t) => classifyCategory(t) === selectedCategory);
+        const normalizedSelected = (selectedCategoryOption.value ?? selectedCategoryOption.key).toLowerCase();
+        templates = templates.filter((t) => {
+          const templateCategory = (t.category ?? 'uncategorized').toLowerCase();
+          return templateCategory === normalizedSelected;
+        });
       }
     }
 
@@ -712,7 +768,7 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
     }
 
     return templates;
-  }, [searchQuery, currentFormat, combinedTemplates, selectedCategory, classifyCategory, isAdmin]);
+  }, [searchQuery, currentFormat, combinedTemplates, selectedCategoryOption, isAdmin]);
 
   // Get grid columns based on format for better layout
   const getGridColumns = (format: string) => {
@@ -748,7 +804,7 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
           {categoryOptions.map((c) => (
             <button
               key={c.key}
-              onClick={() => setSelectedCategory(c.key as typeof selectedCategory)}
+              onClick={() => setSelectedCategory(c.key)}
               className={`px-2 py-1 text-xs rounded-full border ${selectedCategory === c.key ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
             >
               {c.label}
@@ -778,24 +834,25 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
         ) : (
           <div className={`grid gap-2 sm:gap-3 ${getGridColumns(currentFormat)}`}>
             {filteredTemplates.map((template) => (
-            <Card key={template.id} className="overflow-hidden hover:shadow-lg transition-shadow p-0">
-              {/* Clickable Full-Size Preview with correct aspect ratio */}
-              <TemplatePreview 
-                template={template} 
-                onClick={() => handleAddTemplate(template)}
-                isLoading={loadingTemplateId === template.id}
-                format={currentFormat}
-                isTouchDevice={isTouchDevice}
-                adminView={isAdmin}
-                onDelete={isAdmin && template.isFromDatabase && (template.sceneCount ?? 1) > 1 ? () => handleDeleteTemplate(template) : undefined}
-                isDeleting={deletingTemplateId === template.id}
-              />
-            </Card>
-          ))}
-          </div>
-        )}
+          <Card key={template.id} className="overflow-hidden hover:shadow-lg transition-shadow p-0">
+            {/* Clickable Full-Size Preview with correct aspect ratio */}
+            <TemplatePreview
+              template={template}
+              onClick={() => handleAddTemplate(template)}
+              isLoading={loadingTemplateId === template.id}
+              format={currentFormat}
+              isTouchDevice={isTouchDevice}
+              projectId={projectId}
+              isAdmin={isAdmin}
+              onDelete={isAdmin && template.isFromDatabase && (template.sceneCount ?? 1) > 1 ? () => handleDeleteTemplate(template) : undefined}
+              isDeleting={deletingTemplateId === template.id}
+            />
+          </Card>
+        ))}
+      </div>
+    )}
 
-        {filteredTemplates.length === 0 && (
+        {filteredTemplates.length === 0 && !isInitialLoading && (
           <div className="text-center py-6 text-gray-500">
             <SearchIcon className="h-8 w-8 mx-auto mb-2 text-gray-300" />
             <p className="text-sm">No templates found</p>
@@ -803,6 +860,15 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
               <p className="text-xs mt-1">Try a different search term</p>
             ) : (
               <p className="text-xs mt-1">No templates available for {currentFormat} format</p>
+            )}
+          </div>
+        )}
+
+        {/* Infinite scroll trigger */}
+        {hasNextPage && (
+          <div ref={loadMoreRef} className="py-4 text-center">
+            {isFetchingNextPage && (
+              <Loader2 className="h-6 w-6 animate-spin text-gray-400 mx-auto" />
             )}
           </div>
         )}

@@ -152,7 +152,7 @@ export class IntentAnalyzer {
           attachedScenesInfo += `\n${idx + 1}. Scene ID: ${sceneId}`;
         }
       });
-      attachedScenesInfo += `\n\n🚨 CRITICAL: These attached scenes MUST be used as targetSceneId for any edit/delete/trim operations. The user explicitly selected these scenes by dragging them into the chat.`;
+      attachedScenesInfo += `\n\n➡️ PRIORITY RULE: These are explicit selections for this request. Use them as the target for any edit/delete/trim operation. If the user attaches more than one scene, use their wording to decide which of the attached scenes to change. Only ignore the attachments if the user clearly says to edit a *different* scene instead of the ones they just attached.`;
       attachedScenesInfo += `\n\nsceneUrls contains: [${attachedSceneIds.join(', ')}]`;
     }
     

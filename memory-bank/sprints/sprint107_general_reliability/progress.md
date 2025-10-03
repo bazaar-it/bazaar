@@ -134,6 +134,11 @@ Audio in the live preview ignored timeline offset and total video duration, star
 ### Result
 - Above-the-fold layout remains balanced; primary CTA and hero copy stay centered without the external widget.
 
+## 2025-09-29 - Homepage Suspense guard for search params
+- Root cause: Next 15 now requires any component using `useSearchParams` to be rendered under a Suspense boundary; the marketing homepage was still calling it in the top-level export, so `next build` failed with `missing-suspense-with-csr-bailout` for `/home`.
+- Change: Extracted the UI into `HomepageContent` and wrapped it with `<Suspense>` plus a lightweight fallback component so the hook runs within a compliant boundary.【src/app/(marketing)/home/page.tsx:343】【src/app/(marketing)/home/page.tsx:351】
+- Result: `npm run build` completes without CSR bailout errors and the marketing homepage continues to render as before (modal/search param logic unaffected).
+
 ## 2025-09-24 - Marketing OG metadata refresh
 
 ### Change
@@ -354,3 +359,25 @@ Date: 2025-09-24 (markdown fence strip)
 - Confirmed production lacks the Sprint 99.5 brand tables; only `bazaar-vid_personalization_target` exists with `(project_id, website_url)` uniqueness so brand extracts stay project-scoped.
 - Queried dev: `bazaar-vid_brand_extraction` (3 rows) enforces `user_id` while `bazaar-vid_brand_profile` requires `project_id`, leading to four duplicate `https://ramp.com` profiles and screenshot URLs treated as websites.
 - Logged the schema drift + dedupe issues plus a plan for a global `normalized_url` repository and linkage table in `analysis/2025-09-30-shared-brand-dataset.md`.
+
+## 2025-09-30 - Assistant message source-of-truth audit
+- Traced ChatPanelG → videoState → generateScene flow; found client renders `decision.chatResponse` while server overwrites the DB row with `formatSceneOperationMessage` seconds later.
+- Captured DB evidence (`bazaar-vid_message`) showing single UUIDs with mismatched content and `updatedAt` spikes, confirming messages mutate post-delivery.
+- Logged findings + recommendations in `analysis/2025-09-30-assistant-message-consistency.md`, covering authoritative message selection, ID-first reconciliation, and streaming clean-up steps.
+
+## 2025-10-02 - Assistant message alignment shipped
+- Updated `generateScene` to track a single `assistantChatMessage` so the formatted summary returned to the client matches the value we persist; clarifications now return the sanitized text instead of the raw LLM prose.【src/server/api/routers/generation/scene-operations.ts:380】【src/server/api/routers/generation/scene-operations.ts:708】
+- Audio-only runs now reuse that same formatted message, preventing the "narrative vs. summary" flip that appeared after refreshes.【src/server/api/routers/generation/scene-operations.ts:605】
+- Reworked `videoState.syncDbMessages` to reconcile by message ID with DB rows as the source of truth while merging transient metadata, which removes the duplicate bubble flashes from content-based deduping.【src/stores/videoState.ts:522】
+- Attempted `npm run lint -- …`; run aborted because the sandbox still pins Node 16.17.1 (Next.js requires ≥18.18). Will rerun once the toolchain matches project requirements.
+- Removed the chat-panel model override so SSE requests no longer force Claude Sonnet 4; the edit tool now inherits claude-sonnet-4-5 from the active `MODEL_PACK` unless the user explicitly overrides it.【src/app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx:713】
+- Logged intent-analyzer regression where attachments override explicit scene names; see `analysis/2025-10-02-intent-analyzer-scene-target.md` for reproduction and fix plan.
+- Softened brain instructions so attached scenes are preferred only when the prompt is ambiguous; explicit scene names now override prior attachments.【src/brain/orchestrator_functions/intentAnalyzer.ts:98】
+- Snapshot scene attachments at submit time and clear `selectedScenes` immediately so the next prompt starts without stale scene URLs; prevents old drags from influencing new requests.【src/app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx:604】
+- Clarified attachment guidance again so dragged scenes are treated as explicit targets unless the user clearly redirects to a different scene.【src/brain/orchestrator_functions/intentAnalyzer.ts:98】
+- Standardized default cubic easing across add/edit prompts so new scenes and edits automatically apply `Easing.bezier(0.4, 0, 0.2, 1)` unless the user requests otherwise, keeping motion curves consistent.【src/config/prompts/active/bases/technical-guardrails.ts:8】
+## 2025-10-03 - Personalization merge alignment
+- Rebased personalization branch on main, resolving ChatPanel/PreviewPanel/template pagination conflicts while keeping URL personalization features intact.【src/app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx:35】【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx:400】
+- Templates API now exposes cursor-based pagination with admin filters; desktop/mobile panels share the `useInfiniteQuery` flow and new TemplateAdminMenu tooling from main.【src/server/api/routers/templates.ts:102】【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelMobile.tsx:420】【src/components/templates/TemplateAdminMenu.tsx:1】
+- Documented merge outcome and left TODO to rerun typecheck once baseline TS issues are resolved (current run blocked by pre-existing repository errors).【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelMobile.tsx:713】
+

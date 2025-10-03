@@ -248,6 +248,7 @@ export const scenes = createTable(
     tsxCode: d.text().notNull(),
     props: d.jsonb(), // Scene-specific props for animation parameters
     duration: d.integer().default(150).notNull(), // Duration in frames (default 5 seconds at 30fps)
+    revision: d.integer().default(1).notNull(),
     // Publishing columns for BAZAAR-303
     publishedUrl: d.text(), // Public URL to the published bundle
     publishedHash: d.text(), // SHA-256 hash of the published bundle

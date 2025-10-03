@@ -125,11 +125,11 @@ export class AddAudioTool extends BaseMCPTool<AddAudioInput, AddAudioOutput> {
         try {
           const { db } = await import("~/server/db");
           const { scenes } = await import("~/server/db/schema");
-          const { eq } = await import("drizzle-orm");
+          const { eq, and, isNull } = await import("drizzle-orm");
 
           // Fetch all scenes for this project to compute cumulative starts
           const projectScenes = await db.query.scenes.findMany({
-            where: eq(scenes.projectId, input.projectId),
+            where: and(eq(scenes.projectId, input.projectId), isNull(scenes.deletedAt)),
             columns: { id: true, duration: true, order: true },
             orderBy: [scenes.order],
           });

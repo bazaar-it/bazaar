@@ -1,5 +1,13 @@
 # 🏆 Bazaar-Vid Progress Summary
 
+## 📝 Latest Update (Oct 03, 2025)
+- Sprint 107/140 merge reconciliation: Merged `main` into `personalization`, resolved ChatPanel/PreviewPanel/template conflicts, and preserved URL personalization while adopting main's scene sync + infinite pagination fixes.【src/app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx:35】【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx:460】【src/server/api/routers/generation/template-operations.ts:24】【src/server/api/routers/templates.ts:102】
+- Template panels now share the infinite scroll data flow: both desktop and mobile use cursor-based tRPC pagination, local caches, and load-more triggers matching main's scene sync helpers.【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx:400】【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelMobile.tsx:448】
+- Documented merge context and verified conflicts in sprint107 log for future reference.【memory-bank/sprints/sprint107_general_reliability/progress.md:370】
+
+## 📝 Latest Update (Oct 02, 2025)
+- Sprint 107: Unified cubic easing guidance across add/edit prompts so generated scenes default to `Easing.bezier(0.4, 0, 0.2, 1)` unless users ask otherwise, keeping motion curves consistent between new content and tweaks.【src/config/prompts/active/bases/technical-guardrails.ts:8】
+
 ## 📝 Latest Update (Sep 29, 2025)
 - Sprint 124: Started Template Bootstrap onboarding sprint; captured the template-first personalization brief for Amy with brand-data extraction and orchestration guardrails.【memory-bank/sprints/sprint124_template_bootstrap/2025-09-29-template-onboarding-strategy.md:1】【memory-bank/sprints/sprint124_template_bootstrap/README.md:1】
 - Sprint 124: Delivered admin-only multi-scene templates end-to-end (schema, tRPC, add flow, desktop/mobile UI) and seeded the OrbitFlow 4-scene demo for QA.【src/server/api/routers/templates.ts:11】【src/server/api/routers/generation/template-operations.ts:24】【src/components/CreateTemplateModal.tsx:1】【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx:364】【scripts/seed-admin-multiscene-template.ts:1】
@@ -12,6 +20,7 @@
 - Sprint 107: Admin user metrics now pull unique image uploads from the asset registry and surface image-prompt counts in the timeline for clarity.【src/server/api/routers/admin.ts:1749】【src/app/admin/users/[userId]/page.tsx:208】
 - Sprint 107: Dashboard overview drops the paying-user vanity card, and feedback now lives in a dedicated inbox route with sidebar navigation.【src/app/admin/page.tsx:615】【src/app/admin/feedback/page.tsx:10】【src/components/AdminSidebar.tsx:24】
 - Sprint 107: Rebuilt the admin analytics page to rely on real metrics (cards, growth chart, template usage, engagement) and removed all mock data sections.【src/app/admin/analytics/page.tsx:1】
+- Sprint 107: Wrapped the marketing homepage in a Suspense boundary so `useSearchParams` complies with Next.js 15 CSR requirements and the production build succeeds again.【src/app/(marketing)/home/page.tsx:343】【src/app/(marketing)/home/page.tsx:351】
 
 ## 📝 Latest Update (Sep 27, 2025)
 - Sprint 140: Documented desktop vs mobile UX map for Projects and Generate flows to anchor upcoming mobile-first work.【memory-bank/sprints/sprint140_mobile/desktop-vs-mobile-ux-map.md:1】
@@ -1339,3 +1348,24 @@ The core video generation pipeline is **production-ready** with:
 - 2025-10-01: Added live assistant progress messages (template selection → per-scene completion → summary) so users see the streaming status even after the modal closes.
 - 2025-10-01: Added 5s music previews in the URL modal and auto-applied the selected soundtrack via the AddAudio tool so generated videos come with the chosen vibe.
 - 2025-09-30: Investigating unnecessary media plan resolutions when only user-library assets exist; drafted skip heuristics for zero project media.
+2025-09-30 – Assistant chat consistency audit
+- Investigated reports of assistant replies changing post-refresh; traced ChatPanelG optimistic updates to `decision.chatResponse` while the server overwrites the same row with `formatSceneOperationMessage` after tool execution.
+- Verified with dev DB queries that single UUIDs carry multiple payloads over their lifetime (`createdAt` vs. `updatedAt` deltas) and that `syncDbMessages` re-merges both strings because it dedups on content snippets.
+- Captured the full flow, impact, and recommended fixes (authoritative message body, ID-first reconciliation, streaming cleanup) in `sprints/sprint107_general_reliability/analysis/2025-09-30-assistant-message-consistency.md`.
+2025-10-02 – Assistant chat alignment
+- Server now returns the same formatted assistant summary it persists, so users no longer see the LLM narrative first and a different message after refresh; clarified flows use the sanitized copy too.【src/server/api/routers/generation/scene-operations.ts:380】【src/server/api/routers/generation/scene-operations.ts:708】
+- Client sync now reconciles messages by UUID with DB as the authority, eliminating the duplicate bubbles and mismatch caused by first-50-char comparisons.【src/stores/videoState.ts:522】
+- Lint run blocked by sandbox Node 16.17.1 requirement; noted for follow-up once Node ≥18 is available.
+- ChatPanel SSE flow no longer sets `modelOverride=claude-sonnet-4-20250514`; without that override the active Optimal pack keeps edits on Claude Sonnet 4.5 by default.【src/app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx:713】
+- Documented intent analyzer mis-target: attachments marked as "MUST" cause the brain to edit the wrong scene after a prior drag; analysis captured in `sprints/sprint107_general_reliability/analysis/2025-10-02-intent-analyzer-scene-target.md`.
+- Adjusted intent-analyzer attachment guidance: attachments are now treated as default targets only for ambiguous prompts; explicit scene names take precedence.【src/brain/orchestrator_functions/intentAnalyzer.ts:98】
+- ChatPanel now snapshots selected scenes before submit and clears the state immediately afterward, eliminating carry-over attachments that were polluting later prompts.【src/app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx:604】
+- Tightened attachment instructions: the brain now treats dragged scenes as explicit targets for the current prompt, only ignoring them if the user clearly redirects elsewhere.【src/brain/orchestrator_functions/intentAnalyzer.ts:98】
+2025-10-02 – Scene deletion reliability
+- Deleted scenes were reappearing when the brain orchestrator loaded soft-deleted rows into its storyboard and the edit tool updated them; all scene queries feeding orchestration, manual mutations, and template exports now require `deletedAt IS NULL`.【src/server/api/routers/generation/scene-operations.ts:45】【src/server/api/routers/generation/helpers.ts:300】【src/server/api/routers/scenes.ts:449】【src/server/api/routers/templates.ts:50】
+- Delete mutation now returns `NOT_FOUND` once a scene is soft-deleted, preventing downstream edits from targeting stale IDs; timelines remain consistent after chat edits or template selection runs.【src/server/api/routers/generation/scene-operations.ts:834】
+- Documented regression + fix steps in Sprint 127 progress notes for state-management follow-up.
+- Completed second-pass audit so create-scene-from-plan, template imports, website-to-video, add-audio alignment, and iteration reverts also ignore soft-deleted scenes, preventing resurrected rows during batch operations.【src/server/api/routers/generation/create-scene-from-plan.ts:95】【src/server/api/routers/generation/template-operations.ts:53】【src/server/api/routers/generation/helpers.ts:952】【src/tools/addAudio/addAudio.ts:132】【src/server/api/routers/generation/iteration-operations.ts:145】
+2025-10-02 – Preview audio unlocks
+- Preview player now launches muted and global pointer/keyboard gestures unlock audio, matching Chrome autoplay rules; the Remotion controls live in a portal so the old container listener never fired, which is why audio stayed silent even though exports contained it.【src/app/projects/[id]/generate/components/RemotionPreview.tsx:132】【src/app/projects/[id]/generate/workspace/panels/PreviewPanelG.tsx:2699】
+- Removed premature unmute logic from the chat play handler to avoid triggering NotAllowed errors before the user interacts, eliminating the console spam loop.【src/app/projects/[id]/generate/workspace/panels/PreviewPanelG.tsx:2699】
