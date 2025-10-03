@@ -48,6 +48,17 @@ const iconSetLoaders: Record<string, () => Promise<IconifyJSON>> = {
   octicon: loadIconSet('octicon', () => import('@iconify-json/octicon/icons.json')),
   'akar-icons': loadIconSet('akar-icons', () => import('@iconify-json/akar-icons/icons.json')),
   ic: loadIconSet('ic', () => import('@iconify-json/ic/icons.json')),
+  heroicons: loadIconSet('heroicons', () => import('@iconify-json/heroicons/icons.json')),
+  healthicons: loadIconSet('healthicons', () => import('@iconify-json/healthicons/icons.json')),
+  bi: loadIconSet('bi', () => import('@iconify-json/bi/icons.json')),
+  codicon: loadIconSet('codicon', () => import('@iconify-json/codicon/icons.json')),
+  devicon: loadIconSet('devicon', () => import('@iconify-json/devicon/icons.json')),
+  'fa6-brands': loadIconSet('fa6-brands', () => import('@iconify-json/fa6-brands/icons.json')),
+  'fa6-solid': loadIconSet('fa6-solid', () => import('@iconify-json/fa6-solid/icons.json')),
+  logos: loadIconSet('logos', () => import('@iconify-json/logos/icons.json')),
+  octicon: loadIconSet('octicon', () => import('@iconify-json/octicon/icons.json')),
+  'akar-icons': loadIconSet('akar-icons', () => import('@iconify-json/akar-icons/icons.json')),
+  ic: loadIconSet('ic', () => import('@iconify-json/ic/icons.json')),
 };
 
 // Cache loaded icon sets to avoid reloading

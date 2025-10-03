@@ -1,10 +1,11 @@
 "use client";
 
 import React, {useState, useMemo, useCallback, useEffect, useRef} from "react";
+import {useSession} from "next-auth/react";
 import {Card} from "~/components/ui/card";
 import {Button} from "~/components/ui/button";
 import {Input} from "~/components/ui/input";
-import {SearchIcon, Loader2, X as XIcon} from "lucide-react";
+import {SearchIcon, Loader2, Trash2, X as XIcon} from "lucide-react";
 import {api} from "~/trpc/react";
 import {toast} from "sonner";
 import {TEMPLATES} from "~/templates/registry";
@@ -42,6 +43,9 @@ type MobileTemplate = {
   tags?: string[];
   isFromDatabase?: boolean;
   compiledCode?: string | null;
+  sceneCount?: number;
+  totalDuration?: number | null;
+  adminOnly?: boolean;
 };
 
 const getFormatDimensions = (format: string) => {
@@ -304,8 +308,18 @@ const TemplateVideoPlayer: React.FC<{template: MobileTemplate; format: string}> 
   );
 };
 
-const MobileTemplateCard: React.FC<{template: MobileTemplate; format: string; onSelect: () => void}> = ({template, format, onSelect}) => {
-  const duration = `${Math.round((template.duration / 30) * 10) / 10}s`;
+const MobileTemplateCard: React.FC<{
+  template: MobileTemplate;
+  format: string;
+  onSelect: () => void;
+  adminView?: boolean;
+  onDelete?: () => void;
+  isDeleting?: boolean;
+}> = ({template, format, onSelect, adminView = false, onDelete, isDeleting = false}) => {
+  const baseDuration = `${Math.round((template.duration / 30) * 10) / 10}s`;
+  const totalDuration = `${Math.round(((template.totalDuration ?? template.duration) / 30) * 10) / 10}s`;
+  const isMultiScene = (template.sceneCount ?? 1) > 1;
+
   return (
     <Card className="overflow-hidden" onClick={onSelect}>
       <div
@@ -318,8 +332,43 @@ const MobileTemplateCard: React.FC<{template: MobileTemplate; format: string; on
         } bg-black`}
       >
         <TemplateThumbnail template={template} format={format} />
-        <div className="absolute bottom-2 left-2 bg-black/70 text-white text-[10px] px-2 py-1 rounded-full">
-          {duration}
+        {adminView && isMultiScene && onDelete && (
+          <div className="absolute top-2 right-2 z-10">
+            <Button
+              variant="destructive"
+              size="sm"
+              className="h-7 px-3 text-[11px]"
+              onClick={(event) => {
+                event.stopPropagation();
+                if (!isDeleting) {
+                  onDelete();
+                }
+              }}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <div className="flex items-center gap-1">
+                  <Trash2 className="h-3 w-3" />
+                  <span>Delete</span>
+                </div>
+              )}
+            </Button>
+          </div>
+        )}
+        <div className="absolute bottom-2 left-2 flex flex-wrap items-center gap-1">
+          <span className="bg-black/80 text-white text-[10px] px-2 py-1 rounded-full">
+            {isMultiScene ? totalDuration : baseDuration}
+          </span>
+          {isMultiScene && (
+            <span className="bg-black/70 text-white/80 text-[10px] px-2 py-1 rounded-full">
+              {(template.sceneCount ?? 1)} scenes
+            </span>
+          )}
+          {adminView && template.adminOnly && (
+            <span className="bg-amber-500/90 text-white text-[10px] px-2 py-1 rounded-full">Admin only</span>
+          )}
         </div>
       </div>
     </Card>
@@ -328,14 +377,18 @@ const MobileTemplateCard: React.FC<{template: MobileTemplate; format: string; on
 
 const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, onSceneGenerated}) => {
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<'all' | 'colors' | 'ui' | 'text' | 'other'>("all");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [loadingTemplateId, setLoadingTemplateId] = useState<string | null>(null);
+  const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
   const [previewTemplate, setPreviewTemplate] = useState<MobileTemplate | null>(null);
   const [visibleCount, setVisibleCount] = useState(MOBILE_PAGE_SIZE);
+  const {data: session} = useSession();
+  const isAdmin = session?.user?.isAdmin ?? false;
 
   const utils = api.useUtils();
-  const {addScene, getCurrentProps} = useVideoState();
-  const currentFormat = getCurrentProps()?.meta?.format ?? 'landscape';
+  const {addScene} = useVideoState();
+  // Get current project format from the specific project (not global currentProjectId)
+  const currentFormat = useVideoState(state => state.projects[projectId]?.props?.meta?.format ?? 'landscape');
 
   useEffect(() => {
     if (!previewTemplate) return;
@@ -346,11 +399,71 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
     };
   }, [previewTemplate]);
 
+  useEffect(() => {
+    if (!isAdmin && selectedCategory === 'multi') {
+      setSelectedCategory('all');
+    }
+  }, [isAdmin, selectedCategory]);
+
+  const { data: categoriesData } = api.templates.getCategories.useQuery();
+
+  const categoryOptions = useMemo(
+    () => {
+      const base: Array<{ key: string; label: string; value?: string }> = [
+        { key: 'all', label: 'All', value: undefined },
+      ];
+
+      if (categoriesData) {
+        for (const category of categoriesData) {
+          const rawValue = category.category ?? 'uncategorized';
+          const normalizedKey = rawValue.toLowerCase();
+          const labelName = category.category
+            ? category.category.charAt(0).toUpperCase() + category.category.slice(1)
+            : 'Uncategorized';
+          base.push({
+            key: normalizedKey,
+            label: `${labelName} (${category.count})`,
+            value: rawValue,
+          });
+        }
+      }
+
+      if (isAdmin) {
+        base.push({ key: 'multi', label: 'Multi-scene', value: undefined });
+      }
+
+      return base;
+    },
+    [categoriesData, isAdmin]
+  );
+
+  const selectedCategoryOption = useMemo(
+    () => categoryOptions.find((option) => option.key === selectedCategory),
+    [categoryOptions, selectedCategory]
+  );
+
+  const templatesQueryInput = useMemo(
+    () => ({
+      format: currentFormat,
+      limit: 10,
+      category:
+        selectedCategoryOption &&
+        selectedCategoryOption.key !== 'all' &&
+        selectedCategoryOption.key !== 'multi'
+          ? selectedCategoryOption.value
+          : undefined,
+    }),
+    [currentFormat, selectedCategoryOption]
+  );
+
   const {
     data: templatesData,
     isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
   } = api.templates.getAll.useInfiniteQuery(
-    { format: currentFormat, limit: 10 },
+    templatesQueryInput,
     {
       getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
       staleTime: 5 * 60 * 1000,
@@ -376,6 +489,9 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
       getCode: () => (t.tsxCode ?? null),
       isFromDatabase: true,
       compiledCode: t.jsCode ?? null,
+      sceneCount: t.sceneCount ?? 1,
+      totalDuration: t.totalDuration ?? t.duration ?? 150,
+      adminOnly: t.adminOnly ?? false,
     }));
 
     // Add hardcoded templates at the bottom for additional options
@@ -394,25 +510,28 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
       compiledCode: getCompiledTemplate(t.id) ?? null,
     }));
 
-    return [...dbFormatted, ...registryFormatted];
-  }, [databaseTemplates]);
+    const shouldIncludeRegistry = !hasNextPage && !isFetchingNextPage;
+
+    return shouldIncludeRegistry ? [...dbFormatted, ...registryFormatted] : dbFormatted;
+  }, [databaseTemplates, hasNextPage, isFetchingNextPage]);
 
   const filteredTemplates = useMemo(() => {
     let templates = combinedTemplates;
-    if (selectedCategory !== 'all') {
-      templates = templates.filter((t) => {
-        const hay = `${t.category || ''} ${t.name || ''}`.toLowerCase();
-        switch (selectedCategory) {
-          case 'colors':
-            return /color|gradient|bg|background/.test(hay);
-          case 'ui':
-            return /ui|app|card|button|form|login|signup|screen/.test(hay);
-          case 'text':
-            return /text|type|word|typography/.test(hay);
-          default:
-            return true;
-        }
-      });
+
+    if (!isAdmin) {
+      templates = templates.filter((t) => (t.sceneCount ?? 1) <= 1);
+    }
+
+    if (selectedCategoryOption && selectedCategoryOption.key !== 'all') {
+      if (selectedCategoryOption.key === 'multi') {
+        templates = templates.filter((t) => (t.sceneCount ?? 1) > 1);
+      } else {
+        const normalizedSelected = (selectedCategoryOption.value ?? selectedCategoryOption.key).toLowerCase();
+        templates = templates.filter((t) => {
+          const templateCategory = (t.category ?? 'uncategorized').toLowerCase();
+          return templateCategory === normalizedSelected;
+        });
+      }
     }
 
     templates = templates.filter((t) => {
@@ -426,38 +545,59 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
     }
 
     return templates;
-  }, [combinedTemplates, selectedCategory, currentFormat, searchQuery]);
+  }, [combinedTemplates, selectedCategoryOption, currentFormat, searchQuery, isAdmin]);
 
   const visibleTemplates = filteredTemplates.slice(0, visibleCount);
-  const hasMore = visibleCount < filteredTemplates.length;
+  const hasMore = visibleCount < filteredTemplates.length || Boolean(hasNextPage);
 
   useEffect(() => {
-    setVisibleCount(Math.min(MOBILE_PAGE_SIZE, filteredTemplates.length));
-  }, [filteredTemplates.length, searchQuery, selectedCategory]);
+    const base = Math.min(MOBILE_PAGE_SIZE, filteredTemplates.length);
+    setVisibleCount((count) => Math.min(base, count));
+  }, [filteredTemplates.length, searchQuery, selectedCategoryOption?.key, isAdmin, currentFormat]);
 
   const trackUsageMutation = api.templates.trackUsage.useMutation();
 
   const addTemplateMutation = api.generation.addTemplate.useMutation({
-    onSuccess: async (result) => {
+    onSuccess: async (result, variables) => {
       setLoadingTemplateId(null);
-      if (result.success && result.scene) {
-        if (result.message?.trim()) {
-          toast.success(result.message);
+      const createdScenes = result.scenes ?? (result.scene ? [result.scene] : []);
+
+      if (result.success && createdScenes.length > 0) {
+        const sceneCount = createdScenes.length;
+        const defaultMessage = `${variables.templateName}${sceneCount > 1 ? ` (${sceneCount} scenes)` : ''} added`;
+        const toastMessage = result.message?.trim() || defaultMessage;
+        toast.success(toastMessage);
+
+        for (const scene of createdScenes) {
+          addScene(projectId, scene);
         }
 
-        addScene(projectId, result.scene);
-
-        if (onSceneGenerated && result.scene?.id) {
-          await onSceneGenerated(result.scene.id);
+        const lastSceneId = createdScenes[createdScenes.length - 1]?.id;
+        if (onSceneGenerated && lastSceneId) {
+          await onSceneGenerated(lastSceneId);
         }
 
         setTimeout(async () => {
           await utils.chat.getMessages.invalidate({projectId});
+          await utils.templates.getCategories.invalidate();
         }, 100);
 
         setPreviewTemplate(null);
       } else {
-        toast.error('Failed to add template');
+        const fallback = 'Failed to add template';
+        const rawMessage = result.message?.trim();
+        const errorMessage = (() => {
+          switch (rawMessage) {
+            case 'Template scenes missing':
+              return 'Template scenes are missing. Please recreate or delete this template.';
+            case 'Template code missing for non-database template':
+              return 'Template is incomplete (no code available). Delete and recreate it from a project.';
+            default:
+              return rawMessage || fallback;
+          }
+        })();
+        console.warn('[TemplatesPanelMobile] Template add returned without scenes:', result);
+        toast.error(errorMessage);
       }
     },
     onError: (error) => {
@@ -466,11 +606,34 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
     },
   });
 
+  const deleteTemplateMutation = api.templates.delete.useMutation({
+    onSuccess: async (_data, templateId) => {
+      setDeletingTemplateId(null);
+      toast.success('Template deleted');
+      setPreviewTemplate((current) => (current?.id === templateId ? null : current));
+      await utils.templates.getAll.invalidate();
+      await utils.templates.getCategories.invalidate();
+    },
+    onError: (error) => {
+      setDeletingTemplateId(null);
+      toast.error(`Failed to delete template: ${error.message}`);
+    },
+  });
+
   const handleAddTemplate = useCallback(async (template: MobileTemplate) => {
-    const templateCode = template.getCode?.() ?? '';
-    if (!templateCode) {
-      toast.error('Template preview unavailable right now. Please try again later.');
+    const isMultiScene = (template.sceneCount ?? 1) > 1;
+    if (isMultiScene && !isAdmin) {
+      toast.error('Multi-scene templates are limited to admin accounts right now.');
       return;
+    }
+
+    let templateCode: string | null = null;
+    if (!isMultiScene) {
+      templateCode = template.getCode?.() ?? null;
+      if (!templateCode) {
+        toast.error('Template preview unavailable right now. Please try again later.');
+        return;
+      }
     }
 
     setLoadingTemplateId(template.id);
@@ -483,10 +646,33 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
       projectId,
       templateId: template.id,
       templateName: template.name,
-      templateCode,
-      templateDuration: template.duration,
+      templateCode: templateCode ?? undefined,
+      templateDuration: !isMultiScene ? template.duration : undefined,
     });
-  }, [addTemplateMutation, projectId, trackUsageMutation]);
+  }, [addTemplateMutation, projectId, trackUsageMutation, isAdmin]);
+
+  const handleDeleteTemplate = useCallback((template: MobileTemplate) => {
+    if (!isAdmin) return;
+
+    const isMultiScene = (template.sceneCount ?? 1) > 1;
+    if (!isMultiScene) {
+      toast.error('Only multi-scene templates can be deleted here.');
+      return;
+    }
+
+    if (!template.isFromDatabase) {
+      toast.error('Static templates cannot be deleted.');
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete template "${template.name}"? This removes it from the shared library.`);
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingTemplateId(template.id);
+    deleteTemplateMutation.mutate(template.id);
+  }, [isAdmin, deleteTemplateMutation]);
 
   const handleCardPress = (template: MobileTemplate) => {
     setPreviewTemplate(template);
@@ -511,16 +697,10 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
           />
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {[
-            {key: 'all', label: 'All'},
-            {key: 'colors', label: 'Colors'},
-            {key: 'ui', label: 'UI'},
-            {key: 'text', label: 'Text'},
-            {key: 'other', label: 'Other'},
-          ].map((chip) => (
+          {categoryOptions.map((chip) => (
             <button
               key={chip.key}
-              onClick={() => setSelectedCategory(chip.key as any)}
+              onClick={() => setSelectedCategory(chip.key)}
               className={`px-2 py-1 text-xs rounded-full border ${selectedCategory === chip.key ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
             >
               {chip.label}
@@ -557,6 +737,9 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
                   template={template}
                   format={currentFormat}
                   onSelect={() => handleCardPress(template)}
+                  adminView={isAdmin}
+                  onDelete={isAdmin && template.isFromDatabase && (template.sceneCount ?? 1) > 1 ? () => handleDeleteTemplate(template) : undefined}
+                  isDeleting={deletingTemplateId === template.id}
                 />
               ))}
             </div>
@@ -565,9 +748,16 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
               <div className="mt-4 flex justify-center">
                 <Button
                   variant="secondary"
-                  onClick={() => setVisibleCount((count) => Math.min(count + MOBILE_PAGE_SIZE, filteredTemplates.length))}
+                  disabled={isFetchingNextPage}
+                  onClick={async () => {
+                    const nextCount = visibleCount + MOBILE_PAGE_SIZE;
+                    if (nextCount > filteredTemplates.length && hasNextPage) {
+                      await fetchNextPage();
+                    }
+                    setVisibleCount((count) => Math.max(count, nextCount));
+                  }}
                 >
-                  Load more templates
+                  {isFetchingNextPage ? 'Loading…' : 'Load more templates'}
                 </Button>
               </div>
             )}
@@ -586,15 +776,44 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
             <div className="mx-auto flex w-full max-w-md flex-col gap-4">
               <div className={`relative w-full overflow-hidden rounded-xl bg-black shadow-lg ${getAspectRatioClass(currentFormat)}`}>
                 <TemplateVideoPlayer template={previewedTemplate} format={currentFormat} />
+                {(previewedTemplate.sceneCount ?? 1) > 1 && (
+                  <div className="absolute top-3 left-3 flex gap-2">
+                    <span className="bg-black/80 text-white text-[10px] px-2 py-1 rounded-full">
+                      {(previewedTemplate.sceneCount ?? 1)} scenes
+                    </span>
+                    <span className="bg-black/70 text-white/80 text-[10px] px-2 py-1 rounded-full">
+                      {`${Math.round(((previewedTemplate.totalDuration ?? previewedTemplate.duration) / 30) * 10) / 10}s`}
+                    </span>
+                  </div>
+                )}
               </div>
-              <Button
-                className="w-full"
-                size="lg"
-                onClick={() => handleAddTemplate(previewedTemplate)}
-                disabled={loadingTemplateId === previewedTemplate.id}
-              >
-                {loadingTemplateId === previewedTemplate.id ? 'Adding…' : 'Add to project'}
-              </Button>
+              <div className="flex items-center justify-between text-xs text-white/70">
+                <span className="font-medium text-white">{previewedTemplate.name}</span>
+                {previewedTemplate.adminOnly && (
+                  <span className="bg-amber-500/90 text-white px-2 py-0.5 rounded-full">Admin only</span>
+                )}
+              </div>
+              <div className="flex flex-col gap-2">
+                {isAdmin && previewedTemplate.isFromDatabase && (previewedTemplate.sceneCount ?? 1) > 1 && (
+                  <Button
+                    variant="destructive"
+                    size="lg"
+                    className="w-full"
+                    onClick={() => handleDeleteTemplate(previewedTemplate)}
+                    disabled={deletingTemplateId === previewedTemplate.id}
+                  >
+                    {deletingTemplateId === previewedTemplate.id ? 'Deleting…' : 'Delete template'}
+                  </Button>
+                )}
+                <Button
+                  className="w-full"
+                  size="lg"
+                  onClick={() => handleAddTemplate(previewedTemplate)}
+                  disabled={loadingTemplateId === previewedTemplate.id || deletingTemplateId === previewedTemplate.id}
+                >
+                  {loadingTemplateId === previewedTemplate.id ? 'Adding…' : 'Add to project'}
+                </Button>
+              </div>
             </div>
           </div>
         </div>

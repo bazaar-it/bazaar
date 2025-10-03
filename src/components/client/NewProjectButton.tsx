@@ -145,7 +145,7 @@ export function NewProjectButton({
         onProjectCreated(result.projectId);
       }
       // Use window.location for more reliable navigation
-      window.location.href = `/projects/${result.projectId}/generate`;
+      window.location.href = `/projects/${result.projectId}/generate?onboarding=1`;
     },
     onError: (error) => {
       console.error("Failed to create project:", error);

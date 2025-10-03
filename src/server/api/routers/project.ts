@@ -1,7 +1,7 @@
 // src/server/api/routers/project.ts
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
-import { projects, patches, scenePlans, scenes, messages, assets } from "~/server/db/schema";
+import { projects, patches, scenePlans, scenes, messages, assets, personalizationTargets } from "~/server/db/schema";
 import { eq, desc, like, and, ne, isNull, inArray, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { createDefaultProjectProps } from "~/lib/types/video/remotion-constants";
@@ -13,6 +13,11 @@ import { generateTitle } from "~/server/services/ai/titleGenerator.service";
 import { executeWithRetry } from "~/server/db";
 import { assetContext } from "~/server/services/context/assetContextService";
 import type { AssetContext as AssetContextType } from "~/lib/types/asset-context";
+import { tokenizeSceneWithLLM } from "~/server/services/automation/sceneTokenizer.service";
+import { editSceneForBrandWithLLM } from "~/server/services/automation/sceneBrandEditor.service";
+import type { BrandTheme, BrandSceneVariant, BrandSceneStatusEntry } from "~/lib/theme/brandTheme";
+import { DEFAULT_BRAND_THEME, ensureBrandThemeCopy } from "~/lib/theme/brandTheme";
+import { compileSceneToJS } from "~/server/utils/compile-scene";
 
 export const projectRouter = createTRPCRouter({
   getById: protectedProcedure
@@ -817,4 +822,375 @@ export const projectRouter = createTRPCRouter({
 
       return { success: true, assetId: input.assetId };
     }),
-}); 
+
+  tokenizeScenes: protectedProcedure
+    .input(
+      z.object({
+        projectId: z.string().uuid(),
+        sceneIds: z.array(z.string().uuid()).optional(),
+        dryRun: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const project = await ctx.db.query.projects.findFirst({
+        where: eq(projects.id, input.projectId),
+      });
+
+      if (!project) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Project not found" });
+      }
+
+      if (project.userId !== ctx.session.user.id && !ctx.session.user.isAdmin) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "You don't have access to this project" });
+      }
+
+      const sceneFilter = input.sceneIds && input.sceneIds.length > 0
+        ? (sceneId: string) => input.sceneIds!.includes(sceneId)
+        : () => true;
+
+      const projectScenes = await ctx.db
+        .select({
+          id: scenes.id,
+          tsxCode: scenes.tsxCode,
+          name: scenes.name,
+          order: scenes.order,
+          duration: scenes.duration,
+        })
+        .from(scenes)
+        .where(eq(scenes.projectId, input.projectId))
+        .orderBy(scenes.order);
+
+      const scenesToProcess = projectScenes.filter((scene) => sceneFilter(scene.id));
+
+      if (scenesToProcess.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "No scenes found to tokenize" });
+      }
+
+      const results: Array<{
+        sceneId: string;
+        name: string;
+        changed: boolean;
+        summary?: string;
+        error?: string;
+      }> = [];
+      let hadFailures = false;
+
+      for (const scene of scenesToProcess) {
+        try {
+          const llmResult = await tokenizeSceneWithLLM({
+            sceneName: scene.name,
+            code: scene.tsxCode,
+            projectTitle: project.title,
+            order: scene.order,
+          });
+
+          const newCode = llmResult.code.trim();
+          const originalNormalized = scene.tsxCode.trim();
+          const changed = newCode !== originalNormalized;
+          const compiledNeedsReturnFix = !scene.jsCode || !/\breturn\s+[A-Za-z_$][\w$]*\s*;\s*$/.test(scene.jsCode.trim());
+          const didUpdate = changed || compiledNeedsReturnFix;
+
+          if (!input.dryRun && didUpdate) {
+            const compilation = compileSceneToJS(newCode);
+            if (!compilation.success || !compilation.jsCode) {
+              throw new Error(compilation.error || 'Compilation failed');
+            }
+
+            await ctx.db
+              .update(scenes)
+              .set({
+                tsxCode: newCode,
+                jsCode: compilation.jsCode,
+                jsCompiledAt: compilation.compiledAt ?? new Date(),
+                compilationError: null,
+                compilationVersion: 1,
+                updatedAt: new Date(),
+              })
+              .where(eq(scenes.id, scene.id));
+          }
+
+          results.push({
+            sceneId: scene.id,
+            name: scene.name,
+            changed: didUpdate,
+            summary: llmResult.summary,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          results.push({
+            sceneId: scene.id,
+            name: scene.name,
+            changed: false,
+            error: message,
+          });
+
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: `Failed to tokenize scene "${scene.name}": ${message}`,
+          });
+        }
+      }
+
+      return {
+        projectId: input.projectId,
+        total: scenesToProcess.length,
+        updated: results.filter((r) => r.changed).length,
+        dryRun: !!input.dryRun,
+        results,
+      };
+    }),
+
+  applyBrandToScenes: protectedProcedure
+    .input(
+      z.object({
+        projectId: z.string().uuid(),
+        targetId: z.string().uuid(),
+        sceneIds: z.array(z.string().uuid()).optional(),
+        dryRun: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const project = await ctx.db.query.projects.findFirst({
+        where: eq(projects.id, input.projectId),
+      });
+
+      if (!project) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Project not found" });
+      }
+
+      if (project.userId !== ctx.session.user.id && !ctx.session.user.isAdmin) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "You don't have access to this project" });
+      }
+
+      const target = await ctx.db.query.personalizationTargets.findFirst({
+        where: and(
+          eq(personalizationTargets.id, input.targetId),
+          eq(personalizationTargets.projectId, input.projectId),
+        ),
+      });
+
+      if (!target) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Personalization target not found" });
+      }
+
+      if (!target.brandTheme) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Target does not have a prepared brand theme",
+        });
+      }
+
+      const brandTheme = (target.brandTheme as BrandTheme | null) ?? DEFAULT_BRAND_THEME;
+      const sanitizedBrandTheme: BrandTheme = {
+        ...DEFAULT_BRAND_THEME,
+        ...brandTheme,
+        colors: {
+          ...DEFAULT_BRAND_THEME.colors,
+          ...(brandTheme.colors ?? {}),
+        },
+        fonts: {
+          ...DEFAULT_BRAND_THEME.fonts,
+          ...(brandTheme.fonts ?? {}),
+        },
+        assets: {
+          ...DEFAULT_BRAND_THEME.assets,
+          ...(brandTheme.assets ?? {}),
+        },
+        iconography: brandTheme.iconography ?? DEFAULT_BRAND_THEME.iconography,
+        backgroundEffects: brandTheme.backgroundEffects ?? DEFAULT_BRAND_THEME.backgroundEffects,
+        motion: brandTheme.motion ?? DEFAULT_BRAND_THEME.motion,
+        copy: ensureBrandThemeCopy(brandTheme.copy ?? {}),
+        variants: brandTheme.variants ?? {},
+      };
+      const variantMap: Record<string, BrandSceneVariant> = {
+        ...(sanitizedBrandTheme.variants ?? {}),
+      };
+
+      const sceneFilter = input.sceneIds && input.sceneIds.length > 0
+        ? (sceneId: string) => input.sceneIds!.includes(sceneId)
+        : () => true;
+
+      const projectScenes = await ctx.db
+        .select({
+          id: scenes.id,
+          tsxCode: scenes.tsxCode,
+          name: scenes.name,
+          order: scenes.order,
+          duration: scenes.duration,
+        })
+        .from(scenes)
+        .where(eq(scenes.projectId, input.projectId))
+        .orderBy(scenes.order);
+
+      const scenesToProcess = projectScenes.filter((scene) => sceneFilter(scene.id));
+
+      if (scenesToProcess.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "No scenes found to edit" });
+      }
+
+      const results: Array<{
+        sceneId: string;
+        name: string;
+        changed: boolean;
+        summary?: string;
+        error?: string;
+      }> = [];
+
+      const variantUpdates: Record<string, {
+        tsxCode: string;
+        jsCode?: string;
+        summary?: string;
+        updatedAt: string;
+      }> = {};
+
+      const sceneStatuses: Record<string, BrandSceneStatusEntry> = {
+        ...(sanitizedBrandTheme.meta?.sceneStatuses ?? {}),
+      };
+      const preparedAt = new Date().toISOString();
+      sanitizedBrandTheme.meta = {
+        ...(sanitizedBrandTheme.meta ?? {}),
+        sceneStatuses,
+        lastPreparedAt: preparedAt,
+      };
+
+      const brandMetadata = {
+        targetId: target.id,
+        companyName: target.companyName,
+        websiteUrl: target.websiteUrl,
+        notes: target.notes,
+      };
+
+      const persistTheme = async () => {
+        await ctx.db
+          .update(personalizationTargets)
+          .set({
+            brandTheme: {
+              ...sanitizedBrandTheme,
+              variants: variantMap,
+              meta: sanitizedBrandTheme.meta,
+            },
+            updatedAt: new Date(),
+          })
+          .where(eq(personalizationTargets.id, target.id));
+      };
+
+      for (const scene of scenesToProcess) {
+        try {
+          if (!input.dryRun) {
+            sceneStatuses[scene.id] = {
+              status: 'in_progress',
+              updatedAt: new Date().toISOString(),
+            };
+            sanitizedBrandTheme.meta = {
+              ...(sanitizedBrandTheme.meta ?? {}),
+              sceneStatuses,
+              lastPreparedAt: preparedAt,
+            };
+            await persistTheme();
+          }
+
+          const llmResult = await editSceneForBrandWithLLM({
+            sceneName: scene.name,
+            code: scene.tsxCode,
+            projectTitle: project.title,
+            order: scene.order,
+            brandTheme: sanitizedBrandTheme,
+            brandMetadata,
+          });
+
+          const newCode = llmResult.code.trim();
+          const originalNormalized = scene.tsxCode.trim();
+          const changed = newCode !== originalNormalized;
+
+          if (changed) {
+            const compilation = compileSceneToJS(newCode);
+            if (!compilation.success || !compilation.jsCode) {
+              throw new Error(compilation.error || 'Compilation failed');
+            }
+
+            const variantRecord: BrandSceneVariant = {
+              tsxCode: newCode,
+              jsCode: compilation.jsCode,
+              summary: llmResult.summary,
+              updatedAt: new Date().toISOString(),
+            };
+
+            variantUpdates[scene.id] = variantRecord;
+            variantMap[scene.id] = variantRecord;
+          }
+
+          sceneStatuses[scene.id] = {
+            status: 'completed',
+            summary: llmResult.summary,
+            updatedAt: new Date().toISOString(),
+          };
+          sanitizedBrandTheme.meta = {
+            ...(sanitizedBrandTheme.meta ?? {}),
+            sceneStatuses,
+            lastPreparedAt: preparedAt,
+          };
+
+          if (!input.dryRun) {
+            await persistTheme();
+          }
+
+          results.push({
+            sceneId: scene.id,
+            name: scene.name,
+            changed,
+            summary: llmResult.summary,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+
+          sceneStatuses[scene.id] = {
+            status: 'failed',
+            message,
+            updatedAt: new Date().toISOString(),
+          };
+          sanitizedBrandTheme.meta = {
+            ...(sanitizedBrandTheme.meta ?? {}),
+            sceneStatuses,
+            lastPreparedAt: preparedAt,
+          };
+
+          if (!input.dryRun) {
+            await persistTheme();
+          }
+
+          results.push({
+            sceneId: scene.id,
+            name: scene.name,
+            changed: false,
+            error: message,
+          });
+          hadFailures = true;
+        }
+      }
+
+      if (!input.dryRun) {
+        sanitizedBrandTheme.meta = {
+          ...(sanitizedBrandTheme.meta ?? {}),
+          sceneStatuses,
+          lastPreparedAt: preparedAt,
+        };
+        await persistTheme();
+      }
+
+      const updatedCount = results.filter((r) => r.changed).length;
+      const failedCount = results.filter((r) => r.error).length;
+
+      return {
+        projectId: input.projectId,
+        targetId: target.id,
+        total: scenesToProcess.length,
+        updated: updatedCount,
+        failed: failedCount,
+        hasErrors: hadFailures,
+        dryRun: !!input.dryRun,
+        results,
+        variants: variantMap,
+        meta: sanitizedBrandTheme.meta,
+      };
+    }),
+});

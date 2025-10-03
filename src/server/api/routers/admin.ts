@@ -1,7 +1,7 @@
 // src/server/api/routers/admin.ts
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
-import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory, emailSubscribers, exports, promoCodes, promoCodeUsage, paywallEvents, paywallAnalytics, creditTransactions, templates, templateUsages, brandProfiles, autofixMetrics, autofixSessions, userAttribution, assets } from "~/server/db/schema";
+import { users, projects, scenes, feedback, messages, accounts, imageAnalysis, sceneIterations, projectMemory, emailSubscribers, exports, promoCodes, promoCodeUsage, paywallEvents, paywallAnalytics, creditTransactions, templates, templateUsages, brandRepository, projectBrandUsage, autofixMetrics, autofixSessions, userAttribution, assets } from "~/server/db/schema";
 import { sql, and, gte, lt, lte, desc, count, eq, like, or, inArray, asc, countDistinct, isNull, ne } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -155,19 +155,27 @@ export const adminRouter = createTRPCRouter({
     .input(z.object({ projectId: z.string() }))
     .query(async ({ input }) => {
       const profile = await db
-        .select()
-        .from(brandProfiles)
-        .where(eq(brandProfiles.projectId, input.projectId))
+        .select({
+          brand: brandRepository,
+          usage: projectBrandUsage,
+        })
+        .from(projectBrandUsage)
+        .innerJoin(
+          brandRepository,
+          eq(projectBrandUsage.brandRepositoryId, brandRepository.id),
+        )
+        .where(eq(projectBrandUsage.projectId, input.projectId))
+        .orderBy(desc(projectBrandUsage.usedAt))
         .limit(1);
 
-      if (!profile[0]) {
+      if (!profile[0]?.brand) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Brand profile not found for this project.",
         });
       }
 
-      return profile[0];
+      return profile[0].brand;
     }),
 
   // Check if current user is admin

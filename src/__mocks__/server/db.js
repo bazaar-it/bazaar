@@ -1,5 +1,7 @@
 // Mock database for tests
-export const db = {
+const createMockQueryFn = () => jest.fn(() => Promise.resolve(null));
+
+const mockDb = {
   select: jest.fn(() => ({
     from: jest.fn(() => ({
       where: jest.fn(() => ({
@@ -11,13 +13,13 @@ export const db = {
       })),
     })),
   })),
-  
+
   insert: jest.fn(() => ({
     values: jest.fn(() => ({
       returning: jest.fn(() => Promise.resolve([{ id: 'test-id' }])),
     })),
   })),
-  
+
   update: jest.fn(() => ({
     set: jest.fn(() => ({
       where: jest.fn(() => ({
@@ -25,17 +27,27 @@ export const db = {
       })),
     })),
   })),
-  
+
   delete: jest.fn(() => ({
     where: jest.fn(() => Promise.resolve()),
   })),
-  
+
   query: {
+    brandRepository: {
+      findFirst: createMockQueryFn(),
+    },
+    projectBrandUsage: {
+      findFirst: createMockQueryFn(),
+    },
     brandProfiles: {
-      findFirst: jest.fn(() => Promise.resolve(null)),
+      findFirst: createMockQueryFn(),
     },
     users: {
       findFirst: jest.fn(() => Promise.resolve({ id: 'test-user', isAdmin: true })),
     },
   },
 };
+
+mockDb.transaction = jest.fn(async (callback) => callback(mockDb));
+
+export const db = mockDb;

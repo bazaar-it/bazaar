@@ -6,6 +6,7 @@ import { index, pgTableCreator, primaryKey } from "drizzle-orm/pg-core";
 import { type AdapterAccount } from "@auth/core/adapters";
 import { type InputProps } from "~/lib/types/video/input-props";
 import { type JsonPatch } from "~/lib/types/shared/json-patch";
+import { type BrandTheme } from "~/lib/theme/brandTheme";
 import { type InferSelectModel } from "drizzle-orm";
 
 // Import the InputProps type for the projects table
@@ -175,13 +176,6 @@ export const projects = createTable(
     uniqueIndex("project_unique_name").on(t.userId, t.title), // Added unique index on projects.title per user
   ],
 );
-
-export const projectsRelations = relations(projects, ({ many }) => ({ // Added projectsRelations
-  patches: many(patches),
-  messages: many(messages), // Add relation to messages
-  scenes: many(scenes), // Add relation to scenes
-  sharedVideos: many(sharedVideos), // Add relation to sharedVideos
-}));
 
 // --- Patches table ---
 // Stores JSON patches for projects, referencing the project by ID.
@@ -1333,6 +1327,9 @@ export const templates = createTable("templates", (d) => ({
   tags: d.jsonb("tags").$type<string[]>().default([]),
   isActive: d.boolean("is_active").default(true).notNull(),
   isOfficial: d.boolean("is_official").default(false).notNull(),
+  adminOnly: d.boolean("admin_only").default(false).notNull(),
+  sceneCount: d.integer("scene_count").default(1).notNull(),
+  totalDuration: d.integer("total_duration"),
   createdBy: d.varchar("created_by", { length: 255 }).notNull().references(() => users.id),
   sourceProjectId: d.uuid("source_project_id").references(() => projects.id),
   sourceSceneId: d.uuid("source_scene_id").references(() => scenes.id),
@@ -1342,13 +1339,39 @@ export const templates = createTable("templates", (d) => ({
 }), (t) => [
   index("templates_active_idx").on(t.isActive),
   index("templates_official_idx").on(t.isOfficial),
+  index("templates_admin_only_idx").on(t.adminOnly),
   index("templates_category_idx").on(t.category),
   index("templates_created_by_idx").on(t.createdBy),
   index("templates_created_at_idx").on(t.createdAt),
 ]);
 
+export const templateScenes = createTable("template_scene", (d) => ({
+  id: d.uuid("id").primaryKey().defaultRandom(),
+  templateId: d.uuid("template_id").notNull().references(() => templates.id, { onDelete: "cascade" }),
+  name: d.varchar("name", { length: 255 }).notNull(),
+  description: d.text("description"),
+  order: d.integer("order").notNull(),
+  duration: d.integer("duration").notNull(),
+  tsxCode: d.text("tsx_code").notNull(),
+  jsCode: d.text("js_code"),
+  jsCompiledAt: d.timestamp("js_compiled_at", { withTimezone: true }),
+  compilationError: d.text("compilation_error"),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: d.timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("template_scene_template_idx").on(t.templateId),
+  index("template_scene_order_idx").on(t.templateId, t.order),
+]);
+
+export const templateScenesRelations = relations(templateScenes, ({ one }) => ({
+  template: one(templates, {
+    fields: [templateScenes.templateId],
+    references: [templates.id],
+  }),
+}));
+
 // Template relations
-export const templatesRelations = relations(templates, ({ one }) => ({
+export const templatesRelations = relations(templates, ({ one, many }) => ({
   creator: one(users, {
     fields: [templates.createdBy],
     references: [users.id],
@@ -1361,6 +1384,7 @@ export const templatesRelations = relations(templates, ({ one }) => ({
     fields: [templates.sourceSceneId],
     references: [scenes.id],
   }),
+  scenes: many(templateScenes),
 }));
 
 // Track per-usage events for templates to enable timeframe analytics
@@ -1827,7 +1851,138 @@ export const brandProfileVersionsRelations = relations(brandProfileVersions, ({ 
     fields: [brandProfileVersions.changedBy],
     references: [users.id],
   }),
-}))
+}));
+
+// Shared brand repository storing normalized URLs reusable across projects
+export const brandRepository = createTable("brand_repository", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  normalizedUrl: d.text("normalized_url").notNull(),
+  originalUrl: d.text("original_url").notNull(),
+  firstExtractedBy: d
+    .varchar("first_extracted_by", { length: 255 })
+    .references(() => users.id, { onDelete: "set null" }),
+  latestExtractionId: d.uuid("latest_extraction_id"),
+  brandData: d.jsonb("brand_data").notNull(),
+  colors: d.jsonb("colors").$default(() => ({})),
+  typography: d.jsonb("typography").$default(() => ({})),
+  logos: d.jsonb("logos").$default(() => ({})),
+  copyVoice: d.jsonb("copy_voice").$default(() => ({})),
+  productNarrative: d.jsonb("product_narrative").$default(() => ({})),
+  socialProof: d.jsonb("social_proof").$default(() => ({})),
+  screenshots: d.jsonb("screenshots").$default(() => []),
+  mediaAssets: d.jsonb("media_assets").$default(() => []),
+  personality: d.jsonb("personality"),
+  confidenceScore: d.real("confidence_score").default(0.95),
+  reviewStatus: d.text("review_status").default("automated"),
+  extractionVersion: d.text("extraction_version").default("1.0.0"),
+  usageCount: d.integer("usage_count").default(0),
+  lastUsedAt: d.timestamp("last_used_at", { withTimezone: true }),
+  lastExtractedAt: d.timestamp("last_extracted_at", { withTimezone: true }),
+  ttl: d.timestamp("ttl", { withTimezone: true }),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: d.timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  uniqueIndex("brand_repo_url_unique_idx").on(t.normalizedUrl),
+  index("brand_repo_url_idx").on(t.normalizedUrl),
+  index("brand_repo_usage_idx").on(t.usageCount),
+  index("brand_repo_quality_idx").on(t.reviewStatus, t.confidenceScore),
+  index("brand_repo_ttl_idx").on(t.ttl),
+]);
+
+export const brandRepositoryRelations = relations(brandRepository, ({ one, many }) => ({
+  firstExtractor: one(users, {
+    fields: [brandRepository.firstExtractedBy],
+    references: [users.id],
+  }),
+  usages: many(() => projectBrandUsage),
+}));
+
+export const projectBrandUsage = createTable("project_brand_usage", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  projectId: d
+    .uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  brandRepositoryId: d
+    .uuid("brand_repository_id")
+    .notNull()
+    .references(() => brandRepository.id, { onDelete: "cascade" }),
+  usedAt: d.timestamp("used_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  uniqueIndex("project_brand_unique_idx").on(t.projectId, t.brandRepositoryId),
+  index("project_brand_project_idx").on(t.projectId),
+  index("project_brand_repo_idx").on(t.brandRepositoryId),
+]);
+
+export const projectBrandUsageRelations = relations(projectBrandUsage, ({ one }) => ({
+  project: one(projects, {
+    fields: [projectBrandUsage.projectId],
+    references: [projects.id],
+  }),
+  brand: one(brandRepository, {
+    fields: [projectBrandUsage.brandRepositoryId],
+    references: [brandRepository.id],
+  }),
+}));
+
+export const brandExtractionCache = createTable("brand_extraction_cache", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  normalizedUrl: d.text("normalized_url").notNull(),
+  cacheKey: d.text("cache_key").notNull(),
+  rawHtml: d.text("raw_html"),
+  screenshotUrls: d.jsonb("screenshot_urls").$default(() => []),
+  colorSwatches: d.jsonb("color_swatches").$default(() => []),
+  ttl: d.timestamp("ttl", { withTimezone: true }).notNull(),
+  extractedAt: d.timestamp("extracted_at", { withTimezone: true }).defaultNow().notNull(),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  uniqueIndex("brand_cache_url_unique_idx").on(t.normalizedUrl),
+  uniqueIndex("brand_cache_key_unique_idx").on(t.cacheKey),
+  index("brand_cache_ttl_idx").on(t.ttl),
+]);
+
+// Personalization targets table (per-company brand themes for bulk personalization)
+export const personalizationTargets = createTable("personalization_target", (d) => ({
+  id: d.uuid().primaryKey().defaultRandom(),
+  projectId: d
+    .uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  companyName: d.text("company_name"),
+  websiteUrl: d.text("website_url").notNull(),
+  contactEmail: d.text("contact_email"),
+  sector: d.text("sector"),
+  status: d
+    .text("status", { enum: ["pending", "extracting", "ready", "failed"] })
+    .default("pending")
+    .notNull(),
+  notes: d.text("notes"),
+  brandProfile: d.jsonb("brand_profile").$type<Record<string, unknown> | null>().default(null),
+  brandTheme: d.jsonb("brand_theme").$type<BrandTheme | null>().default(null),
+  errorMessage: d.text("error_message"),
+  extractedAt: d.timestamp("extracted_at", { withTimezone: true }),
+  createdAt: d.timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: d.timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}), (t) => [
+  index("personalization_target_project_idx").on(t.projectId),
+  uniqueIndex("personalization_target_project_url_idx").on(t.projectId, t.websiteUrl),
+]);
+
+export const personalizationTargetsRelations = relations(personalizationTargets, ({ one }) => ({
+  project: one(projects, {
+    fields: [personalizationTargets.projectId],
+    references: [projects.id],
+  }),
+}));
+
+export const projectsRelations = relations(projects, ({ many }) => ({
+  patches: many(patches),
+  messages: many(messages),
+  scenes: many(scenes),
+  sharedVideos: many(sharedVideos),
+  personalizationTargets: many(personalizationTargets),
+  brandUsages: many(projectBrandUsage),
+}));
 
 // Auto-fix metrics table for tracking error corrections
 export const autofixMetrics = createTable("autofix_metrics", (d) => ({

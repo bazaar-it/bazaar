@@ -144,17 +144,28 @@ export class WebAnalysisAgentV4 {
       context = await this.createContext();
       page = await context.newPage();
       
-      // Set page timeout for all operations
-      page.setDefaultTimeout(30000);
+      // Set extended page timeout for complex sites
+      page.setDefaultTimeout(60000);
       
       // Navigate to the website
-      await page.goto(url, { 
-        waitUntil: 'networkidle',
-        timeout: 30000 
-      });
+      try {
+        await page.goto(url, {
+          waitUntil: 'networkidle',
+          timeout: 45_000,
+        });
+      } catch (error) {
+        toolsLogger.warn('⚠️ WebAnalysisV4: networkidle navigation timeout, falling back to domcontentloaded', {
+          url,
+          message: error instanceof Error ? error.message : String(error),
+        });
+        await page.goto(url, {
+          waitUntil: 'domcontentloaded',
+          timeout: 45_000,
+        });
+      }
       
-      // Wait for content to load
-      await page.waitForTimeout(2000);
+      // Wait a bit longer so heavy hero sections and client logos load
+      await page.waitForTimeout(4000);
       
       // Extract brand data from the page
       toolsLogger.info('🔍 WebAnalysisV4: Extracting page data...');
@@ -417,39 +428,151 @@ export class WebAnalysisAgentV4 {
 
       // 1. EXTRACT COMPANY NAME from logo, header, title
       const extractCompanyName = (): string => {
-        // Try logo alt text first
-        const logos = document.querySelectorAll('img[alt*="logo" i], img[src*="logo" i], [class*="logo" i] img, header img');
-        for (const logo of logos) {
-          const alt = (logo as HTMLImageElement).alt;
-          if (alt && alt.toLowerCase().includes('logo')) {
-            const name = alt.replace(/logo|icon|brand/gi, '').trim();
-            if (isValidText(name, 2, 50)) return name;
-          }
-        }
+        const hostname = window.location.hostname.replace(/^www\./i, '');
+        const domainSlug = hostname.split('.')[0] || hostname;
 
-        // Try header brand text
-        const brandSelectors = [
-          'header [class*="brand"]', 'header [class*="logo"]', 
-          '.navbar-brand', '[data-testid*="brand"]', '[data-testid*="logo"]',
-          'header h1', 'header .title', 'nav .brand'
+        const SKIP_SECTION_SELECTORS = [
+          '[class*="customer" i]',
+          '[class*="logos" i]',
+          '[class*="clients" i]',
+          '[class*="partners" i]',
+          '[class*="investors" i]',
+          '[data-section*="customers" i]',
+          '[aria-label*="customers" i]',
         ];
-        for (const selector of brandSelectors) {
-          const element = document.querySelector(selector);
-          if (element) {
-            const text = cleanText(element.textContent);
-            if (isValidText(text, 2, 30)) return text;
+
+        const isInSkipSection = (node: Element | null): boolean => {
+          if (!node) return false;
+          return SKIP_SECTION_SELECTORS.some((selector) => node.closest(selector));
+        };
+
+        type Candidate = { value: string; weight: number };
+        const candidates: Candidate[] = [];
+        const pushCandidate = (raw: string | null | undefined, weight: number) => {
+          const cleaned = cleanText(raw || '');
+          if (!isValidText(cleaned, 2, 50)) return;
+          if (candidates.some((candidate) => candidate.value.toLowerCase() === cleaned.toLowerCase())) {
+            return;
           }
+          candidates.push({ value: cleaned, weight });
+        };
+
+        const ogSiteName = document.querySelector('meta[property="og:site_name" i]')?.getAttribute('content');
+        pushCandidate(ogSiteName, 12);
+
+        // Header and navigation logos first
+        const primaryLogoSelectors = [
+          'header img[alt]',
+          'nav img[alt]',
+          '[data-testid*="logo" i] img[alt]',
+          'header svg[aria-label], header svg title',
+        ];
+        primaryLogoSelectors.forEach((selector) => {
+          document.querySelectorAll(selector).forEach((node) => {
+            const element = node as Element;
+            if (isInSkipSection(element)) return;
+
+            if (element instanceof HTMLImageElement) {
+              const alt = element.alt;
+              if (alt) {
+                if (alt.toLowerCase().includes('logo')) {
+                  pushCandidate(alt.replace(/logo|icon|brand/gi, ''), 10);
+                } else {
+                  pushCandidate(alt, 9);
+                }
+              }
+            }
+
+            if (element.hasAttribute('aria-label')) {
+              pushCandidate(element.getAttribute('aria-label'), 9);
+            }
+
+            const titleNode = element.querySelector('title');
+            if (titleNode) {
+              pushCandidate(titleNode.textContent, 9);
+            }
+          });
+        });
+
+        // Header brand text elements
+        const brandSelectors = [
+          'header [class*="brand" i]',
+          'header [class*="logo" i]',
+          '.navbar-brand',
+          '[data-testid*="brand" i]',
+          'header h1',
+          'header .title',
+          'nav .brand',
+          'nav a[aria-label]',
+        ];
+        brandSelectors.forEach((selector) => {
+          document.querySelectorAll(selector).forEach((element) => {
+            if (isInSkipSection(element)) return;
+            pushCandidate(element.textContent, 8);
+          });
+        });
+
+        // Broad logo scan if we still do not have candidates
+        if (candidates.length === 0) {
+          document.querySelectorAll('img[alt*="logo" i], img[src*="logo" i]').forEach((logo) => {
+            if (!(logo instanceof HTMLImageElement)) return;
+            if (isInSkipSection(logo)) return;
+            const alt = logo.alt.replace(/logo|icon|brand/gi, '').trim();
+            pushCandidate(alt, 6);
+          });
         }
 
-        // Fallback to domain from title
+        // Try hero heading text as a fallback signal
+        const heroH1 = document.querySelector('main h1')?.textContent || document.querySelector('section h1')?.textContent;
+        pushCandidate(heroH1, 5);
+
+        // Meta title parts
         const title = document.title;
-        const titleParts = title.split(/[\|\-\–\—]/);
-        if (titleParts.length > 1) {
-          const lastPart = cleanText(titleParts[titleParts.length - 1]);
-          if (isValidText(lastPart, 2, 20)) return lastPart;
+        const titleParts = title.split(/[\|\-\–\—]/).map((part) => cleanText(part));
+        titleParts.forEach((part, index) => {
+          const weight = index === 0 ? 4 : 3;
+          pushCandidate(part, weight);
+        });
+
+        // Domain-derived fallback (e.g., "Y Combinator" from ycombinator.com)
+        const domainWords = domainSlug
+          .split(/[-_]/)
+          .filter(Boolean)
+          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+        pushCandidate(domainWords, 3);
+        pushCandidate(hostname, 2);
+
+        if (candidates.length === 0) {
+          return domainWords || hostname || '';
         }
 
-        return '';
+        const normalizedDomain = domainSlug.replace(/[^a-z0-9]/gi, '').toLowerCase();
+
+        const scored = candidates.map(({ value, weight }) => {
+          const normalizedValue = value.replace(/[^a-z0-9]/gi, '').toLowerCase();
+          let score = weight;
+
+          if (normalizedDomain && normalizedValue.includes(normalizedDomain)) {
+            score += 8;
+          } else if (normalizedDomain && normalizedDomain.includes(normalizedValue) && normalizedValue.length >= 3) {
+            score += 4;
+          }
+
+          if (/customers?|clients?|partners?/i.test(value)) {
+            score -= 4;
+          }
+
+          // Penalize clearly unrelated household names that do not match the domain
+          if (normalizedDomain && normalizedValue && normalizedValue.length > 1 && !normalizedValue.includes(normalizedDomain)) {
+            score -= 1;
+          }
+
+          return { value, score };
+        });
+
+        scored.sort((a, b) => b.score - a.score);
+        return scored[0]?.value || domainWords || hostname || '';
       };
 
       // 2. EXTRACT VALUE PROPOSITIONS from hero sections

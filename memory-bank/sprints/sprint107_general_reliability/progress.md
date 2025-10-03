@@ -355,6 +355,11 @@ Date: 2025-09-24 (markdown fence strip)
 - Reworked the Growth view so "All Time" pulls the real historical window (new timeframe in `admin.getAnalyticsData`), added wheel/pinch zoom plus horizontal pan directly inside each chart (no brush bar), and fixed hover behaviour so tooltips follow the cursor with delta details.
 - Introduced an "Overview ↔ Growth" toggle on the admin dashboard; growth mode renders three cumulative charts for users/prompts/scenes using the existing analytics feed (`cumulative` series) while keeping the metric cards intact.
 
+## 2025-09-30 – Shared brand dataset audit
+- Confirmed production lacks the Sprint 99.5 brand tables; only `bazaar-vid_personalization_target` exists with `(project_id, website_url)` uniqueness so brand extracts stay project-scoped.
+- Queried dev: `bazaar-vid_brand_extraction` (3 rows) enforces `user_id` while `bazaar-vid_brand_profile` requires `project_id`, leading to four duplicate `https://ramp.com` profiles and screenshot URLs treated as websites.
+- Logged the schema drift + dedupe issues plus a plan for a global `normalized_url` repository and linkage table in `analysis/2025-09-30-shared-brand-dataset.md`.
+
 ## 2025-09-30 - Assistant message source-of-truth audit
 - Traced ChatPanelG → videoState → generateScene flow; found client renders `decision.chatResponse` while server overwrites the DB row with `formatSceneOperationMessage` seconds later.
 - Captured DB evidence (`bazaar-vid_message`) showing single UUIDs with mismatched content and `updatedAt` spikes, confirming messages mutate post-delivery.
@@ -371,3 +376,8 @@ Date: 2025-09-24 (markdown fence strip)
 - Snapshot scene attachments at submit time and clear `selectedScenes` immediately so the next prompt starts without stale scene URLs; prevents old drags from influencing new requests.【src/app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx:604】
 - Clarified attachment guidance again so dragged scenes are treated as explicit targets unless the user clearly redirects to a different scene.【src/brain/orchestrator_functions/intentAnalyzer.ts:98】
 - Standardized default cubic easing across add/edit prompts so new scenes and edits automatically apply `Easing.bezier(0.4, 0, 0.2, 1)` unless the user requests otherwise, keeping motion curves consistent.【src/config/prompts/active/bases/technical-guardrails.ts:8】
+## 2025-10-03 - Personalization merge alignment
+- Rebased personalization branch on main, resolving ChatPanel/PreviewPanel/template pagination conflicts while keeping URL personalization features intact.【src/app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx:35】【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx:400】
+- Templates API now exposes cursor-based pagination with admin filters; desktop/mobile panels share the `useInfiniteQuery` flow and new TemplateAdminMenu tooling from main.【src/server/api/routers/templates.ts:102】【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelMobile.tsx:420】【src/components/templates/TemplateAdminMenu.tsx:1】
+- Documented merge outcome and left TODO to rerun typecheck once baseline TS issues are resolved (current run blocked by pre-existing repository errors).【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelMobile.tsx:713】
+

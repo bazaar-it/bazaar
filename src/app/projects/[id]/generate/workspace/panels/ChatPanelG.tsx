@@ -31,6 +31,7 @@ import { useSSEGeneration } from "~/hooks/use-sse-generation";
 import { PurchaseModal } from "~/components/purchase/PurchaseModal";
 import { extractYouTubeUrl } from "~/brain/tools/youtube-analyzer";
 import { useIsMobile } from "~/hooks/use-breakpoint";
+import { FEATURES } from "~/config/features";
 import { sceneSyncHelpers } from "~/lib/sync/sceneSync";
 
 
@@ -100,6 +101,7 @@ export default function ChatPanelG({
   const [generationComplete, setGenerationComplete] = useState(false);
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
+  const [selectedModel] = useState<string>('claude-sonnet-4-20250514'); // Default model for personalization flow
   
   // Asset mention state
   const [mentionSuggestions, setMentionSuggestions] = useState<AssetMention[]>([]);
@@ -251,9 +253,9 @@ export default function ChatPanelG({
     { enabled: !!githubConnection?.isConnected }
   );
 
-  // Get video state and current scenes
-  const { getCurrentProps, replace, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene, removeMessage, setSceneGenerating, updateProjectAudio, syncDbMessages } = useVideoState();
-  const currentProps = getCurrentProps();
+  // Get video state and current scenes from the specific project (not global currentProjectId)
+  const { replace, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene, removeMessage, setSceneGenerating, updateProjectAudio, syncDbMessages } = useVideoState();
+  const currentProps = useVideoState(state => state.projects[projectId]?.props || null);
   const scenes = currentProps?.scenes || [];
   
   // 🚨 SIMPLIFIED: Scene context logic - let Brain LLM handle scene targeting
@@ -390,6 +392,8 @@ export default function ChatPanelG({
         duration: sceneDuration,
         data: {
           code: dbScene.tsxCode,
+          tsxCode: dbScene.tsxCode,
+          jsCode: (dbScene as any).jsCode,
           name: dbScene.name,
           componentId: dbScene.id,
           props: dbScene.props || {}
@@ -695,23 +699,35 @@ export default function ChatPanelG({
     // Use finalMessage if it's a YouTube follow-up, otherwise use trimmedMessage (which includes icon info for backend)
     const backendMessage = finalMessage !== trimmedMessage ? finalMessage : trimmedMessage;
     
-    // Website-to-video pipeline is temporarily disabled.
-    // Keep URL extraction commented for future re-enable.
-    // const urlRegex = /https?:\/\/[^\s]+/g;
-    // const urls = backendMessage.match(urlRegex);
-    // const websiteUrl = urls?.find(url => 
-    //   !url.includes('youtube.com') && 
-    //   !url.includes('youtu.be') &&
-    //   !url.includes('localhost') &&
-    //   !url.includes('127.0.0.1')
-    // );
-    const websiteUrl = undefined;
+    let websiteUrl: string | undefined;
+    if (FEATURES.WEBSITE_TO_VIDEO_ENABLED) {
+      const urlRegex = /https?:\/\/[^\s]+/g;
+      const urls = backendMessage.match(urlRegex);
+      websiteUrl = urls?.find((candidate) => {
+        const lowered = candidate.toLowerCase();
+        return (
+          !lowered.includes('youtube.com') &&
+          !lowered.includes('youtu.be') &&
+          !lowered.includes('localhost') &&
+          !lowered.includes('127.0.0.1')
+        );
+      });
+    }
     
     // Pass both GitHub and Figma modes to generation, plus website URL
     // Use backendMessage which contains icon information for the LLM
     console.log('[ChatPanelG] Backend message with icon info:', backendMessage);
-    // Do not pass websiteUrl while the pipeline is disabled
-    generateSSE(backendMessage, imageUrls, videoUrls, audioUrls, sceneUrls, undefined, isGitHubMode || isFigmaMode, undefined);
+    const generationOptions = websiteUrl ? { websiteUrl } : undefined;
+    generateSSE(
+      backendMessage,
+      imageUrls,
+      videoUrls,
+      audioUrls,
+      sceneUrls,
+      selectedModel,
+      isGitHubMode || isFigmaMode,
+      generationOptions,
+    );
     
     // Create display message for chat that includes icon information
     let userDisplayMessage = originalMessage;
@@ -1428,13 +1444,14 @@ export default function ChatPanelG({
     setIsEnhancing(true);
     
     try {
-      const currentProps = getCurrentProps();
+      // Get current props from the specific project
+      const props = useVideoState.getState().projects[projectId]?.props;
       await enhancePromptMutation.mutateAsync({
         prompt: message.trim(),
         videoFormat: {
-          format: currentProps?.meta?.format || 'landscape',
-          width: currentProps?.meta?.width || 1920,
-          height: currentProps?.meta?.height || 1080
+          format: props?.meta?.format || 'landscape',
+          width: props?.meta?.width || 1920,
+          height: props?.meta?.height || 1080
         }
       });
       

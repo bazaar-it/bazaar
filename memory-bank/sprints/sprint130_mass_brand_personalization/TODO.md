@@ -4,6 +4,7 @@
 - [ ] Finalize `BrandTheme` TypeScript contract + provider implementation.
 - [ ] Audit master demo scenes; replace hard-coded colors/fonts/logos with theme tokens.
 - [ ] Add lint rule / test guarding against literal brand styles.
+- [x] Ship one-click scene tokenization pipeline (LLM-driven) via personalize page.
 
 ## Variant Generation
 - [ ] Design `project_variants` schema + migrations.
@@ -12,7 +13,7 @@
 - [ ] Tag exports with variant metadata; ensure download links stored per variant.
 
 ## Orchestration UX
-- [ ] Draft “Personalize for Clients” panel wireframes.
+- [x] Draft “Personalize for Clients” panel wireframes.
 - [ ] CSV/JSON ingestion pipeline (validation, dedupe, manual overrides).
 - [ ] Choose orchestrator (n8n vs worker) and implement batch queueing.
 - [ ] Build progress dashboard (status, failures, download zip).

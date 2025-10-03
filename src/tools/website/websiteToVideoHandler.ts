@@ -19,11 +19,12 @@ import { projects, scenes } from "~/server/db/schema";
 import { eq, asc } from "drizzle-orm";
 import { WebAnalysisAgentV4, type ExtractedBrandDataV4 } from "~/tools/webAnalysis/WebAnalysisAgentV4";
 import { convertV4ToSimplified, createFallbackBrandData, type SimplifiedBrandData } from "~/tools/webAnalysis/brandDataAdapter";
-import { HeroJourneyGenerator } from "~/tools/narrative/herosJourney";
-import { TemplateSelector } from "~/server/services/website/template-selector-v2";
+import { MultiSceneTemplateSelector } from "~/server/services/templates/multi-scene-selector";
 import { TemplateCustomizerAI } from "~/server/services/website/template-customizer-ai";
 import { saveBrandProfile, createBrandStyleFromExtraction } from "~/server/services/website/save-brand-profile";
 import { toolsLogger } from '~/lib/utils/logger';
+import { MUSIC_LIBRARY, type UrlToVideoUserInputs } from '~/lib/types/url-to-video';
+import { AddAudioTool } from '~/tools/addAudio/addAudio';
 
 export interface WebsiteToVideoInput {
   userPrompt: string;
@@ -34,18 +35,43 @@ export interface WebsiteToVideoInput {
   duration?: number; // Target duration in seconds
   webContext?: any; // Pass existing web analysis if available
   streamingCallback?: (event: StreamingEvent) => Promise<void>;
+  userInputs?: UrlToVideoUserInputs;
 }
 
-export interface StreamingEvent {
-  type: 'scene_completed' | 'all_scenes_complete';
-  data: {
-    sceneIndex: number;
-    sceneName: string;
-    totalScenes: number;
-    sceneId?: string;
-    projectId: string;
-  };
-}
+export type StreamingEvent =
+  | {
+      type: 'scene_completed';
+      data: {
+        sceneIndex: number;
+        sceneName: string;
+        totalScenes: number;
+        sceneId?: string;
+        projectId: string;
+      };
+    }
+  | {
+      type: 'all_scenes_complete';
+      data: {
+        totalScenes: number;
+        projectId: string;
+      };
+    }
+  | {
+      type: 'template_selected';
+      data: {
+        projectId: string;
+        templateName: string;
+        totalScenes: number;
+      };
+    }
+  | {
+      type: 'audio_added';
+      data: {
+        projectId: string;
+        trackName: string;
+        trackUrl: string;
+      };
+    };
 
 
 export class WebsiteToVideoHandler {
@@ -61,7 +87,7 @@ export class WebsiteToVideoHandler {
     const debugData: any = {
       screenshots: [],
       brandExtraction: null,
-      heroJourney: [],
+      narrativeScenes: [],
       templateSelections: [],
       generatedPrompts: [],
       extractionPhases: [], // Track V4's multi-phase extraction
@@ -155,9 +181,14 @@ export class WebsiteToVideoHandler {
       // 2. Save to brand_profile table and format brand data
       toolsLogger.info('🌐 [WEBSITE HANDLER] Step 2: Saving brand profile and formatting data...');
       
-      // Save to database
-      await saveBrandProfile(input.projectId, input.websiteUrl, websiteData);
-      
+      // Save to database (includes AI personality analysis)
+      const savedBrand = await saveBrandProfile({
+        projectId: input.projectId,
+        websiteUrl: input.websiteUrl,
+        extractedData: websiteData,
+        userId: input.userId,
+      });
+
       // Create brand style directly from extracted data (skip formatter)
       const brandStyle = createBrandStyleFromExtraction(websiteData);
       toolsLogger.debug('🌐 [WEBSITE HANDLER] Brand style created', {
@@ -165,43 +196,51 @@ export class WebsiteToVideoHandler {
         primaryFont: brandStyle.typography.primaryFont,
         animationStyle: brandStyle.animation.style
       });
-      
-      // 3. Generate hero's journey narrative
-      toolsLogger.info('🌐 [WEBSITE HANDLER] Step 3: Creating narrative structure...');
-      const storyGenerator = new HeroJourneyGenerator();
-      const narrativeScenes = storyGenerator.generateNarrative(websiteData);
-      
-      // Store hero journey debug data
-      debugData.heroJourney = narrativeScenes;
-      
-      // Adjust durations for 20-second video (600 frames total)
-      const adjustedScenes = narrativeScenes.map((scene, index) => {
-        const durations = [90, 90, 240, 90, 90]; // 3s, 3s, 8s, 3s, 3s
-        return {
-          ...scene,
-          duration: durations[index] || 90
-        };
+
+      // 3. Select multi-scene template with AI personality
+      toolsLogger.info('🌐 [WEBSITE HANDLER] Step 3: Selecting multi-scene template...');
+      const multiSceneSelector = new MultiSceneTemplateSelector();
+      const selection = await multiSceneSelector.select({
+        websiteData,
+        brandStyle,
+        preferredDurationSeconds: input.userInputs?.requestedDurationSeconds ?? input.duration,
+        aiPersonality: savedBrand?.personality as any, // Use AI-analyzed personality
+        userInputs: input.userInputs,
       });
-      
-      // 4. Select best templates for each narrative beat with brand intelligence
-      toolsLogger.info('🌐 [WEBSITE HANDLER] Step 4: Selecting templates with brand context...');
-      const selector = new TemplateSelector();
-      const selectedTemplates = await selector.selectTemplatesForJourney(
-        adjustedScenes, 
-        input.style || 'dynamic',
-        websiteData // Pass brand data for intelligent selection
-      );
-      
-      // Store template selection debug data
+
+      const adjustedScenes = selection.narrativeScenes;
+      const selectedTemplates = selection.templates;
+
+      debugData.narrativeScenes = adjustedScenes;
+      debugData.brandPersonality = selection.brandPersonality;
+      debugData.templateSelection = {
+        templateId: selection.selectedTemplate.id,
+        templateName: selection.selectedTemplate.name,
+        score: selection.score.score,
+        breakdown: selection.score.breakdown,
+        reasoning: selection.score.reasoning,
+      };
+      debugData.userInputs = input.userInputs;
       debugData.templateSelections = selectedTemplates.map((template, i) => ({
         scene: adjustedScenes[i]?.title,
         templateId: template.templateId,
         templateName: template.templateName,
-        emotionalBeat: adjustedScenes[i]?.emotionalBeat
+        beat: template.narrativeBeat,
       }));
+
+      if (input.streamingCallback) {
+        await input.streamingCallback({
+          type: 'template_selected',
+          data: {
+            projectId: input.projectId,
+            templateName: selection.selectedTemplate.name,
+            totalScenes: selectedTemplates.length,
+          },
+        });
+      }
       
-      // 5. ✨ STREAMING: Customize templates with incremental database saves
-      toolsLogger.info('🌐 [WEBSITE HANDLER] Step 5: Streaming template customization...');
+      // 4. ✨ STREAMING: Customize templates with incremental database saves
+      toolsLogger.info('🌐 [WEBSITE HANDLER] Step 4: Streaming template customization...');
       const customizer = new TemplateCustomizerAI();
       
       // Store generated prompts for debug
@@ -269,15 +308,58 @@ export class WebsiteToVideoHandler {
         brandStyle,
         websiteData,
         narrativeScenes: adjustedScenes,
+        userInputs: input.userInputs,
       }, onSceneComplete);
+
+      let selectedMusicTrack = undefined as (typeof MUSIC_LIBRARY)[number] | undefined;
+      if (input.userInputs?.musicPreferenceId) {
+        selectedMusicTrack = MUSIC_LIBRARY.find((track) => track.id === input.userInputs?.musicPreferenceId);
+      }
+      if (!selectedMusicTrack && input.userInputs?.musicPreferenceName) {
+        const normalized = input.userInputs.musicPreferenceName.toLowerCase();
+        selectedMusicTrack = MUSIC_LIBRARY.find((track) => track.name.toLowerCase() === normalized);
+      }
+
+      debugData.selectedMusic = selectedMusicTrack
+        ? { name: selectedMusicTrack.name, url: selectedMusicTrack.url, applied: false }
+        : null;
+
+      if (selectedMusicTrack) {
+        try {
+          const addAudioTool = new AddAudioTool();
+          const audioResult = await addAudioTool.run({
+            userPrompt: `Apply ${selectedMusicTrack.name} background audio selected from URL onboarding modal.`,
+            projectId: input.projectId,
+            audioUrls: [selectedMusicTrack.url],
+          });
+
+          debugData.selectedMusic.applied = audioResult.success && audioResult.data?.audioAdded;
+          if (!audioResult.success) {
+            debugData.selectedMusic.error = audioResult.error?.message ?? 'Failed to add audio';
+          }
+
+          if (audioResult.success && audioResult.data?.audioAdded && input.streamingCallback) {
+            await input.streamingCallback({
+              type: 'audio_added',
+              data: {
+                projectId: input.projectId,
+                trackName: selectedMusicTrack.name,
+                trackUrl: selectedMusicTrack.url,
+              },
+            });
+          }
+        } catch (error) {
+          debugData.selectedMusic.applied = false;
+          debugData.selectedMusic.error = error instanceof Error ? error.message : 'Unknown error while adding audio';
+          toolsLogger.warn('🎵 [WEBSITE HANDLER] Failed to apply music preference automatically', error);
+        }
+      }
       
       // Final completion event
       if (input.streamingCallback) {
         await input.streamingCallback({
           type: 'all_scenes_complete',
           data: {
-            sceneIndex: customizedScenes.length - 1,
-            sceneName: 'Generation Complete',
             totalScenes: customizedScenes.length,
             projectId: input.projectId
           }

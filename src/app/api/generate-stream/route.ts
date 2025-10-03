@@ -8,6 +8,7 @@ import { messageService } from '~/server/services/data/message.service';
 import { generateTitle } from '~/server/services/ai/titleGenerator.service';
 import { WebsiteToVideoHandler } from '~/tools/website/websiteToVideoHandler';
 import type { StreamingEvent } from '~/tools/website/websiteToVideoHandler';
+import type { UrlToVideoUserInputs } from '~/lib/types/url-to-video';
 import { FEATURES } from "~/config/features";
 
 // SSE helper to format messages
@@ -51,6 +52,16 @@ export async function GET(request: NextRequest) {
   const modelOverride = searchParams.get('modelOverride');
   const useGitHub = searchParams.get('useGitHub') === 'true';
   const websiteUrl = searchParams.get('websiteUrl');
+  const userInputsRaw = searchParams.get('userInputs');
+  let userInputs: UrlToVideoUserInputs | undefined;
+
+  if (userInputsRaw) {
+    try {
+      userInputs = JSON.parse(userInputsRaw) as UrlToVideoUserInputs;
+    } catch (error) {
+      console.warn('[SSE] Failed to parse userInputs payload', error);
+    }
+  }
 
   if (!projectId || !userMessage) {
     return new Response('Missing required parameters', { status: 400 });
@@ -246,39 +257,63 @@ export async function GET(request: NextRequest) {
         
         const streamingCallback = async (event: StreamingEvent) => {
           console.log('[SSE] Streaming event:', event.type);
-          
+
+        if (event.type === 'template_selected') {
+          const data = event.data;
+          const plannedMessage = `Selected ${data.templateName} template · ${data.totalScenes} scenes planned.`;
+          assistantMessageContent += `\n\n${plannedMessage}`;
+          await safeWrite({
+            type: 'assistant_message_chunk',
+            message: plannedMessage,
+            isComplete: false,
+          });
+          return;
+        }
+
           if (event.type === 'scene_completed') {
-            // Send scene progress message
-            const progressMessage = `Creating Scene ${event.data.sceneIndex + 1}/${event.data.totalScenes}: ${event.data.sceneName}...`;
-            assistantMessageContent += `\n\n${progressMessage} ✅`;
-            
+            const data = event.data;
+            const progressMessage = `Scene ${data.sceneIndex + 1}/${data.totalScenes} complete → ${data.sceneName}`;
+            assistantMessageContent += `\n\n${progressMessage}`;
+
             await safeWrite({
               type: 'assistant_message_chunk',
               message: progressMessage,
-              isComplete: false
+              isComplete: false,
             });
-            
-            // Send scene addition event for immediate timeline update
+
             await safeWrite({
               type: 'scene_added',
               data: {
-                sceneId: event.data.sceneId,
-                sceneName: event.data.sceneName,
-                progress: Math.round(((event.data.sceneIndex + 1) / event.data.totalScenes) * 100)
-              }
+                sceneId: data.sceneId,
+                sceneName: data.sceneName,
+                progress: Math.round(((data.sceneIndex + 1) / data.totalScenes) * 100),
+              },
             });
+            return;
           }
-          
-          if (event.type === 'all_scenes_complete') {
-            // Send final completion message
-            const domain = new URL(websiteUrl).hostname;
-            const completionMessage = `\n\n✨ Complete! Generated ${event.data.totalScenes} branded scenes using ${domain}'s colors and messaging.`;
-            assistantMessageContent += completionMessage;
-            
+
+          if (event.type === 'audio_added') {
+            const data = event.data;
+            const audioMessage = `Added background music: ${data.trackName}`;
+            assistantMessageContent += `\n\n${audioMessage}`;
             await safeWrite({
-              type: 'assistant_message_chunk', 
+              type: 'assistant_message_chunk',
+              message: audioMessage,
+              isComplete: false,
+            });
+            return;
+          }
+
+          if (event.type === 'all_scenes_complete') {
+            const data = event.data;
+            const domain = new URL(websiteUrl).hostname;
+            const completionMessage = `✨ Complete! Generated ${data.totalScenes} branded scenes using ${domain}'s colors and messaging.`;
+          assistantMessageContent += `\n\n${completionMessage}`;
+
+          await safeWrite({
+              type: 'assistant_message_chunk',
               message: completionMessage,
-              isComplete: true
+              isComplete: true,
             });
           }
         };
@@ -289,7 +324,8 @@ export async function GET(request: NextRequest) {
           projectId,
           userId,
           websiteUrl,
-          streamingCallback
+          streamingCallback,
+          userInputs,
         });
         
         if (result.success) {

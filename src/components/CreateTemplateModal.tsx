@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { Checkbox } from "~/components/ui/checkbox";
-import { Loader2, Film } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { api } from "~/trpc/react";
 import { toast } from "sonner";
 // Use the database scene type instead of the video Scene type
@@ -60,7 +60,7 @@ export function CreateTemplateModal({
   projectId,
   scenes,
 }: CreateTemplateModalProps) {
-  const [selectedSceneId, setSelectedSceneId] = useState<string>("");
+  const [selectedSceneIds, setSelectedSceneIds] = useState<string[]>([]);
   const [templateName, setTemplateName] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
@@ -71,19 +71,59 @@ export function CreateTemplateModal({
     square: true,
   });
   const [isOfficial, setIsOfficial] = useState(false);
+  const [adminOnly, setAdminOnly] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedSceneIds(scenes.map((scene) => scene.id));
+    }
+  }, [isOpen, scenes]);
+
+  const selectedScenes = useMemo(() => {
+    const selectedSet = new Set(selectedSceneIds);
+    return scenes
+      .filter((scene) => selectedSet.has(scene.id))
+      .sort((a, b) => a.order - b.order);
+  }, [scenes, selectedSceneIds]);
+
+  const totalDurationFrames = useMemo(() => {
+    return selectedScenes.reduce((sum, scene) => sum + (scene.duration ?? 0), 0);
+  }, [selectedScenes]);
+
+  const toggleSceneSelection = (sceneId: string) => {
+    setSelectedSceneIds((prev) => {
+      if (prev.includes(sceneId)) {
+        return prev.filter((id) => id !== sceneId);
+      }
+      return [...prev, sceneId];
+    });
+  };
+
+  const selectAllScenes = () => {
+    setSelectedSceneIds(scenes.map((scene) => scene.id));
+  };
+
+  const clearSceneSelection = () => {
+    setSelectedSceneIds([]);
+  };
+
+  const allScenesSelected = selectedSceneIds.length === scenes.length && scenes.length > 0;
+  const selectedSceneCount = selectedScenes.length;
+  const totalDurationSeconds = totalDurationFrames ? Math.round((totalDurationFrames / 30) * 10) / 10 : 0;
 
   const createTemplateMutation = api.templates.create.useMutation({
     onSuccess: () => {
       toast.success("Template created successfully!");
       onClose();
       // Reset form
-      setSelectedSceneId("");
       setTemplateName("");
       setDescription("");
       setCategory("");
       setTags("");
       setSupportedFormats({ landscape: true, portrait: true, square: true });
       setIsOfficial(false);
+      setAdminOnly(false);
+      setSelectedSceneIds(scenes.map((scene) => scene.id));
     },
     onError: (error) => {
       toast.error(`Failed to create template: ${error.message}`);
@@ -91,8 +131,13 @@ export function CreateTemplateModal({
   });
 
   const handleSubmit = () => {
-    if (!selectedSceneId || !templateName) {
-      toast.error("Please select a scene and provide a template name");
+    if (!templateName.trim()) {
+      toast.error('Please provide a template name');
+      return;
+    }
+
+    if (selectedScenes.length === 0) {
+      toast.error('Please select at least one scene');
       return;
     }
 
@@ -107,13 +152,14 @@ export function CreateTemplateModal({
 
     createTemplateMutation.mutate({
       projectId,
-      sceneId: selectedSceneId,
-      name: templateName,
+      sceneIds: selectedScenes.map((scene) => scene.id),
+      name: templateName.trim(),
       description: description || undefined,
       category: category || undefined,
-      tags: tags ? tags.split(",").map(t => t.trim()).filter(Boolean) : undefined,
+      tags: tags ? tags.split(',').map((t) => t.trim()).filter(Boolean) : undefined,
       supportedFormats: formatArray,
       isOfficial,
+      adminOnly,
     });
   };
 
@@ -121,39 +167,73 @@ export function CreateTemplateModal({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create Template from Scene</DialogTitle>
+          <DialogTitle>Create Template from Scenes</DialogTitle>
           <DialogDescription>
-            Select a scene from your project to save as a reusable template
+            Select one or more scenes from your project to save as a reusable template
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           {/* Scene Selection */}
           <div className="space-y-2">
-            <Label>Select Scene</Label>
-            <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto border rounded-lg p-2">
-              {scenes.map((scene, index) => (
-                <div
-                  key={scene.id}
-                  className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
-                    selectedSceneId === scene.id
-                      ? "bg-primary text-primary-foreground"
-                      : "hover:bg-gray-100"
-                  }`}
-                  onClick={() => setSelectedSceneId(scene.id)}
+            <Label>Select Scenes</Label>
+            <div className="flex items-center justify-between text-xs text-gray-500">
+              <span>
+                {selectedSceneCount}/{scenes.length} selected
+                {selectedSceneCount > 0 ? ` · ${totalDurationSeconds.toFixed(1)}s total` : ''}
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={allScenesSelected ? clearSceneSelection : selectAllScenes}
                 >
-                  <Film className="h-4 w-4 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">
-                      Scene {index + 1}: {scene.name}
-                    </div>
-                    <div className="text-xs opacity-70">
-                      {scene.duration} frames ({(scene.duration / 30).toFixed(1)}s)
+                  {allScenesSelected ? 'Clear all' : 'Select all'}
+                </Button>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-2 max-h-52 overflow-y-auto border rounded-lg p-2">
+              {scenes.map((scene, index) => {
+                const isSelected = selectedSceneIds.includes(scene.id);
+                return (
+                  <div
+                    key={scene.id}
+                    className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+                      isSelected
+                        ? 'border-primary bg-primary/10'
+                        : 'border-gray-200 hover:bg-gray-50'
+                    }`}
+                    onClick={() => toggleSceneSelection(scene.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        toggleSceneSelection(scene.id);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                  >
+                    <Checkbox
+                      checked={isSelected}
+                      onCheckedChange={() => toggleSceneSelection(scene.id)}
+                      onClick={(event) => event.stopPropagation()}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">
+                        Scene {index + 1}: {scene.name}
+                      </div>
+                      <div className="text-xs opacity-70">
+                        {scene.duration} frames ({(scene.duration / 30).toFixed(1)}s)
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
+            {selectedSceneCount > 1 && (
+              <p className="text-xs text-gray-500">Scenes will be saved in timeline order to create a multi-scene template.</p>
+            )}
           </div>
 
           {/* Template Name */}
@@ -272,6 +352,21 @@ export function CreateTemplateModal({
               className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
             >
               Mark as Official Template
+            </label>
+          </div>
+
+          {/* Admin only gate */}
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="adminOnly"
+              checked={adminOnly}
+              onCheckedChange={(checked) => setAdminOnly(!!checked)}
+            />
+            <label
+              htmlFor="adminOnly"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            >
+              Visible to admins only
             </label>
           </div>
         </div>

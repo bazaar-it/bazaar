@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(new URL('/projects/quick-create', url.origin));
     }
 
-    return NextResponse.redirect(new URL(`/projects/${res.projectId}/generate`, url.origin));
+    return NextResponse.redirect(new URL(`/projects/${res.projectId}/generate?onboarding=1`, url.origin));
   } catch (error) {
     // Last-resort fallback: ensure the user lands somewhere safe
     try {
