@@ -95,8 +95,8 @@ export function CodePanelG({
     }
   }, [monaco]);
   
-  // Get current props and scenes
-  const currentProps = getCurrentProps();
+  // Get current props and scenes for the specific project (not global currentProjectId)
+  const currentProps = useVideoState(state => state.projects[projectId]?.props || null);
   const scenes = (currentProps?.scenes || []) as Scene[];
 
   const firstSceneId = scenes[0]?.id;
@@ -213,7 +213,10 @@ export function CodePanelG({
                 code: localCode // Update the code in the cache
               },
               // TypeScript safe assignment for tsxCode (Scene type may not include it)
-              ...(localCode && { tsxCode: localCode })
+              ...(localCode && { tsxCode: localCode }),
+              // Clear compiled JS to force recompilation from new tsxCode
+              jsCode: null,
+              jsCompiledAt: null
             };
           }
           
@@ -223,9 +226,15 @@ export function CodePanelG({
           };
         });
 
-        // Broadcast a direct event so Preview can recompile immediately
+        // Invalidate scenes query to force database refetch with new compiled code
+        await utils.generation.getProjectScenes.invalidate({ projectId });
+
+        // Small delay to ensure database sync completes before triggering recompile
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Broadcast a direct event so Preview can recompile immediately with fresh data
         try {
-          const ev = new CustomEvent('code-saved', { detail: { projectId, sceneId: selectedScene.id } });
+          const ev = new CustomEvent('code-saved', { detail: { projectId, sceneId: selectedScene.id, forceRefresh: true } });
           window.dispatchEvent(ev);
         } catch {}
 
@@ -340,11 +349,6 @@ export function CodePanelG({
     setIsSaving(true);
     
     try {
-      // Validate that the code has export default
-      if (!localCode.includes('export default')) {
-        throw new Error('Component must have a default export');
-      }
-
       // Try to compile with Sucrase first to validate
       compileWithSucrase(localCode);
       
