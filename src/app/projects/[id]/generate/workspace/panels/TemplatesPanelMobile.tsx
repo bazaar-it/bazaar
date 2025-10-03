@@ -5,7 +5,7 @@ import {useSession} from "next-auth/react";
 import {Card} from "~/components/ui/card";
 import {Button} from "~/components/ui/button";
 import {Input} from "~/components/ui/input";
-import {SearchIcon, Loader2, Trash2, X as XIcon} from "lucide-react";
+import {SearchIcon, Loader2, X as XIcon} from "lucide-react";
 import {api} from "~/trpc/react";
 import {toast} from "sonner";
 import {TEMPLATES} from "~/templates/registry";
@@ -313,9 +313,7 @@ const MobileTemplateCard: React.FC<{
   format: string;
   onSelect: () => void;
   adminView?: boolean;
-  onDelete?: () => void;
-  isDeleting?: boolean;
-}> = ({template, format, onSelect, adminView = false, onDelete, isDeleting = false}) => {
+}> = ({template, format, onSelect, adminView = false}) => {
   const baseDuration = `${Math.round((template.duration / 30) * 10) / 10}s`;
   const totalDuration = `${Math.round(((template.totalDuration ?? template.duration) / 30) * 10) / 10}s`;
   const isMultiScene = (template.sceneCount ?? 1) > 1;
@@ -332,31 +330,6 @@ const MobileTemplateCard: React.FC<{
         } bg-black`}
       >
         <TemplateThumbnail template={template} format={format} />
-        {adminView && isMultiScene && onDelete && (
-          <div className="absolute top-2 right-2 z-10">
-            <Button
-              variant="destructive"
-              size="sm"
-              className="h-7 px-3 text-[11px]"
-              onClick={(event) => {
-                event.stopPropagation();
-                if (!isDeleting) {
-                  onDelete();
-                }
-              }}
-              disabled={isDeleting}
-            >
-              {isDeleting ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <div className="flex items-center gap-1">
-                  <Trash2 className="h-3 w-3" />
-                  <span>Delete</span>
-                </div>
-              )}
-            </Button>
-          </div>
-        )}
         <div className="absolute bottom-2 left-2 flex flex-wrap items-center gap-1">
           <span className="bg-black/80 text-white text-[10px] px-2 py-1 rounded-full">
             {isMultiScene ? totalDuration : baseDuration}
@@ -379,7 +352,6 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [loadingTemplateId, setLoadingTemplateId] = useState<string | null>(null);
-  const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
   const [previewTemplate, setPreviewTemplate] = useState<MobileTemplate | null>(null);
   const [visibleCount, setVisibleCount] = useState(MOBILE_PAGE_SIZE);
   const {data: session} = useSession();
@@ -606,20 +578,6 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
     },
   });
 
-  const deleteTemplateMutation = api.templates.delete.useMutation({
-    onSuccess: async (_data, templateId) => {
-      setDeletingTemplateId(null);
-      toast.success('Template deleted');
-      setPreviewTemplate((current) => (current?.id === templateId ? null : current));
-      await utils.templates.getAll.invalidate();
-      await utils.templates.getCategories.invalidate();
-    },
-    onError: (error) => {
-      setDeletingTemplateId(null);
-      toast.error(`Failed to delete template: ${error.message}`);
-    },
-  });
-
   const handleAddTemplate = useCallback(async (template: MobileTemplate) => {
     const isMultiScene = (template.sceneCount ?? 1) > 1;
     if (isMultiScene && !isAdmin) {
@@ -650,29 +608,6 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
       templateDuration: !isMultiScene ? template.duration : undefined,
     });
   }, [addTemplateMutation, projectId, trackUsageMutation, isAdmin]);
-
-  const handleDeleteTemplate = useCallback((template: MobileTemplate) => {
-    if (!isAdmin) return;
-
-    const isMultiScene = (template.sceneCount ?? 1) > 1;
-    if (!isMultiScene) {
-      toast.error('Only multi-scene templates can be deleted here.');
-      return;
-    }
-
-    if (!template.isFromDatabase) {
-      toast.error('Static templates cannot be deleted.');
-      return;
-    }
-
-    const confirmed = window.confirm(`Delete template "${template.name}"? This removes it from the shared library.`);
-    if (!confirmed) {
-      return;
-    }
-
-    setDeletingTemplateId(template.id);
-    deleteTemplateMutation.mutate(template.id);
-  }, [isAdmin, deleteTemplateMutation]);
 
   const handleCardPress = (template: MobileTemplate) => {
     setPreviewTemplate(template);
@@ -738,8 +673,6 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
                   format={currentFormat}
                   onSelect={() => handleCardPress(template)}
                   adminView={isAdmin}
-                  onDelete={isAdmin && template.isFromDatabase && (template.sceneCount ?? 1) > 1 ? () => handleDeleteTemplate(template) : undefined}
-                  isDeleting={deletingTemplateId === template.id}
                 />
               ))}
             </div>
@@ -794,22 +727,11 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
                 )}
               </div>
               <div className="flex flex-col gap-2">
-                {isAdmin && previewedTemplate.isFromDatabase && (previewedTemplate.sceneCount ?? 1) > 1 && (
-                  <Button
-                    variant="destructive"
-                    size="lg"
-                    className="w-full"
-                    onClick={() => handleDeleteTemplate(previewedTemplate)}
-                    disabled={deletingTemplateId === previewedTemplate.id}
-                  >
-                    {deletingTemplateId === previewedTemplate.id ? 'Deleting…' : 'Delete template'}
-                  </Button>
-                )}
                 <Button
                   className="w-full"
                   size="lg"
                   onClick={() => handleAddTemplate(previewedTemplate)}
-                  disabled={loadingTemplateId === previewedTemplate.id || deletingTemplateId === previewedTemplate.id}
+                  disabled={loadingTemplateId === previewedTemplate.id}
                 >
                   {loadingTemplateId === previewedTemplate.id ? 'Adding…' : 'Add to project'}
                 </Button>

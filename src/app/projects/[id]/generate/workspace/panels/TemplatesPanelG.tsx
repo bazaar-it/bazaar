@@ -4,8 +4,7 @@ import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useSession } from "next-auth/react";
 import { Input } from "~/components/ui/input";
 import { Card } from "~/components/ui/card";
-import { Button } from "~/components/ui/button";
-import { SearchIcon, Loader2, Trash2 } from "lucide-react";
+import { SearchIcon, Loader2 } from "lucide-react";
 import { api } from "~/trpc/react";
 import { toast } from "sonner";
 import { TEMPLATES, type TemplateDefinition } from "~/templates/registry";
@@ -171,8 +170,6 @@ const TemplatePreview = ({
   isTouchDevice,
   projectId,
   isAdmin,
-  onDelete,
-  isDeleting = false,
 }: {
   template: ExtendedTemplateDefinition;
   onClick: () => void;
@@ -181,8 +178,6 @@ const TemplatePreview = ({
   isTouchDevice: boolean;
   projectId: string;
   isAdmin: boolean;
-  onDelete?: () => void;
-  isDeleting?: boolean;
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const utils = api.useUtils();
@@ -208,8 +203,8 @@ const TemplatePreview = ({
 
   const className = `relative w-full ${getAspectRatioClass(format)} bg-black rounded-lg overflow-hidden cursor-pointer transition-all duration-200 group${isTouchDevice ? '' : ' hover:scale-[1.01]'}`;
   const showVideo = !isTouchDevice && isHovered;
-  const showInfo = isAdmin && isMultiScene;
-  const showFooter = isAdmin || isMultiScene;
+  const showInfo = isMultiScene;
+  const showFooter = isMultiScene;
   const formattedDuration = `${Math.round((template.duration / 30) * 10) / 10}s`;
   const formattedTotalDuration = `${Math.round(((totalDurationFrames ?? template.duration) / 30) * 10) / 10}s`;
 
@@ -232,7 +227,7 @@ const TemplatePreview = ({
       )}
 
       {isAdmin && template.isFromDatabase && (
-        <div className="absolute top-2 right-2 z-20 flex items-center gap-2">
+        <div className="absolute top-2 right-2 z-20">
           <TemplateAdminMenu
             template={{
               id: template.id,
@@ -243,29 +238,6 @@ const TemplatePreview = ({
             projectId={projectId}
             onUpdate={handleAdminUpdate}
           />
-          {onDelete && isMultiScene && (
-            <Button
-              variant="destructive"
-              size="sm"
-              className="h-7 px-3 text-[11px]"
-              onClick={(event) => {
-                event.stopPropagation();
-                if (!isDeleting) {
-                  onDelete();
-                }
-              }}
-              disabled={isDeleting}
-            >
-              {isDeleting ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <div className="flex items-center gap-1">
-                  <Trash2 className="h-3 w-3" />
-                  <span>Delete</span>
-                </div>
-              )}
-            </Button>
-          )}
         </div>
       )}
 
@@ -434,7 +406,6 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [loadingTemplateId, setLoadingTemplateId] = useState<string | null>(null);
-  const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
   const isTouchDevice = useIsTouchDevice();
   const { data: session } = useSession();
   const sessionIsAdmin = session?.user?.isAdmin ?? false;
@@ -605,20 +576,6 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
     },
   });
 
-  const deleteTemplateMutation = api.templates.delete.useMutation({
-    onSuccess: async (_data, templateId) => {
-      setDeletingTemplateId(null);
-      toast.success('Template deleted');
-      await utils.templates.getAll.invalidate();
-      await utils.templates.getCategories.invalidate();
-    },
-    onError: (error) => {
-      setDeletingTemplateId(null);
-      console.error('[TemplatesPanelG] Template deletion failed:', error);
-      toast.error(`Failed to delete template: ${error.message}`);
-    },
-  });
-
   useEffect(() => {
     if (!isAdmin && selectedCategory === 'multi') {
       setSelectedCategory('all');
@@ -676,31 +633,6 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
 
     addTemplateMutation.mutate(mutationParams);
   }, [projectId, addTemplateMutation, trackUsageMutation, isAdmin]);
-
-  const handleDeleteTemplate = useCallback((template: ExtendedTemplateDefinition) => {
-    if (!isAdmin) {
-      return;
-    }
-
-    const isMultiScene = (template.sceneCount ?? 1) > 1;
-    if (!isMultiScene) {
-      toast.error('Only multi-scene templates can be deleted here.');
-      return;
-    }
-
-    if (!template.isFromDatabase) {
-      toast.error('Static registry templates cannot be deleted.');
-      return;
-    }
-
-    const confirmed = window.confirm(`Delete template "${template.name}"? This removes it from the shared library.`);
-    if (!confirmed) {
-      return;
-    }
-
-    setDeletingTemplateId(template.id);
-    deleteTemplateMutation.mutate(template.id);
-  }, [isAdmin, deleteTemplateMutation]);
 
   // Combine hardcoded and database templates (DB first, then hardcoded after all pages loaded)
   const combinedTemplates = useMemo<ExtendedTemplateDefinition[]>(() => {
@@ -844,8 +776,6 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
               isTouchDevice={isTouchDevice}
               projectId={projectId}
               isAdmin={isAdmin}
-              onDelete={isAdmin && template.isFromDatabase && (template.sceneCount ?? 1) > 1 ? () => handleDeleteTemplate(template) : undefined}
-              isDeleting={deletingTemplateId === template.id}
             />
           </Card>
         ))}

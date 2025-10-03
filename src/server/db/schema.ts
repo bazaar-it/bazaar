@@ -1889,14 +1889,6 @@ export const brandRepository = createTable("brand_repository", (d) => ({
   index("brand_repo_ttl_idx").on(t.ttl),
 ]);
 
-export const brandRepositoryRelations = relations(brandRepository, ({ one, many }) => ({
-  firstExtractor: one(users, {
-    fields: [brandRepository.firstExtractedBy],
-    references: [users.id],
-  }),
-  usages: many(() => projectBrandUsage),
-}));
-
 export const projectBrandUsage = createTable("project_brand_usage", (d) => ({
   id: d.uuid().primaryKey().defaultRandom(),
   projectId: d
@@ -1923,6 +1915,14 @@ export const projectBrandUsageRelations = relations(projectBrandUsage, ({ one })
     fields: [projectBrandUsage.brandRepositoryId],
     references: [brandRepository.id],
   }),
+}));
+
+export const brandRepositoryRelations = relations(brandRepository, ({ one, many }) => ({
+  firstExtractor: one(users, {
+    fields: [brandRepository.firstExtractedBy],
+    references: [users.id],
+  }),
+  usages: many(projectBrandUsage),
 }));
 
 export const brandExtractionCache = createTable("brand_extraction_cache", (d) => ({
