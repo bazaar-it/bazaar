@@ -442,10 +442,10 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
   const utils = api.useUtils();
 
   // Get video state methods
-  const { addScene, getCurrentProps } = useVideoState();
+  const { addScene } = useVideoState();
 
-  // Get current project format
-  const currentFormat = getCurrentProps()?.meta?.format ?? 'landscape';
+  // Get current project format from the specific project (not global currentProjectId)
+  const currentFormat = useVideoState(state => state.projects[projectId]?.props?.meta?.format ?? 'landscape');
 
   // Check if user is admin (fallback to API if session not definitive)
   const { data: adminCheck } = api.admin.checkAdminAccess.useQuery(undefined, {

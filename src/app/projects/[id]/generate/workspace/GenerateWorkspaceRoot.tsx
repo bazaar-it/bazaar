@@ -343,8 +343,8 @@ export default function GenerateWorkspaceRoot({ projectId, userId, initialProps,
     isAdmin: session.user.isAdmin ?? false
   } : undefined;
   
-  // Get current scenes for template creation
-  const currentScenes = getCurrentProps()?.scenes || [];
+  // Get current scenes for template creation from the specific project (not global currentProjectId)
+  const currentScenes = useVideoState(state => state.projects[projectId]?.props?.scenes || []);
 
   const isMobile = forcedMobile || breakpoint === 'mobile' || (isTouchDevice && breakpoint !== 'desktop');
 

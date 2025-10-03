@@ -2821,49 +2821,6 @@ export default function FallbackComposition() {
         aria-hidden="true"
       />
 
-      {isAdmin && (
-        <div className="border-b border-slate-200 bg-white px-4 py-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate-500">
-            <span>Brand theme</span>
-            <Badge variant="outline" className="text-xs">
-              {activeBrandTarget ? (activeBrandTarget.companyName || activeBrandTarget.websiteUrl) : 'Default'}
-            </Badge>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={selectedBrandTargetId}
-              onChange={(event) => setSelectedBrandTargetId(event.target.value)}
-              className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-700 shadow-sm focus:border-slate-500 focus:outline-none"
-            >
-              <option value="default">Default (Bazaar)</option>
-              {readyBrandTargets.map((target: any) => (
-                <option key={target.id} value={target.id}>
-                  {target.companyName || target.websiteUrl}
-                </option>
-              ))}
-            </select>
-            <Button
-              size="sm"
-              onClick={() => handleApplyBrandTheme(selectedBrandTargetId)}
-              disabled={isApplyingBrandTheme || (selectedBrandTargetId !== 'default' && !selectedBrandTarget)}
-            >
-              {isApplyingBrandTheme ? 'Applying…' : 'Apply theme'}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                setSelectedBrandTargetId('default');
-                handleApplyBrandTheme('default');
-              }}
-              disabled={selectedBrandTargetId === 'default'}
-            >
-              Reset
-            </Button>
-          </div>
-        </div>
-      )}
-      
       <div className="relative flex-grow min-h-0 min-w-0 flex items-center justify-center">
         {/* Preview source indicator removed in this branch */}
         {componentImporter && playerProps ? (

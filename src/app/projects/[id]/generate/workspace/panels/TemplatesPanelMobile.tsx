@@ -386,8 +386,9 @@ const TemplatesPanelMobile: React.FC<TemplatesPanelMobileProps> = ({projectId, o
   const isAdmin = session?.user?.isAdmin ?? false;
 
   const utils = api.useUtils();
-  const {addScene, getCurrentProps} = useVideoState();
-  const currentFormat = getCurrentProps()?.meta?.format ?? 'landscape';
+  const {addScene} = useVideoState();
+  // Get current project format from the specific project (not global currentProjectId)
+  const currentFormat = useVideoState(state => state.projects[projectId]?.props?.meta?.format ?? 'landscape');
 
   useEffect(() => {
     if (!previewTemplate) return;

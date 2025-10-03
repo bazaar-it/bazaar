@@ -95,8 +95,8 @@ export function CodePanelG({
     }
   }, [monaco]);
   
-  // Get current props and scenes
-  const currentProps = getCurrentProps();
+  // Get current props and scenes for the specific project (not global currentProjectId)
+  const currentProps = useVideoState(state => state.projects[projectId]?.props || null);
   const scenes = (currentProps?.scenes || []) as Scene[];
 
   const firstSceneId = scenes[0]?.id;

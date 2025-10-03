@@ -194,7 +194,8 @@ export function useAutoFix(projectId: string, scenes: Scene[]) {
   // Helper function to convert database scenes to InputProps format
   const convertDbScenesToInputProps = useCallback((dbScenes: any[]) => {
     let currentStart = 0;
-    const currentProps = getCurrentProps();
+    // Get props from the specific project (not global currentProjectId)
+    const currentProps = useVideoState.getState().projects[projectId]?.props;
     const convertedScenes = dbScenes.map((dbScene) => {
       const sceneDuration = dbScene.duration || 150; 
       const scene = {

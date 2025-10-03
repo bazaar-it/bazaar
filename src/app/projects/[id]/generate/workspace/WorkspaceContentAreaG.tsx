@@ -619,10 +619,10 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
     // Callback for handling new scene generation with validation
     const handleSceneGenerated = useCallback(async (sceneId: string) => {
       console.log('[WorkspaceContentAreaG] 🎉 NEW SCENE GENERATED! Scene ID:', sceneId);
-      
-      // 🚨 FIX DOUBLE REFRESH: Check if scene already exists in state
-      const currentProps = getCurrentProps();
-      const existingScene = currentProps?.scenes?.find((s: any) => s.id === sceneId);
+
+      // 🚨 FIX DOUBLE REFRESH: Check if scene already exists in state from specific project
+      const props = useVideoState.getState().projects[projectId]?.props;
+      const existingScene = props?.scenes?.find((s: any) => s.id === sceneId);
       
       if (existingScene) {
         console.log('[WorkspaceContentAreaG] ✅ Scene already in state (added optimistically), skipping DB fetch');
@@ -822,11 +822,11 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
       }, PANEL_ANIM_MS);
     }, []);
 
-    // Memoize current scenes to avoid recalculation on every render
+    // Memoize current scenes to avoid recalculation on every render from specific project
     const currentScenes = useMemo(() => {
-      const props = getCurrentProps();
+      const props = useVideoState.getState().projects[projectId]?.props;
       return props?.scenes || [];
-    }, [getCurrentProps, projectId]);
+    }, [projectId]);
 
     // Smoothly animate to restored layout on first mount
     const [animateLayout, setAnimateLayout] = useState(false);

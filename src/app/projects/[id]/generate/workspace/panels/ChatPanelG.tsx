@@ -253,9 +253,9 @@ export default function ChatPanelG({
     { enabled: !!githubConnection?.isConnected }
   );
 
-  // Get video state and current scenes
-  const { getCurrentProps, replace, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene, removeMessage, setSceneGenerating, updateProjectAudio, syncDbMessages } = useVideoState();
-  const currentProps = getCurrentProps();
+  // Get video state and current scenes from the specific project (not global currentProjectId)
+  const { replace, updateAndRefresh, getProjectChatHistory, addUserMessage, addAssistantMessage, updateMessage, updateScene, removeMessage, setSceneGenerating, updateProjectAudio, syncDbMessages } = useVideoState();
+  const currentProps = useVideoState(state => state.projects[projectId]?.props || null);
   const scenes = currentProps?.scenes || [];
   
   // 🚨 SIMPLIFIED: Scene context logic - let Brain LLM handle scene targeting
@@ -1444,13 +1444,14 @@ export default function ChatPanelG({
     setIsEnhancing(true);
     
     try {
-      const currentProps = getCurrentProps();
+      // Get current props from the specific project
+      const props = useVideoState.getState().projects[projectId]?.props;
       await enhancePromptMutation.mutateAsync({
         prompt: message.trim(),
         videoFormat: {
-          format: currentProps?.meta?.format || 'landscape',
-          width: currentProps?.meta?.width || 1920,
-          height: currentProps?.meta?.height || 1080
+          format: props?.meta?.format || 'landscape',
+          width: props?.meta?.width || 1920,
+          height: props?.meta?.height || 1080
         }
       });
       
