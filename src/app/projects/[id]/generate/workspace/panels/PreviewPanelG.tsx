@@ -72,6 +72,8 @@ export function PreviewPanelG({
 }) {
   // Phase 1 metrics (lightweight, console-based)
   const metricsRef = useRef({ precompiled: 0, slowPath: 0, errors: 0, runs: 0 });
+  // Track when code saves happen to force refresh bypassing signature check
+  const forceRefreshRef = useRef(false);
   // ✅ FIXED: Use separate selectors to prevent infinite loops
   const currentProps = useVideoState((state) => {
     const project = state.projects[projectId];
@@ -85,9 +87,9 @@ export function PreviewPanelG({
   const projectRefreshToken = useVideoState((state) => state.projects[projectId]?.refreshToken);
   
   // Get scenes from database to ensure we have the latest data
-  const { data: dbScenes, dataUpdatedAt } = api.generation.getProjectScenes.useQuery(
+  const { data: dbScenes, dataUpdatedAt, refetch: refetchScenes } = api.generation.getProjectScenes.useQuery(
     { projectId },
-    { 
+    {
       refetchOnWindowFocus: false,
       // Balance: give optimistic UI a moment before DB resync
       staleTime: 1000,
@@ -123,7 +125,23 @@ export function PreviewPanelG({
   const { replace } = useVideoState();
   const [lastSyncedSceneIds, setLastSyncedSceneIds] = useState<string>('');
   const [syncDebounceTimer, setSyncDebounceTimer] = useState<NodeJS.Timeout | null>(null);
-  
+
+  // Listen for code save events from CodePanel
+  useEffect(() => {
+    const handleCodeSaved = async (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail?.projectId === projectId && customEvent.detail?.forceRefresh) {
+        console.log('[PreviewPanelG] 🔄 Code save detected, forcing immediate refetch');
+        forceRefreshRef.current = true;
+        // Immediately refetch the latest data from database
+        await refetchScenes();
+      }
+    };
+
+    window.addEventListener('code-saved', handleCodeSaved);
+    return () => window.removeEventListener('code-saved', handleCodeSaved);
+  }, [projectId, refetchScenes]);
+
   useEffect(() => {
     if (dbScenes && currentProps) {
       // 🚨 FIX: Check if scenes have actually changed to prevent redundant syncs
@@ -140,8 +158,12 @@ export function PreviewPanelG({
       if (syncDebounceTimer) {
         clearTimeout(syncDebounceTimer);
       }
-      
-      // Debounce the sync to avoid rapid updates
+
+      // Skip debounce if force refresh is active (immediate sync after code save)
+      const shouldSkipDebounce = forceRefreshRef.current;
+      const debounceDelay = shouldSkipDebounce ? 0 : 300;
+
+      // Debounce the sync to avoid rapid updates (unless force refresh)
       const timer = setTimeout(() => {
         console.log('[PreviewPanelG] 🔄 Database scenes changed, syncing to VideoState...');
         // Database scenes updated, syncing to VideoState
@@ -208,7 +230,12 @@ export function PreviewPanelG({
       const serverSig = sigFrom(convertedScenes);
       const localSig = sigFrom((currentProps.scenes || []) as any[]);
 
-      if (serverSig === localSig) {
+      // Check if we should force refresh (after code save)
+      const shouldForceRefresh = forceRefreshRef.current;
+      if (shouldForceRefresh) {
+        console.log('[PreviewPanelG] 🔄 Force refresh active, bypassing signature check');
+        forceRefreshRef.current = false; // Reset flag
+      } else if (serverSig === localSig) {
         console.log('[PreviewPanelG] ⚖️ Server scenes match local signature; skipping replace');
         return;
       }
@@ -234,8 +261,8 @@ export function PreviewPanelG({
         });
         replace(projectId, updatedProps);
       }
-      }, 300); // 300ms debounce for DB sync
-      
+      }, debounceDelay); // Dynamic debounce: 0ms for force refresh, 300ms otherwise
+
       setSyncDebounceTimer(timer);
     }
     
@@ -437,7 +464,8 @@ export function PreviewPanelG({
   const scenesFingerprint = useMemo(() => {
     const sortedForFingerprint = [...scenes].sort((a: any, b: any) => ((a as any).order ?? 0) - ((b as any).order ?? 0));
     return sortedForFingerprint.map((s, idx) => {
-      const code = (s.data as any)?.code || (s.data as any)?.tsxCode || '';
+      // Check all possible locations for scene code (tsxCode at scene level takes priority)
+      const code = (s as any).tsxCode || (s.data as any)?.code || (s.data as any)?.tsxCode || '';
       const codeHash = code ? hashString(code) : 'empty';
       return `${idx}|${s.id}|${(s as any).order ?? 0}|${s.duration || 150}|${codeHash}`;
     }).join('~');
@@ -496,6 +524,18 @@ export function PreviewPanelG({
     const tsxCode = scene.tsxCode || (scene.data as any)?.tsxCode || (scene.data as any)?.code;
     // Use JS if available, otherwise fall back to TSX
     const sceneCode = preCompiledJS || tsxCode;
+
+    // Debug: Log what code we're using for this specific scene
+    if (scene.id === 'e6156b08-02eb-4436-864f-967bb603dad3') {
+      console.log('[PreviewPanelG] 🔍 Scene 2 (Highlight Sweep) code source:', {
+        sceneId: scene.id,
+        hasPreCompiledJS: !!preCompiledJS,
+        hasTsxCode: !!tsxCode,
+        usingPreCompiled: !!preCompiledJS,
+        jsCodePreview: preCompiledJS ? preCompiledJS.substring(0, 200) : 'N/A',
+        tsxCodePreview: tsxCode ? tsxCode.substring(0, 200) : 'N/A'
+      });
+    }
     const sceneName = scene.name || (scene.data as any)?.name || scene.id;
     const sceneId = scene.id;
     
