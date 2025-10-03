@@ -249,6 +249,22 @@ useEffect(() => {
     return `${activeBrandTargetId}:${keys}`;
   }, [activeBrandTarget, activeBrandTargetId, activeBrandVariants]);
 
+  // Listen for code save events from CodePanel
+  useEffect(() => {
+    const handleCodeSaved = async (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail?.projectId === projectId && customEvent.detail?.forceRefresh) {
+        console.log('[PreviewPanelG] 🔄 Code save detected, forcing immediate refetch');
+        forceRefreshRef.current = true;
+        // Immediately refetch the latest data from database
+        await refetchScenes();
+      }
+    };
+
+    window.addEventListener('code-saved', handleCodeSaved);
+    return () => window.removeEventListener('code-saved', handleCodeSaved);
+  }, [projectId, refetchScenes]);
+
   useEffect(() => {
     if (dbScenes && currentProps) {
       // 🚨 FIX: Check if scenes have actually changed to prevent redundant syncs
@@ -265,8 +281,12 @@ useEffect(() => {
       if (syncDebounceTimer) {
         clearTimeout(syncDebounceTimer);
       }
-      
-      // Debounce the sync to avoid rapid updates
+
+      // Skip debounce if force refresh is active (immediate sync after code save)
+      const shouldSkipDebounce = forceRefreshRef.current;
+      const debounceDelay = shouldSkipDebounce ? 0 : 300;
+
+      // Debounce the sync to avoid rapid updates (unless force refresh)
       const timer = setTimeout(() => {
         console.log('[PreviewPanelG] 🔄 Database scenes changed, syncing to VideoState...');
         // Database scenes updated, syncing to VideoState
@@ -340,7 +360,12 @@ useEffect(() => {
       const serverSig = sigFrom(convertedScenes);
       const localSig = sigFrom((currentProps.scenes || []) as any[]);
 
-      if (serverSig === localSig) {
+      // Check if we should force refresh (after code save)
+      const shouldForceRefresh = forceRefreshRef.current;
+      if (shouldForceRefresh) {
+        console.log('[PreviewPanelG] 🔄 Force refresh active, bypassing signature check');
+        forceRefreshRef.current = false; // Reset flag
+      } else if (serverSig === localSig) {
         console.log('[PreviewPanelG] ⚖️ Server scenes match local signature; skipping replace');
         return;
       }
@@ -366,8 +391,8 @@ useEffect(() => {
         });
         replace(projectId, updatedProps);
       }
-      }, 300); // 300ms debounce for DB sync
-      
+      }, debounceDelay); // Dynamic debounce: 0ms for force refresh, 300ms otherwise
+
       setSyncDebounceTimer(timer);
     }
     
