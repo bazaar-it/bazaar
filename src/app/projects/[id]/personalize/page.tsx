@@ -61,7 +61,7 @@ export default async function PersonalizePage({
 
     const approxDurationFrames = scenes.reduce((total, scene) => total + (scene.duration ?? 0), 0);
     const approxDurationSeconds = scenes.length === 0 ? 0 : Math.max(1, Math.round(approxDurationFrames / 30));
-    const tokenizedRegex = /(brandThemeRuntime|theme\?\.)/;
+    const tokenizedRegex = /theme\??\./;
     const isTokenized = scenes.length > 0 && scenes.every((scene) => {
       const code = scene.tsxCode ?? '';
       return tokenizedRegex.test(code);

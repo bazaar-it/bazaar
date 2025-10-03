@@ -873,6 +873,7 @@ export const projectRouter = createTRPCRouter({
         summary?: string;
         error?: string;
       }> = [];
+      let hadFailures = false;
 
       for (const scene of scenesToProcess) {
         try {
@@ -1163,11 +1164,7 @@ export const projectRouter = createTRPCRouter({
             changed: false,
             error: message,
           });
-
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: `Failed to edit scene "${scene.name}" for brand: ${message}`,
-          });
+          hadFailures = true;
         }
       }
 
@@ -1180,11 +1177,16 @@ export const projectRouter = createTRPCRouter({
         await persistTheme();
       }
 
+      const updatedCount = results.filter((r) => r.changed).length;
+      const failedCount = results.filter((r) => r.error).length;
+
       return {
         projectId: input.projectId,
         targetId: target.id,
         total: scenesToProcess.length,
-        updated: results.filter((r) => r.changed).length,
+        updated: updatedCount,
+        failed: failedCount,
+        hasErrors: hadFailures,
         dryRun: !!input.dryRun,
         results,
         variants: variantMap,
