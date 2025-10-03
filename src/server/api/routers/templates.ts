@@ -110,6 +110,12 @@ export const templatesRouter = createTRPCRouter({
       const primaryScene = orderedScenes[0];
       const totalDuration = orderedScenes.reduce((sum, scene) => sum + (scene.duration ?? 0), 0);
 
+      // Auto-tag multi-scene templates
+      const baseTags = templateData.tags || [];
+      const finalTags = orderedScenes.length > 1 && !baseTags.includes('multiscene')
+        ? [...baseTags, 'multiscene']
+        : baseTags;
+
       const createTemplateResult = await db.transaction(async (tx) => {
         const [templateRow] = await tx.insert(templates).values({
           name: templateData.name,
@@ -121,7 +127,7 @@ export const templatesRouter = createTRPCRouter({
           duration: primaryScene.duration,
           supportedFormats: templateData.supportedFormats || ['landscape', 'portrait', 'square'],
           category: templateData.category,
-          tags: templateData.tags || [],
+          tags: finalTags,
           isOfficial: templateData.isOfficial || false,
           isActive: true,
           adminOnly: templateData.adminOnly ?? false,

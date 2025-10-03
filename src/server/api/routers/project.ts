@@ -852,6 +852,7 @@ export const projectRouter = createTRPCRouter({
         .select({
           id: scenes.id,
           tsxCode: scenes.tsxCode,
+          jsCode: scenes.jsCode,
           name: scenes.name,
           order: scenes.order,
           duration: scenes.duration,
