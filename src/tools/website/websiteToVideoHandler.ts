@@ -15,7 +15,7 @@ interface ToolExecutionResult {
 import { db } from "~/server/db";
 import { env } from "~/env";
 import { sceneCompiler } from "~/server/services/compilation/scene-compiler.service";
-import { projects, scenes } from "~/server/db/schema";
+import { projects, scenes, personalizationTargets } from "~/server/db/schema";
 import { eq, asc } from "drizzle-orm";
 import { WebAnalysisAgentV4, type ExtractedBrandDataV4 } from "~/tools/webAnalysis/WebAnalysisAgentV4";
 import { convertV4ToSimplified, createFallbackBrandData, type SimplifiedBrandData } from "~/tools/webAnalysis/brandDataAdapter";
@@ -180,7 +180,7 @@ export class WebsiteToVideoHandler {
       
       // 2. Save to brand_profile table and format brand data
       toolsLogger.info('🌐 [WEBSITE HANDLER] Step 2: Saving brand profile and formatting data...');
-      
+
       // Save to database (includes AI personality analysis)
       const savedBrand = await saveBrandProfile({
         projectId: input.projectId,
@@ -196,6 +196,31 @@ export class WebsiteToVideoHandler {
         primaryFont: brandStyle.typography.primaryFont,
         animationStyle: brandStyle.animation.style
       });
+
+      // Create personalization_target record for UI polling
+      const domain = new URL(input.websiteUrl).hostname.replace('www.', '');
+      const now = new Date();
+      await db.insert(personalizationTargets).values({
+        projectId: input.projectId,
+        websiteUrl: input.websiteUrl,
+        companyName: websiteData.brand?.identity?.name || domain,
+        status: 'ready',
+        brandProfile: websiteData as any,
+        brandTheme: brandStyle as any,
+        extractedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }).onConflictDoUpdate({
+        target: personalizationTargets.projectId,
+        set: {
+          status: 'ready',
+          brandProfile: websiteData as any,
+          brandTheme: brandStyle as any,
+          extractedAt: now,
+          updatedAt: now,
+        }
+      });
+      toolsLogger.info('🌐 [WEBSITE HANDLER] Created personalization_target record');
 
       // 3. Select multi-scene template with AI personality
       toolsLogger.info('🌐 [WEBSITE HANDLER] Step 3: Selecting multi-scene template...');
