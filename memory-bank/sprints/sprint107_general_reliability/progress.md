@@ -1,5 +1,8 @@
 # Sprint 107 - Progress Log
 
+## 2025-10-05 - Auto-fix false positives
+- Logged analysis of silent auto-fix rewrites: Preview fallback dispatch still targets Scene 1 when compilation errors are global, and the queue runs without verifying the scene is still broken. Mitigation plan lives in the new false-positive report.【src/app/projects/[id]/generate/workspace/panels/PreviewPanelG.tsx:2434】【src/hooks/use-auto-fix.ts:560】【memory-bank/sprints/sprint107_general_reliability/auto-fix-false-positive-analysis.md:1】
+
 ## 2025-09-29 - Admin image metrics realignment
 - Logged analysis outlining the mismatch between chat attachment counts and true uploads, plus verification plan for asset-backed numbers.【memory-bank/sprints/sprint107_general_reliability/admin-dashboard-images-analysis.md:1】
 - `getUserDetails` now counts distinct active image assets (R2-backed) instead of summing message attachments; keeps prompts-with-images for context.【src/server/api/routers/admin.ts:1865】

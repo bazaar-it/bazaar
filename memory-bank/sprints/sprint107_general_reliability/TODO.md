@@ -1,5 +1,11 @@
 # Sprint 107 - TODO List
 
+## Oct 2025 - Auto-fix Guardrails
+
+- [ ] Audit `PreviewPanelG` fallback dispatch and introduce a non-autofix `preview-global-error` channel for composite import failures.【src/app/projects/[id]/generate/workspace/panels/PreviewPanelG.tsx:2434】
+- [ ] Add a preflight verification step in `useAutoFix` so queued fixes confirm the scene is still broken before calling EDIT.【src/hooks/use-auto-fix.ts:560】
+- [ ] Expand auto-fix telemetry to capture dispatcher source + stack traces for wrapper errors (`autofix_metrics`).【memory-bank/sprints/sprint107_general_reliability/auto-fix-false-positive-analysis.md:1】
+
 ## Critical - Day 1 (Stop the Bleeding)
 
 - [ ] **Fix Component Export** (1 hour)

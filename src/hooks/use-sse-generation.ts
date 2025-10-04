@@ -46,6 +46,8 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
     options?: {
       websiteUrl?: string;
       userInputs?: UrlToVideoUserInputs;
+      mode?: 'multi-scene' | 'current-scenes';
+      sceneIds?: string[];
     }
   ) => {
     // Close any existing connection
@@ -92,6 +94,18 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
         params.append('userInputs', JSON.stringify(options.userInputs));
       } catch (error) {
         console.warn('[useSSEGeneration] Failed to serialize userInputs', error);
+      }
+    }
+
+    if (options?.mode) {
+      params.append('mode', options.mode);
+    }
+
+    if (options?.sceneIds?.length) {
+      try {
+        params.append('sceneIds', JSON.stringify(options.sceneIds));
+      } catch (error) {
+        console.warn('[useSSEGeneration] Failed to serialize sceneIds', error);
       }
     }
 
@@ -177,6 +191,19 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
             
             // Optional: Show progress notification
             // toast.success(`Scene added: ${data.data.sceneName}`);
+            break;
+
+          case 'scene_updated':
+            console.log(`Scene ${data.data.progress}% updated:`, data.data.sceneName);
+            utils.project.getFullProject.invalidate({ id: projectId });
+            void utils.generation.getProjectScenes.invalidate({ projectId });
+            onSceneProgress?.({
+              sceneId: data.data.sceneId,
+              sceneIndex: data.data.sceneIndex,
+              sceneName: data.data.sceneName,
+              totalScenes: data.data.totalScenes,
+              progress: data.data.progress,
+            });
             break;
           
           // ✅ NEW: Handle title updates

@@ -1,5 +1,8 @@
 # 🏆 Bazaar-Vid Progress Summary
 
+## 📝 Latest Update (Oct 05, 2025)
+- Sprint 107: Investigated silent auto-fix rewrites; fallback `preview-scene-error` dispatch without scene attribution and queue preflight gaps explain the false positives, documented mitigation plan in the new analysis note.【src/app/projects/[id]/generate/workspace/panels/PreviewPanelG.tsx:2434】【src/hooks/use-auto-fix.ts:620】【memory-bank/sprints/sprint107_general_reliability/auto-fix-false-positive-analysis.md:1】
+
 ## 📝 Latest Update (Oct 03, 2025)
 - Sprint 107/140 merge reconciliation: Merged `main` into `personalization`, resolved ChatPanel/PreviewPanel/template conflicts, and preserved URL personalization while adopting main's scene sync + infinite pagination fixes.【src/app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx:35】【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx:460】【src/server/api/routers/generation/template-operations.ts:24】【src/server/api/routers/templates.ts:102】
 - Template panels now share the infinite scroll data flow: both desktop and mobile use cursor-based tRPC pagination, local caches, and load-more triggers matching main's scene sync helpers.【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx:400】【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelMobile.tsx:448】
@@ -1380,3 +1383,4 @@ The core video generation pipeline is **production-ready** with:
 - Added sanitizers so persisted scenes drop code-heavy fields and prune large nested strings before hitting storage.【src/stores/videoState.ts:238】【src/stores/videoState.ts:323】
 - `partialize` now runs every project through `sanitizePropsForPersistence`, keeping UI state (audio, selection, drafts) while letting DB sync repopulate heavy scene code post-reload.【src/stores/videoState.ts:1701】
 - Attempted `npx eslint src/stores/videoState.ts` and `npx tsc --noEmit`; both failed on pre-existing repo configuration/type issues (missing `structuredClone`, large TS backlog). Logged the failure context.
+2025-10-04 – URL modal now supports current-scene branding updates. Added admin-only flow that reuses website brand extraction, runs Edit tool passes on selected scenes, and streams `scene_updated` SSE events so the timeline refreshes in place. Frontend tabs, scene selection UI, and SSE hook updates land alongside backend service + API branching.

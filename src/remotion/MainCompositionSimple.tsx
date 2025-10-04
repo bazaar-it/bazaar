@@ -216,7 +216,12 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
               'white-woman': '/avatars/white-woman.png'
             }
           };
-          
+
+          // Safety: if Easing wasn't provided, fall back to window.Remotion.Easing
+          if (typeof Easing === 'undefined' && window.Remotion && window.Remotion.Easing) {
+            Easing = window.Remotion.Easing;
+          }
+
           // Execute the scene code
           // The last expression (Component;) will be returned
           ${executableCode}
