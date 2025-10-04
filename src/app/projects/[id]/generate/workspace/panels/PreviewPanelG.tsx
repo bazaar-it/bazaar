@@ -47,13 +47,13 @@ function sanitizeTheme(theme: BrandTheme | null | undefined): BrandTheme {
     fonts: {
       heading: {
         ...DEFAULT_BRAND_THEME.fonts.heading,
-        ...theme.fonts.heading,
+        ...(theme.fonts?.heading || {}),
       },
       body: {
         ...DEFAULT_BRAND_THEME.fonts.body,
-        ...theme.fonts.body,
+        ...(theme.fonts?.body || {}),
       },
-      mono: theme.fonts.mono || DEFAULT_BRAND_THEME.fonts.mono,
+      mono: theme.fonts?.mono || DEFAULT_BRAND_THEME.fonts.mono,
     },
     assets: {
       ...DEFAULT_BRAND_THEME.assets,
