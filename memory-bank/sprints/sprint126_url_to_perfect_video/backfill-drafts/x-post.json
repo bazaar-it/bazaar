@@ -1,0 +1,43 @@
+{
+  "templateId": "7a60a1c9-38ea-4de5-9769-8e6adc39ed46",
+  "name": "X Post",
+  "matchingMetadata": {
+    "keywords": ["x post", "twitter", "social media", "dark mode", "engagement stats", "feed card"],
+    "userPhrases": ["animate a tweet", "make an x post video", "social proof post", "twitter announcement"],
+    "categories": ["social", "platform", "announcement"],
+    "styles": ["modern", "dark", "minimal"],
+    "useCases": ["social proof", "product launch", "thought leadership"],
+    "animations": ["spring", "word reveal", "counter", "slide"],
+    "elements": ["avatar", "verified badge", "post text", "stats row", "icons"],
+    "colors": ["black", "white", "electric blue"],
+    "complexity": "medium",
+    "primaryUse": "Animated X/Twitter post with live engagement counters",
+    "similarTo": ["LinkedInPost", "InstagramStoryCard"]
+  },
+  "editability": {
+    "lockBrandShell": true,
+    "allowPaletteOverride": false,
+    "editableTextSlots": [
+      "displayName",
+      "postText",
+      "timestamp",
+      "statReplies",
+      "statReposts",
+      "statLikes",
+      "statViews"
+    ],
+    "editableMediaSlots": ["avatarImage"],
+    "disallowedAttributes": ["cardBackground", "xLogo", "verifiedBadgeFill", "engagementIconGlyphs"],
+    "requiresExactAssets": ["xLogo"]
+  },
+  "slotPlan": [
+    { "id": "displayName", "kind": "text", "label": "Display name", "maxChars": 40, "required": true },
+    { "id": "postText", "kind": "longText", "label": "Post text", "maxChars": 240, "required": true },
+    { "id": "timestamp", "kind": "text", "label": "Timestamp", "maxChars": 48 },
+    { "id": "statReplies", "kind": "metric", "label": "Replies count (K)", "min": 0, "max": 999 },
+    { "id": "statReposts", "kind": "metric", "label": "Reposts count (K)", "min": 0, "max": 999 },
+    { "id": "statLikes", "kind": "metric", "label": "Likes count (K)", "min": 0, "max": 999 },
+    { "id": "statViews", "kind": "metric", "label": "Views (M)", "min": 0, "max": 999 },
+    { "id": "avatarImage", "kind": "image", "label": "Avatar image", "aspectRatio": "1:1", "required": true }
+  ]
+}

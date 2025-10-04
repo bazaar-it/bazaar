@@ -1,0 +1,28 @@
+{
+  "templateId": "58bdd9a0-acec-42e5-a222-d07b41dc39cb",
+  "name": "Stretching typography",
+  "matchingMetadata": {
+    "keywords": ["stretch", "letter spacing", "headline", "minimal"],
+    "userPhrases": ["stretch text animation", "letter spacing hero", "bold typography stretch", "simple word stretch"],
+    "categories": ["text", "hero"],
+    "styles": ["minimal", "clean", "white"],
+    "useCases": ["tagline", "section intro", "quote"],
+    "animations": ["letter spacing"],
+    "elements": ["headline"],
+    "colors": ["white", "black"],
+    "complexity": "simple",
+    "primaryUse": "Single headline stretching letter spacing across entrance",
+    "similarTo": ["Single word", "Scaled up word slide"]
+  },
+  "editability": {
+    "lockBrandShell": false,
+    "allowPaletteOverride": true,
+    "editableTextSlots": ["headline"],
+    "editableMediaSlots": [],
+    "disallowedAttributes": ["letterSpacingTiming"],
+    "notes": "Use short phrase (<=24 chars) to keep stretch animation balanced." 
+  },
+  "slotPlan": [
+    { "id": "headline", "kind": "text", "label": "Headline", "maxChars": 24, "required": true }
+  ]
+}

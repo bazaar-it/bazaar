@@ -1,0 +1,31 @@
+{
+  "templateId": "f7c44ae4-5372-4e2a-b79c-64b8bdd06c7c",
+  "name": "Emphasis",
+  "matchingMetadata": {
+    "keywords": ["emphasis", "highlight", "word sweep", "gradient underline"],
+    "userPhrases": ["highlight one word", "animated emphasis", "neon underline", "word sweep animation"],
+    "categories": ["text", "hero"],
+    "styles": ["minimal", "white", "neon"],
+    "useCases": ["tagline", "quote", "callout"],
+    "animations": ["word cascade", "highlight sweep"],
+    "elements": ["wordSequence", "highlightWord"],
+    "colors": ["white", "violet", "pink"],
+    "complexity": "simple",
+    "primaryUse": "Word-by-word reveal with gradient highlight on final word",
+    "similarTo": ["Long sentence slide down", "Typewriter effect"]
+  },
+  "editability": {
+    "lockBrandShell": false,
+    "allowPaletteOverride": true,
+    "editableTextSlots": ["word1", "word2", "word3", "highlightWord"],
+    "editableMediaSlots": [],
+    "disallowedAttributes": ["highlightTiming", "gradientColors"],
+    "notes": "Highlight word is the last slot (`highlightWord`). Keep each word under ~12 characters." 
+  },
+  "slotPlan": [
+    { "id": "word1", "kind": "text", "label": "Word 1", "maxChars": 12, "default": "Sometimes", "required": true },
+    { "id": "word2", "kind": "text", "label": "Word 2", "maxChars": 12, "default": "you", "required": true },
+    { "id": "word3", "kind": "text", "label": "Word 3", "maxChars": 12, "default": "gotta", "required": true },
+    { "id": "highlightWord", "kind": "text", "label": "Emphasized word", "maxChars": 12, "default": "emphasize", "required": true }
+  ]
+}

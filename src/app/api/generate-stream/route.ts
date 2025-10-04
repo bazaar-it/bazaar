@@ -6,7 +6,8 @@ import { eq, desc } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import { messageService } from '~/server/services/data/message.service';
 import { generateTitle } from '~/server/services/ai/titleGenerator.service';
-import { WebsiteToVideoHandler } from '~/tools/website/websiteToVideoHandler';
+import { WebsiteToVideoHandler, type StreamingEvent } from '~/tools/website/websiteToVideoHandler';
+import { WebsiteBrandingSceneApplier } from '~/server/services/website/website-branding-applier';
 import type { StreamingEvent } from '~/tools/website/websiteToVideoHandler';
 import type { UrlToVideoUserInputs } from '~/lib/types/url-to-video';
 import { FEATURES } from "~/config/features";
@@ -52,14 +53,28 @@ export async function GET(request: NextRequest) {
   const modelOverride = searchParams.get('modelOverride');
   const useGitHub = searchParams.get('useGitHub') === 'true';
   const websiteUrl = searchParams.get('websiteUrl');
+  const mode = (searchParams.get('mode') || 'multi-scene') as 'multi-scene' | 'current-scenes';
+  const sceneIdsRaw = searchParams.get('sceneIds');
   const userInputsRaw = searchParams.get('userInputs');
   let userInputs: UrlToVideoUserInputs | undefined;
+  let targetSceneIds: string[] | undefined;
 
   if (userInputsRaw) {
     try {
       userInputs = JSON.parse(userInputsRaw) as UrlToVideoUserInputs;
     } catch (error) {
       console.warn('[SSE] Failed to parse userInputs payload', error);
+    }
+  }
+
+  if (sceneIdsRaw) {
+    try {
+      const parsedIds = JSON.parse(sceneIdsRaw);
+      if (Array.isArray(parsedIds)) {
+        targetSceneIds = parsedIds.filter((value): value is string => typeof value === 'string');
+      }
+    } catch (error) {
+      console.warn('[SSE] Failed to parse sceneIds payload', error);
     }
   }
 
@@ -243,97 +258,186 @@ export async function GET(request: NextRequest) {
       
       // ✨ Check if this is a website-to-video request (feature-gated)
       if (websiteUrl && FEATURES.WEBSITE_TO_VIDEO_ENABLED) {
-        console.log('[SSE] Website-to-video pipeline detected:', websiteUrl);
-        
-        // Send initial analysis message
-        await safeWrite({
-          type: 'assistant_message_chunk',
-          message: `Analyzing ${new URL(websiteUrl).hostname} and extracting brand data...`,
-          isComplete: false
-        });
-        
-        // Setup streaming callback for real-time updates
-        let assistantMessageContent = `Analyzing ${new URL(websiteUrl).hostname} and extracting brand data...`;
-        
-        const streamingCallback = async (event: StreamingEvent) => {
-          console.log('[SSE] Streaming event:', event.type);
+        console.log('[SSE] Website-to-video pipeline detected:', websiteUrl, 'mode:', mode);
+        const domain = new URL(websiteUrl).hostname;
 
-        if (event.type === 'template_selected') {
-          const data = event.data;
-          const plannedMessage = `Selected ${data.templateName} template · ${data.totalScenes} scenes planned.`;
-          assistantMessageContent += `\n\n${plannedMessage}`;
+        if (mode === 'current-scenes') {
+          if (!targetSceneIds?.length) {
+            throw new Error('No scenes selected for branding update');
+          }
+
+          let assistantMessageContent = `Applying ${domain} branding to ${targetSceneIds.length} scene(s)...`;
           await safeWrite({
             type: 'assistant_message_chunk',
-            message: plannedMessage,
+            message: assistantMessageContent,
             isComplete: false,
           });
-          return;
-        }
 
-          if (event.type === 'scene_completed') {
-            const data = event.data;
-            const progressMessage = `Scene ${data.sceneIndex + 1}/${data.totalScenes} complete → ${data.sceneName}`;
-            assistantMessageContent += `\n\n${progressMessage}`;
+          const streamingCallback = async (event: StreamingEvent | { type: 'scene_updated'; data: { sceneId: string; sceneName: string; sceneIndex: number; totalScenes: number; projectId: string } }) => {
+            console.log('[SSE] Branding-applier event:', event.type);
 
-            await safeWrite({
-              type: 'assistant_message_chunk',
-              message: progressMessage,
-              isComplete: false,
-            });
+            if (event.type === 'scene_updated') {
+              const data = event.data;
+              const progressMessage = `Updated scene ${data.sceneIndex + 1}/${data.totalScenes} → ${data.sceneName}`;
+              assistantMessageContent += `\n\n${progressMessage}`;
+              await safeWrite({
+                type: 'assistant_message_chunk',
+                message: progressMessage,
+                isComplete: false,
+              });
+              await safeWrite({
+                type: 'scene_updated',
+                data: {
+                  sceneId: data.sceneId,
+                  sceneName: data.sceneName,
+                  progress: Math.round(((data.sceneIndex + 1) / data.totalScenes) * 100),
+                  sceneIndex: data.sceneIndex,
+                  totalScenes: data.totalScenes,
+                  projectId,
+                },
+              });
+              return;
+            }
 
-            await safeWrite({
-              type: 'scene_added',
-              data: {
-                sceneId: data.sceneId,
-                sceneName: data.sceneName,
-                progress: Math.round(((data.sceneIndex + 1) / data.totalScenes) * 100),
-              },
-            });
-            return;
+            if (event.type === 'all_scenes_complete') {
+              const completionMessage = `✨ Complete! Updated ${event.data.totalScenes} scene(s) with ${domain}'s branding.`;
+              assistantMessageContent += `\n\n${completionMessage}`;
+              await safeWrite({
+                type: 'assistant_message_chunk',
+                message: completionMessage,
+                isComplete: true,
+              });
+              return;
+            }
+
+            // Fallback: handle legacy streaming events gracefully (shouldn't fire in edit mode)
+            if ((event as StreamingEvent).type === 'scene_completed') {
+              const data = (event as StreamingEvent).data;
+              const progressMessage = `Scene ${data.sceneIndex + 1}/${data.totalScenes} complete → ${data.sceneName}`;
+              assistantMessageContent += `\n\n${progressMessage}`;
+              await safeWrite({
+                type: 'assistant_message_chunk',
+                message: progressMessage,
+                isComplete: false,
+              });
+              await safeWrite({
+                type: 'scene_updated',
+                data: {
+                  sceneId: data.sceneId ?? data.sceneName,
+                  sceneName: data.sceneName,
+                  progress: Math.round(((data.sceneIndex + 1) / data.totalScenes) * 100),
+                  sceneIndex: data.sceneIndex,
+                  totalScenes: data.totalScenes,
+                  projectId,
+                },
+              });
+              return;
+            }
+          };
+
+          const result = await WebsiteBrandingSceneApplier.apply({
+            projectId,
+            userId,
+            websiteUrl,
+            sceneIds: targetSceneIds,
+            userPrompt: userMessage,
+            userInputs,
+            streamingCallback,
+          });
+
+          if (!result.success) {
+            throw new Error(result.error?.message || 'Website branding update failed');
           }
 
-          if (event.type === 'audio_added') {
-            const data = event.data;
-            const audioMessage = `Added background music: ${data.trackName}`;
-            assistantMessageContent += `\n\n${audioMessage}`;
-            await safeWrite({
-              type: 'assistant_message_chunk',
-              message: audioMessage,
-              isComplete: false,
-            });
-            return;
-          }
-
-          if (event.type === 'all_scenes_complete') {
-            const data = event.data;
-            const domain = new URL(websiteUrl).hostname;
-            const completionMessage = `✨ Complete! Generated ${data.totalScenes} branded scenes using ${domain}'s colors and messaging.`;
-          assistantMessageContent += `\n\n${completionMessage}`;
-
-          await safeWrite({
-              type: 'assistant_message_chunk',
-              message: completionMessage,
-              isComplete: true,
-            });
-          }
-        };
-        
-        // Execute website pipeline with streaming
-        const result = await WebsiteToVideoHandler.execute({
-          userPrompt: userMessage,
-          projectId,
-          userId,
-          websiteUrl,
-          streamingCallback,
-          userInputs,
-        });
-        
-        if (result.success) {
-          console.log('[SSE] Website pipeline completed successfully');
         } else {
-          throw new Error(result.error?.message || 'Website pipeline failed');
+          // Send initial analysis message
+          await safeWrite({
+            type: 'assistant_message_chunk',
+            message: `Analyzing ${domain} and extracting brand data...`,
+            isComplete: false
+          });
+          
+          // Setup streaming callback for real-time updates
+          let assistantMessageContent = `Analyzing ${domain} and extracting brand data...`;
+          
+          const streamingCallback = async (event: StreamingEvent) => {
+            console.log('[SSE] Streaming event:', event.type);
+
+            if (event.type === 'template_selected') {
+              const data = event.data;
+              const plannedMessage = `Selected ${data.templateName} template · ${data.totalScenes} scenes planned.`;
+              assistantMessageContent += `\n\n${plannedMessage}`;
+              await safeWrite({
+                type: 'assistant_message_chunk',
+                message: plannedMessage,
+                isComplete: false,
+              });
+              return;
+            }
+
+            if (event.type === 'scene_completed') {
+              const data = event.data;
+              const progressMessage = `Scene ${data.sceneIndex + 1}/${data.totalScenes} complete → ${data.sceneName}`;
+              assistantMessageContent += `\n\n${progressMessage}`;
+
+              await safeWrite({
+                type: 'assistant_message_chunk',
+                message: progressMessage,
+                isComplete: false,
+              });
+
+              await safeWrite({
+                type: 'scene_added',
+                data: {
+                  sceneId: data.sceneId,
+                  sceneName: data.sceneName,
+                  progress: Math.round(((data.sceneIndex + 1) / data.totalScenes) * 100),
+                },
+              });
+              return;
+            }
+
+            if (event.type === 'audio_added') {
+              const data = event.data;
+              const audioMessage = `Added background music: ${data.trackName}`;
+              assistantMessageContent += `\n\n${audioMessage}`;
+              await safeWrite({
+                type: 'assistant_message_chunk',
+                message: audioMessage,
+                isComplete: false,
+              });
+              return;
+            }
+
+            if (event.type === 'all_scenes_complete') {
+              const data = event.data;
+              const completionMessage = `✨ Complete! Generated ${data.totalScenes} branded scenes using ${domain}'s colors and messaging.`;
+              assistantMessageContent += `\n\n${completionMessage}`;
+
+              await safeWrite({
+                type: 'assistant_message_chunk',
+                message: completionMessage,
+                isComplete: true,
+              });
+            }
+          };
+          
+          // Execute website pipeline with streaming
+          const result = await WebsiteToVideoHandler.execute({
+            userPrompt: userMessage,
+            projectId,
+            userId,
+            websiteUrl,
+            streamingCallback,
+            userInputs,
+          });
+          
+          if (result.success) {
+            console.log('[SSE] Website pipeline completed successfully');
+          } else {
+            throw new Error(result.error?.message || 'Website pipeline failed');
+          }
         }
-        
       } else {
         // 3. Just send the user data back - no assistant message yet (regular flow)
         await safeWrite({

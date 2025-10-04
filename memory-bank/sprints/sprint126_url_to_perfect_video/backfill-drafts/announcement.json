@@ -1,0 +1,42 @@
+{
+  "templateId": "e2317fbf-8f67-454f-9f75-b227085aaed1",
+  "name": "Announcement",
+  "matchingMetadata": {
+    "keywords": ["funding", "announcement", "raise", "valuation", "supabase", "badge wall"],
+    "userPhrases": ["announce our funding round", "celebrate a raise", "investment announcement video"],
+    "categories": ["social", "launch", "milestone"],
+    "styles": ["bold", "tech", "gradient"],
+    "useCases": ["funding update", "company news", "press highlight"],
+    "animations": ["spring", "staggered text", "scale", "fade"],
+    "elements": ["logo", "headline stack", "subheadline", "badge row", "product mockup"],
+    "colors": ["hunter green", "mint", "charcoal"],
+    "complexity": "complex",
+    "primaryUse": "Hero announcement card for funding or major milestones",
+    "similarTo": ["HeroTemplate", "LogoReveal"]
+  },
+  "editability": {
+    "lockBrandShell": false,
+    "allowPaletteOverride": true,
+    "editableTextSlots": [
+      "headlineLine1",
+      "headlineLine2",
+      "headlineLine3",
+      "subheadline",
+      "callout"
+    ],
+    "editableMediaSlots": ["brandLogo", "heroImage"],
+    "disallowedAttributes": ["badgeRingGeometry"]
+  },
+  "slotPlan": [
+    { "id": "brandLogo", "kind": "image", "label": "Brand logo", "aspectRatio": "4:1", "required": true },
+    { "id": "headlineLine1", "kind": "text", "label": "Headline – lead", "maxChars": 18, "required": true },
+    { "id": "headlineLine2", "kind": "text", "label": "Headline – figure", "maxChars": 18, "required": true },
+    { "id": "headlineLine3", "kind": "text", "label": "Headline – closer", "maxChars": 18, "required": true },
+    { "id": "subheadline", "kind": "richText", "label": "Support copy", "maxChars": 120 },
+    { "id": "badgeA", "kind": "text", "label": "Investor badge A", "maxChars": 18 },
+    { "id": "badgeB", "kind": "text", "label": "Investor badge B", "maxChars": 18 },
+    { "id": "badgeC", "kind": "text", "label": "Investor badge C", "maxChars": 18 },
+    { "id": "heroImage", "kind": "image", "label": "Supporting visual", "aspectRatio": "4:5" },
+    { "id": "callout", "kind": "text", "label": "Corner callout", "maxChars": 12 }
+  ]
+}

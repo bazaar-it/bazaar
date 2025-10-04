@@ -1,0 +1,31 @@
+{
+  "templateId": "6f6151af-50a7-4fc5-9d8f-49d4d43b3c4d",
+  "name": "Word scale up",
+  "matchingMetadata": {
+    "keywords": ["word scale", "sequential words", "hero statement", "bold typography"],
+    "userPhrases": ["word by word hero", "scaling words animation", "bold intro statement", "motivational opener"],
+    "categories": ["text", "hero"],
+    "styles": ["bold", "minimal", "high contrast"],
+    "useCases": ["landing hero", "mission statement", "section opener"],
+    "animations": ["scale", "sequence"],
+    "elements": ["word list"],
+    "colors": ["black", "white"],
+    "complexity": "simple",
+    "primaryUse": "Sequential word emphasis with escalating scale",
+    "similarTo": ["WordFlip", "Single word"]
+  },
+  "editability": {
+    "lockBrandShell": false,
+    "allowPaletteOverride": true,
+    "editableTextSlots": ["word1", "word2", "word3", "word4"],
+    "editableMediaSlots": [],
+    "disallowedAttributes": ["scaleTiming"],
+    "notes": "Template expects exactly four words to maintain timing; keep each word short to avoid clipping when scaled." 
+  },
+  "slotPlan": [
+    { "id": "word1", "kind": "text", "label": "Word 1", "maxChars": 10, "required": true },
+    { "id": "word2", "kind": "text", "label": "Word 2", "maxChars": 10, "required": true },
+    { "id": "word3", "kind": "text", "label": "Word 3", "maxChars": 10, "required": true },
+    { "id": "word4", "kind": "text", "label": "Word 4", "maxChars": 10, "required": true }
+  ]
+}

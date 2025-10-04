@@ -3,15 +3,6 @@
  * Connects the Brain decision to the website pipeline
  */
 
-// Tool execution result interface
-interface ToolExecutionResult {
-  success: boolean;
-  toolName: string;
-  data?: Record<string, any>;
-  error?: { message: string; code: string };
-  reasoning: string;
-  chatResponse?: string;
-}
 import { db } from "~/server/db";
 import { env } from "~/env";
 import { sceneCompiler } from "~/server/services/compilation/scene-compiler.service";
@@ -25,6 +16,166 @@ import { saveBrandProfile, createBrandStyleFromExtraction } from "~/server/servi
 import { toolsLogger } from '~/lib/utils/logger';
 import { MUSIC_LIBRARY, type UrlToVideoUserInputs } from '~/lib/types/url-to-video';
 import { AddAudioTool } from '~/tools/addAudio/addAudio';
+
+function normalizeScreenshotEntries(entries: unknown[]): string[] {
+  return entries
+    .map((item) => {
+      if (!item) return undefined;
+      if (typeof item === 'string') return item;
+      if (typeof item === 'object') {
+        const record = item as Record<string, unknown>;
+        const maybeUrl = record.url || record.src || record.image;
+        if (typeof maybeUrl === 'string') {
+          return maybeUrl;
+        }
+      }
+      return undefined;
+    })
+    .filter((value): value is string => typeof value === 'string');
+}
+
+// Tool execution result interface
+interface ToolExecutionResult {
+  success: boolean;
+  toolName: string;
+  data?: Record<string, any>;
+  error?: { message: string; code: string };
+  reasoning: string;
+  chatResponse?: string;
+}
+
+export interface WebsiteBrandAnalysisResult {
+  websiteData: SimplifiedBrandData;
+  brandStyle: ReturnType<typeof createBrandStyleFromExtraction>;
+  savedBrand: Awaited<ReturnType<typeof saveBrandProfile>>;
+  debugData: Record<string, any>;
+  screenshots: string[];
+  v4Data: ExtractedBrandDataV4 | null;
+  domain: string;
+  isFallback: boolean;
+}
+
+export async function analyzeWebsiteBranding(options: {
+  projectId: string;
+  userId: string;
+  websiteUrl: string;
+  webContext?: any;
+}): Promise<WebsiteBrandAnalysisResult> {
+  const { projectId, userId, websiteUrl, webContext } = options;
+
+  toolsLogger.info('🌐 [WEBSITE HANDLER] Step 1: Analyzing website…', {
+    projectId,
+    websiteUrl,
+  });
+
+  const debugData: Record<string, any> = {
+    screenshots: [],
+    brandExtraction: null,
+    narrativeScenes: [],
+    templateSelections: [],
+    generatedPrompts: [],
+    extractionPhases: [],
+    aiAnalysis: null,
+    psychologicalProfile: null,
+    competitorAnalysis: null,
+  };
+
+  let websiteData: SimplifiedBrandData;
+  let v4Data: ExtractedBrandDataV4 | null = null;
+  const screenshotCollector: string[] = [];
+
+  if (webContext) {
+    toolsLogger.info('🌐 [WEBSITE HANDLER] Using provided web context for analysis');
+    if (webContext.pageData?.visualDesign?.extraction) {
+      websiteData = webContext.pageData.visualDesign.extraction;
+      toolsLogger.debug('🌐 [WEBSITE HANDLER] Detected V1 context with embedded extraction data');
+    } else if (webContext.brand && webContext.product) {
+      websiteData = webContext;
+      toolsLogger.debug('🌐 [WEBSITE HANDLER] Detected direct simplified brand data');
+    } else {
+      toolsLogger.warn('🌐 [WEBSITE HANDLER] Unknown context shape, running full analysis');
+      const analyzer = new WebAnalysisAgentV4(projectId);
+      v4Data = await analyzer.analyze(websiteUrl);
+      websiteData = convertV4ToSimplified(v4Data);
+      if (Array.isArray(v4Data?.screenshots)) {
+        screenshotCollector.push(...normalizeScreenshotEntries(v4Data!.screenshots as unknown[]));
+      }
+    }
+  } else {
+    const analyzer = new WebAnalysisAgentV4(projectId);
+    try {
+      v4Data = await analyzer.analyze(websiteUrl);
+      websiteData = convertV4ToSimplified(v4Data);
+      if (Array.isArray(v4Data?.screenshots)) {
+        const normalized = normalizeScreenshotEntries(v4Data!.screenshots as unknown[]);
+        screenshotCollector.push(...normalized);
+        toolsLogger.info(`🌐 [WEBSITE HANDLER] Found ${normalized.length} screenshots from V4 analysis`);
+      }
+    } catch (analysisError) {
+      toolsLogger.warn('⚠️ [WEBSITE HANDLER] Website analysis failed, creating fallback data…');
+      toolsLogger.error('🌐 [WEBSITE HANDLER] Full analysis error', analysisError as Error, {
+        url: websiteUrl,
+      });
+      const domainFallback = new URL(websiteUrl).hostname.replace('www.', '');
+      websiteData = createFallbackBrandData(websiteUrl, domainFallback);
+    }
+  }
+
+  debugData.brandExtraction = websiteData;
+  const fallbackScreenshots = Array.isArray(websiteData.media?.screenshots)
+    ? normalizeScreenshotEntries(websiteData.media!.screenshots as unknown[])
+    : [];
+
+  debugData.screenshots = screenshotCollector.length > 0
+    ? screenshotCollector
+    : fallbackScreenshots;
+
+  if (v4Data) {
+    const phases = (v4Data.metadata as any)?.phases;
+    if (phases) {
+      debugData.extractionPhases = phases;
+    }
+    if ((v4Data as any).psychology) {
+      debugData.psychologicalProfile = (v4Data as any).psychology;
+    }
+    if ((v4Data as any).competitors) {
+      debugData.competitorAnalysis = (v4Data as any).competitors;
+    }
+  }
+
+  const isFallbackData = !websiteData.extractionMeta
+    || websiteData.page.title.toLowerCase().includes('utmb') === false;
+  debugData.extractionStatus = isFallbackData ? 'fallback' : 'success';
+
+  toolsLogger.info('🌐 [WEBSITE HANDLER] Step 2: Saving brand profile and building style…');
+  const savedBrand = await saveBrandProfile({
+    projectId,
+    websiteUrl,
+    extractedData: websiteData,
+    userId,
+  });
+
+  const brandStyle = createBrandStyleFromExtraction(websiteData);
+  toolsLogger.debug('🌐 [WEBSITE HANDLER] Brand style created', {
+    primaryColor: brandStyle.colors.primary,
+    primaryFont: brandStyle.typography.primaryFont,
+    animationStyle: brandStyle.animation.style,
+  });
+
+  const screenshots = debugData.screenshots as string[];
+  const domain = new URL(websiteUrl).hostname.replace('www.', '');
+
+  return {
+    websiteData,
+    brandStyle,
+    savedBrand,
+    debugData,
+    screenshots,
+    v4Data,
+    domain,
+    isFallback: isFallbackData,
+  };
+}
 
 export interface WebsiteToVideoInput {
   userPrompt: string;
@@ -47,6 +198,17 @@ export type StreamingEvent =
         totalScenes: number;
         sceneId?: string;
         projectId: string;
+      };
+    }
+  | {
+      type: 'scene_updated';
+      data: {
+        sceneIndex: number;
+        sceneName: string;
+        totalScenes: number;
+        sceneId: string;
+        projectId: string;
+        progress: number;
       };
     }
   | {
@@ -83,152 +245,33 @@ export class WebsiteToVideoHandler {
       duration: input.duration || 20
     });
     
-    // Collect debug data for admin panel
-    const debugData: any = {
-      screenshots: [],
-      brandExtraction: null,
-      narrativeScenes: [],
-      templateSelections: [],
-      generatedPrompts: [],
-      extractionPhases: [], // Track V4's multi-phase extraction
-      aiAnalysis: null, // Store AI-powered insights
-      psychologicalProfile: null, // Brand psychology insights
-      competitorAnalysis: null // Competitive positioning
-    };
-
     try {
-      // 1. Use existing web context if available, otherwise analyze
-      let websiteData: SimplifiedBrandData;
-      let v4Data: ExtractedBrandDataV4 | null = null;
-      const screenshotCollector: any[] = [];
-      
-      if (input.webContext) {
-        toolsLogger.info('🌐 [WEBSITE HANDLER] Step 1: Using existing web analysis from context');
-        // Handle both V1 format (from context) and V2 format
-        if (input.webContext.pageData?.visualDesign?.extraction) {
-          // V1 format with embedded V2 data
-          websiteData = input.webContext.pageData.visualDesign.extraction;
-          toolsLogger.debug('🌐 [WEBSITE HANDLER] Using V2 data from V1 wrapper');
-        } else if (input.webContext.brand && input.webContext.product) {
-          // Direct V2 format
-          websiteData = input.webContext;
-          toolsLogger.debug('🌐 [WEBSITE HANDLER] Using direct V2 data');
-        } else {
-          // Fallback to fresh analysis if format is unknown
-          toolsLogger.warn('🌐 [WEBSITE HANDLER] Unknown format, running fresh analysis');
-          const analyzer = new WebAnalysisAgentV4(input.projectId);
-          v4Data = await analyzer.analyze(input.websiteUrl);
-          websiteData = convertV4ToSimplified(v4Data);
-          
-          // Collect screenshots from V4 data
-          if (v4Data.screenshots) {
-            screenshotCollector.push(...v4Data.screenshots);
-            toolsLogger.info(`🌐 [WEBSITE HANDLER] Found ${v4Data.screenshots.length} screenshots from V4 analysis`);
-          }
-        }
-      } else {
-        toolsLogger.info('🌐 [WEBSITE HANDLER] Step 1: Analyzing website...');
-        const analyzer = new WebAnalysisAgentV4(input.projectId);
-        try {
-          v4Data = await analyzer.analyze(input.websiteUrl);
-          websiteData = convertV4ToSimplified(v4Data);
-          
-          // Collect screenshots from V4 data
-          if (v4Data.screenshots) {
-            screenshotCollector.push(...v4Data.screenshots);
-            toolsLogger.info(`🌐 [WEBSITE HANDLER] Found ${v4Data.screenshots.length} screenshots from V4 analysis`);
-          }
-        } catch (analysisError) {
-          toolsLogger.warn('⚠️ [WEBSITE HANDLER] Website analysis failed, creating fallback data...');
-          toolsLogger.error('🌐 [WEBSITE HANDLER] Full analysis error', analysisError as Error, {
-            url: input.websiteUrl
-          });
-          // Create minimal fallback data from URL
-          const domain = new URL(input.websiteUrl).hostname.replace('www.', '');
-          websiteData = createFallbackBrandData(input.websiteUrl, domain);
-        }
-      }
-      
-      // Store debug data with V4's enhanced extraction data
-      debugData.brandExtraction = websiteData;
-      debugData.screenshots = screenshotCollector.length > 0 ? screenshotCollector : 
-        websiteData.media?.screenshots || [];
-      
-      // Store V4's advanced analysis insights if available
-      if (v4Data) {
-        if ((v4Data.metadata as any)?.phases) {
-          debugData.extractionPhases = (v4Data.metadata as any).phases;
-        }
-        if ((v4Data as any).psychology) {
-          debugData.psychologicalProfile = (v4Data as any).psychology;
-        }
-        if ((v4Data as any).competitors) {
-          debugData.competitorAnalysis = (v4Data as any).competitors;
-        }
-      }
-      
-      // Check if we're using fallback data
-      const isFallbackData = !websiteData.extractionMeta || 
-        websiteData.page.title.toLowerCase().includes('utmb') === false;
-      
-      if (isFallbackData) {
-        toolsLogger.warn('⚠️ [WEBSITE HANDLER] Using fallback data - actual extraction may have failed');
-        debugData.extractionStatus = 'fallback';
-      } else {
-        debugData.extractionStatus = 'success';
-      }
-      
-      // 2. Save to brand_profile table and format brand data
-      toolsLogger.info('🌐 [WEBSITE HANDLER] Step 2: Saving brand profile and formatting data...');
+      const analysis = await analyzeWebsiteBranding({
+        projectId: input.projectId,
+        userId: input.userId,
+        websiteUrl: input.websiteUrl,
+        webContext: input.webContext,
+      });
 
-      // Save to database (includes AI personality analysis)
-      const savedBrand = await saveBrandProfile({
+      const {
+        websiteData,
+        brandStyle,
+        savedBrand,
+        debugData,
+        screenshots: _screenshots,
+        v4Data: _v4Data,
+        domain,
+      } = analysis;
+
+      const now = new Date();
+      await upsertPersonalizationTarget({
         projectId: input.projectId,
         websiteUrl: input.websiteUrl,
-        extractedData: websiteData,
-        userId: input.userId,
+        companyName: websiteData.brand?.identity?.name || domain,
+        brandProfile: websiteData as unknown as Record<string, unknown>,
+        brandTheme: brandStyle as unknown as Record<string, unknown>,
+        timestamp: now,
       });
-
-      // Create brand style directly from extracted data (skip formatter)
-      const brandStyle = createBrandStyleFromExtraction(websiteData);
-      toolsLogger.debug('🌐 [WEBSITE HANDLER] Brand style created', {
-        primaryColor: brandStyle.colors.primary,
-        primaryFont: brandStyle.typography.primaryFont,
-        animationStyle: brandStyle.animation.style
-      });
-
-      // Create personalization_target record for UI polling
-      const domain = new URL(input.websiteUrl).hostname.replace('www.', '');
-      const now = new Date();
-
-      // Check if record exists and update, otherwise insert
-      const existingTarget = await db.query.personalizationTargets.findFirst({
-        where: eq(personalizationTargets.projectId, input.projectId),
-      });
-
-      if (existingTarget) {
-        await db.update(personalizationTargets)
-          .set({
-            status: 'ready',
-            brandProfile: websiteData as any,
-            brandTheme: brandStyle as any,
-            extractedAt: now,
-            updatedAt: now,
-          })
-          .where(eq(personalizationTargets.id, existingTarget.id));
-      } else {
-        await db.insert(personalizationTargets).values({
-          projectId: input.projectId,
-          websiteUrl: input.websiteUrl,
-          companyName: websiteData.brand?.identity?.name || domain,
-          status: 'ready',
-          brandProfile: websiteData as any,
-          brandTheme: brandStyle as any,
-          extractedAt: now,
-          createdAt: now,
-          updatedAt: now,
-        });
-      }
       toolsLogger.info('🌐 [WEBSITE HANDLER] Created personalization_target record');
 
       // 3. Select multi-scene template with AI personality
@@ -388,7 +431,7 @@ export class WebsiteToVideoHandler {
           toolsLogger.warn('🎵 [WEBSITE HANDLER] Failed to apply music preference automatically', error);
         }
       }
-      
+
       // Final completion event
       if (input.streamingCallback) {
         await input.streamingCallback({
@@ -453,4 +496,48 @@ export class WebsiteToVideoHandler {
   }
 
   // Removed - now using createFallbackBrandData from brandDataAdapter
+}
+
+export async function upsertPersonalizationTarget(options: {
+  projectId: string;
+  websiteUrl: string;
+  companyName: string;
+  brandProfile: Record<string, unknown>;
+  brandTheme: Record<string, unknown>;
+  timestamp: Date;
+}) {
+  const { projectId, websiteUrl, companyName, brandProfile, brandTheme, timestamp } = options;
+
+  const existingTarget = await db.query.personalizationTargets.findFirst({
+    where: eq(personalizationTargets.projectId, projectId),
+  });
+
+  if (existingTarget) {
+    await db.update(personalizationTargets)
+      .set({
+        status: 'ready',
+        brandProfile: brandProfile as any,
+        brandTheme: brandTheme as any,
+        extractedAt: timestamp,
+        updatedAt: timestamp,
+      })
+      .where(eq(personalizationTargets.id, existingTarget.id));
+    return existingTarget.id;
+  }
+
+  const [inserted] = await db.insert(personalizationTargets)
+    .values({
+      projectId,
+      websiteUrl,
+      companyName,
+      status: 'ready',
+      brandProfile: brandProfile as any,
+      brandTheme: brandTheme as any,
+      extractedAt: timestamp,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    })
+    .returning({ id: personalizationTargets.id });
+
+  return inserted?.id ?? null;
 }

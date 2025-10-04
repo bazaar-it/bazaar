@@ -1,0 +1,28 @@
+{
+  "templateId": "aeb42245-780b-4111-ba7f-230a5ad8b146",
+  "name": "Long sentence slide down",
+  "matchingMetadata": {
+    "keywords": ["sentence", "word cascade", "slide down", "quote", "mission"],
+    "userPhrases": ["long sentence animation", "word cascade hero", "mission statement slide", "quote reveal"],
+    "categories": ["text", "quote"],
+    "styles": ["minimal", "clean"],
+    "useCases": ["mission statement", "principles", "quote overlays"],
+    "animations": ["word cascade", "slide", "fade"],
+    "elements": ["sentence"],
+    "colors": ["white", "black"],
+    "complexity": "simple",
+    "primaryUse": "Word-by-word slide-in sentence for mission copy",
+    "similarTo": ["Slide in and down", "Emphasis"]
+  },
+  "editability": {
+    "lockBrandShell": false,
+    "allowPaletteOverride": true,
+    "editableTextSlots": ["sentence"],
+    "editableMediaSlots": [],
+    "disallowedAttributes": ["wordInterval"],
+    "notes": "Sentence splits into individual words; keep under ~12 words (~80 chars) to avoid overflow." 
+  },
+  "slotPlan": [
+    { "id": "sentence", "kind": "text", "label": "Sentence", "maxChars": 80, "required": true }
+  ]
+}

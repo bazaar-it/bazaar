@@ -1,0 +1,29 @@
+{
+  "templateId": "2ad37972-dfd5-436a-8354-f27528ad9201",
+  "name": "Icon sliding",
+  "matchingMetadata": {
+    "keywords": ["google meet", "cta button", "logo slide", "brand drop", "meeting invite"],
+    "userPhrases": ["google meet intro", "sliding logo animation", "simple meeting bumper", "platform shell hero"],
+    "categories": ["ui animation", "logo animation", "cta"],
+    "styles": ["bold", "dark", "platform"],
+    "useCases": ["feature promo", "meeting invite", "product teaser"],
+    "animations": ["slide", "scale", "glow"],
+    "elements": ["platform logo", "cta button", "glow ring"],
+    "colors": ["black", "rainbow glow"],
+    "complexity": "simple",
+    "primaryUse": "Google Meet logo slide-in with CTA button and rainbow glow",
+    "similarTo": ["Logo slide & scale", "HeroTemplate"]
+  },
+  "editability": {
+    "lockBrandShell": true,
+    "allowPaletteOverride": false,
+    "editableTextSlots": ["ctaLabel"],
+    "editableMediaSlots": [],
+    "disallowedAttributes": ["meetLogo", "rainbowGlowCycle"],
+    "requiresExactAssets": ["logos:google-meet"],
+    "notes": "Template intentionally mirrors Google Meet branding; only CTA text should change."
+  },
+  "slotPlan": [
+    { "id": "ctaLabel", "kind": "text", "label": "CTA label", "maxChars": 20, "default": "Let's Meet", "required": true }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "templateId": "75820bb3-bb4a-429c-b829-b4e0858d1675",
+  "name": "Single word",
+  "matchingMetadata": {
+    "keywords": ["word sequence", "single word", "scaling text", "headline reveal"],
+    "userPhrases": ["word by word sequence", "single word animation", "short statement reveal", "punchy word hero"],
+    "categories": ["text", "hero"],
+    "styles": ["bold", "minimal", "monochrome"],
+    "useCases": ["taglines", "teasers", "hero statements"],
+    "animations": ["fade", "scale", "sequence"],
+    "elements": ["word list"],
+    "colors": ["white", "black"],
+    "complexity": "simple",
+    "primaryUse": "Rapid word-by-word reveal with emphasis scaling",
+    "similarTo": ["Word scale up", "WordFlip"]
+  },
+  "editability": {
+    "lockBrandShell": false,
+    "allowPaletteOverride": true,
+    "editableTextSlots": ["word1", "word2", "word3", "word4", "word5", "word6"],
+    "editableMediaSlots": [],
+    "disallowedAttributes": ["sequenceTiming"],
+    "notes": "Template assumes up to six short tokens; keep each word under ~8 characters to maintain pacing." 
+  },
+  "slotPlan": [
+    { "id": "word1", "kind": "text", "label": "Word 1", "maxChars": 8, "required": true },
+    { "id": "word2", "kind": "text", "label": "Word 2", "maxChars": 8, "required": true },
+    { "id": "word3", "kind": "text", "label": "Word 3", "maxChars": 8, "required": true },
+    { "id": "word4", "kind": "text", "label": "Word 4", "maxChars": 8, "required": true },
+    { "id": "word5", "kind": "text", "label": "Word 5", "maxChars": 8 },
+    { "id": "word6", "kind": "text", "label": "Word 6", "maxChars": 8 }
+  ]
+}

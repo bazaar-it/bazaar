@@ -1,0 +1,47 @@
+{
+  "templateId": "7c021b08-64fd-4ebf-87b1-f856cbb9979b",
+  "name": "LinkedIn Post",
+  "matchingMetadata": {
+    "keywords": ["linkedin", "social", "professional post", "engagement bar", "blue gradient"],
+    "userPhrases": ["animate a linkedin post", "professional announcement card", "linkedin social proof", "b2b social post"],
+    "categories": ["social", "platform", "announcement"],
+    "styles": ["professional", "clean", "corporate"],
+    "useCases": ["company news", "thought leadership", "partnership announcement", "hiring update"],
+    "animations": ["card spring", "word cascade", "counter", "icon pulse"],
+    "elements": ["avatar", "job title", "post body", "cta buttons", "reaction row"],
+    "colors": ["linkedin blue", "white", "light gray"],
+    "complexity": "complex",
+    "primaryUse": "LinkedIn platform shell with animated paragraph reveals and engagement stats",
+    "similarTo": ["X Post", "SocialProofCard"]
+  },
+  "editability": {
+    "lockBrandShell": true,
+    "allowPaletteOverride": false,
+    "editableTextSlots": [
+      "authorName",
+      "authorTitle",
+      "postParagraph1",
+      "postParagraph2",
+      "postParagraph3",
+      "headline",
+      "statOthers",
+      "statComments",
+      "statReposts"
+    ],
+    "editableMediaSlots": ["avatarImage"],
+    "disallowedAttributes": ["linkedinLogo", "reactionIcons", "platformGradient"],
+    "requiresExactAssets": ["linkedinLogo", "reactionIconSet"],
+    "notes": "Keep paragraphs under ~160 chars each to preserve stagger timing; do not change button labels."
+  },
+  "slotPlan": [
+    { "id": "authorName", "kind": "text", "label": "Author name", "maxChars": 40, "required": true },
+    { "id": "authorTitle", "kind": "text", "label": "Author headline", "maxChars": 60, "required": true },
+    { "id": "avatarImage", "kind": "image", "label": "Profile photo", "aspectRatio": "1:1", "required": true },
+    { "id": "postParagraph1", "kind": "longText", "label": "Post body paragraph 1", "maxChars": 160, "required": true },
+    { "id": "postParagraph2", "kind": "longText", "label": "Post body paragraph 2", "maxChars": 160 },
+    { "id": "postParagraph3", "kind": "longText", "label": "Post body paragraph 3", "maxChars": 120 },
+    { "id": "statOthers", "kind": "metric", "label": "Other reactions count", "min": 0, "max": 999, "suffix": "others" },
+    { "id": "statComments", "kind": "metric", "label": "Comments count", "min": 0, "max": 999 },
+    { "id": "statReposts", "kind": "metric", "label": "Reposts count", "min": 0, "max": 999 }
+  ]
+}

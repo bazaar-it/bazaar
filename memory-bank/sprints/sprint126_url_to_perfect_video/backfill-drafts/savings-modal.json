@@ -1,0 +1,33 @@
+{
+  "templateId": "9fa279e4-ae3f-4918-a9c5-726a53b41d9e",
+  "name": "Savings modal",
+  "matchingMetadata": {
+    "keywords": ["savings", "modal", "daily interest", "balance tracker", "glassmorphism"],
+    "userPhrases": ["show a savings modal", "animated interest tracker", "daily interest UI", "finance hero card"],
+    "categories": ["ui animation", "finance", "hero"],
+    "styles": ["glassmorphism", "lifestyle", "light"],
+    "useCases": ["personal finance", "banking promo", "feature highlight"],
+    "animations": ["spring", "fade", "counter"],
+    "elements": ["background image", "headline", "balance", "cta", "icon row"],
+    "colors": ["white", "charcoal", "neutral"],
+    "complexity": "medium",
+    "primaryUse": "Glassmorphism savings hero with live balance counter",
+    "similarTo": ["FintechUI", "HeroTemplate"]
+  },
+  "editability": {
+    "lockBrandShell": false,
+    "allowPaletteOverride": true,
+    "editableTextSlots": ["headline", "ctaLabel"],
+    "editableMediaSlots": ["backgroundImage"],
+    "editableNumericSlots": ["baseAmount", "incrementPerSecond"],
+    "disallowedAttributes": ["iconGlyphSet", "cardLayout"],
+    "notes": "Balance currently increments by €1/s from a base constant—update code if per-brand cadence differs."
+  },
+  "slotPlan": [
+    { "id": "headline", "kind": "text", "label": "Headline copy", "maxChars": 60, "required": true },
+    { "id": "baseAmount", "kind": "currency", "label": "Starting balance", "default": 5400, "required": true },
+    { "id": "incrementPerSecond", "kind": "number", "label": "Increment per second", "default": 1 },
+    { "id": "ctaLabel", "kind": "text", "label": "CTA label", "maxChars": 16, "default": "Accounts" },
+    { "id": "backgroundImage", "kind": "image", "label": "Backdrop image", "aspectRatio": "16:9", "required": true }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "templateId": "d0256d91-ed0b-4b50-aa9d-d4ec9dd4fa11",
+  "name": "Big words",
+  "matchingMetadata": {
+    "keywords": ["big words", "scaling words", "bold statement", "pause"],
+    "userPhrases": ["progressive word scale", "bold word sequence", "large words animation", "emphatic words"],
+    "categories": ["text", "hero"],
+    "styles": ["minimal", "bold", "white"],
+    "useCases": ["mission", "tagline", "cta"],
+    "animations": ["scale", "hold"],
+    "elements": ["wordList"],
+    "colors": ["white", "black"],
+    "complexity": "simple",
+    "primaryUse": "Sequential word scaling with pauses for emphasis",
+    "similarTo": ["Word scale up", "Single word"]
+  },
+  "editability": {
+    "lockBrandShell": false,
+    "allowPaletteOverride": true,
+    "editableTextSlots": ["word1", "word2", "word3", "word4"],
+    "editableMediaSlots": [],
+    "disallowedAttributes": ["scaleSequence"],
+    "notes": "Template expects four words; keep each under ~8 characters to avoid clipping at large scales." 
+  },
+  "slotPlan": [
+    { "id": "word1", "kind": "text", "label": "Word 1", "maxChars": 8, "required": true },
+    { "id": "word2", "kind": "text", "label": "Word 2", "maxChars": 8, "required": true },
+    { "id": "word3", "kind": "text", "label": "Word 3", "maxChars": 8, "required": true },
+    { "id": "word4", "kind": "text", "label": "Word 4", "maxChars": 8, "required": true }
+  ]
+}

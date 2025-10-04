@@ -1,0 +1,28 @@
+{
+  "templateId": "68fe08f0-c9fb-47a3-adcb-899dd8dae48b",
+  "name": "Circle expansion",
+  "matchingMetadata": {
+    "keywords": ["ripple", "circle expansion", "hi", "minimal opener", "pulse"],
+    "userPhrases": ["ripple intro", "circle pulse animation", "minimal welcome", "bubble greeting"],
+    "categories": ["animation", "intro"],
+    "styles": ["minimal", "dark", "futuristic"],
+    "useCases": ["openers", "bumpers", "section transitions"],
+    "animations": ["scale", "ripple", "fade"],
+    "elements": ["center circle", "ripple rings", "headline"],
+    "colors": ["navy", "white"],
+    "complexity": "simple",
+    "primaryUse": "Ripple burst with central greeting",
+    "similarTo": ["LogoReveal", "PulseIntro"]
+  },
+  "editability": {
+    "lockBrandShell": false,
+    "allowPaletteOverride": true,
+    "editableTextSlots": ["centerText"],
+    "editableMediaSlots": [],
+    "disallowedAttributes": ["rippleTiming", "ringCount"],
+    "notes": "Center text should be short (<=4 characters) to remain legible during pulse." 
+  },
+  "slotPlan": [
+    { "id": "centerText", "kind": "text", "label": "Center text", "maxChars": 4, "default": "HI!", "required": true }
+  ]
+}

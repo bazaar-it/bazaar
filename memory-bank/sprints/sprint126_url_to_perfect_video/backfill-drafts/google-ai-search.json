@@ -1,0 +1,56 @@
+{
+  "templateId": "e641534e-77bf-4ea8-9446-2b7837951cd7",
+  "name": "Google AI Search",
+  "matchingMetadata": {
+    "keywords": ["google", "ai search", "serp", "search results", "prompt", "analysis"],
+    "userPhrases": ["google style search animation", "ai search demo", "search results hero", "serp storytelling"],
+    "categories": ["ui animation", "product", "story"],
+    "styles": ["chromatic", "google", "dark"],
+    "useCases": ["product walkthrough", "feature launch", "explainers"],
+    "animations": ["typewriter", "icon slide", "card reveal", "text cascade"],
+    "elements": ["search query", "search status", "result count", "news cards", "narrative text", "cta button"],
+    "colors": ["black", "google palette"],
+    "complexity": "complex",
+    "primaryUse": "Google-style AI search journey from query to curated results and call-to-action",
+    "similarTo": ["PromptUI", "Search box animation"]
+  },
+  "editability": {
+    "lockBrandShell": true,
+    "allowPaletteOverride": false,
+    "editableTextSlots": [
+      "searchQuery",
+      "resultCount",
+      "result1Title",
+      "result1Source",
+      "result2Title",
+      "result2Source",
+      "summaryParagraph",
+      "ctaLabel"
+    ],
+    "editableMediaSlots": ["result1Image", "result2Image"],
+    "disallowedAttributes": ["googleLogo", "statusIconSet", "newsCardLayout", "youtubeGlyph"],
+    "requiresExactAssets": [
+      "devicon:google-wordmark",
+      "material-symbols:mic",
+      "material-symbols:arrow-upward",
+      "material-symbols:warning",
+      "material-symbols:description",
+      "material-symbols:check",
+      "simple-icons:newyorktimes",
+      "mdi:arrow-right-circle"
+    ],
+    "notes": "Search shell mirrors Google SERP. Keep summaries concise (<= 220 chars) to fit the cascade lines without overflowing."
+  },
+  "slotPlan": [
+    { "id": "searchQuery", "kind": "text", "label": "Search query", "maxChars": 120, "required": true },
+    { "id": "resultCount", "kind": "text", "label": "Result count label", "maxChars": 24, "default": "11 sites" },
+    { "id": "result1Title", "kind": "text", "label": "Primary result title", "maxChars": 70, "required": true },
+    { "id": "result1Source", "kind": "text", "label": "Primary source", "maxChars": 32, "required": true },
+    { "id": "result1Image", "kind": "image", "label": "Primary thumb", "aspectRatio": "4:3" },
+    { "id": "result2Title", "kind": "text", "label": "Secondary result title", "maxChars": 70, "required": true },
+    { "id": "result2Source", "kind": "text", "label": "Secondary source", "maxChars": 32, "required": true },
+    { "id": "result2Image", "kind": "image", "label": "Secondary thumb", "aspectRatio": "4:3" },
+    { "id": "summaryParagraph", "kind": "longText", "label": "Narrative summary", "maxChars": 220, "required": true },
+    { "id": "ctaLabel", "kind": "text", "label": "CTA button label", "maxChars": 12, "default": "Watch", "required": true }
+  ]
+}

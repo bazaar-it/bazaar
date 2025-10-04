@@ -174,7 +174,7 @@ export function GenerateSidebar({
           </div>
         </div>
 
-        {onShowUrlModal ? (
+        {isAdmin && onShowUrlModal ? (
           <div className="w-full flex flex-col items-center mb-2">
             <Button
               variant="ghost"

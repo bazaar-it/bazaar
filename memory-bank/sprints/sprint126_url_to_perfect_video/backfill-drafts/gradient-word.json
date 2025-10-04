@@ -1,0 +1,29 @@
+{
+  "templateId": "0437ea83-59be-4386-a2d0-ccfe387dd6df",
+  "name": "Gradient Word",
+  "matchingMetadata": {
+    "keywords": ["gradient", "headline", "rev points", "shimmer", "typo hero"],
+    "userPhrases": ["glow headline", "animated gradient text", "rev points banner", "single line hero"],
+    "categories": ["text", "hero"],
+    "styles": ["minimal", "premium", "dark"],
+    "useCases": ["landing hero", "value prop", "cta banner"],
+    "animations": ["gradient morph", "shimmer", "fade"],
+    "elements": ["headline", "keyword highlight", "animated background"],
+    "colors": ["space grey", "electric blue"],
+    "complexity": "simple",
+    "primaryUse": "Single-line animated gradient headline with emphasized keyword",
+    "similarTo": ["HeroTemplate", "WordFlip"]
+  },
+  "editability": {
+    "lockBrandShell": false,
+    "allowPaletteOverride": true,
+    "editableTextSlots": ["headline", "highlightKeyword"],
+    "editableMediaSlots": [],
+    "disallowedAttributes": ["gradientCycleTiming", "shimmerDirection"],
+    "notes": "Headline is rendered as one sentence; keep highlight keyword within the text to preserve shimmer effect."
+  },
+  "slotPlan": [
+    { "id": "headline", "kind": "text", "label": "Headline text", "maxChars": 60, "required": true },
+    { "id": "highlightKeyword", "kind": "text", "label": "Highlighted keyword", "maxChars": 20, "default": "Rev Points" }
+  ]
+}
