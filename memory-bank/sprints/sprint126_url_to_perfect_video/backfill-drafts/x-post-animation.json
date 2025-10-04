@@ -1,0 +1,44 @@
+{
+  "templateId": "1858608a-0df8-4bed-8a10-ce9a9883074c",
+  "name": "X Post Animation",
+  "matchingMetadata": {
+    "keywords": ["x", "twitter", "animated post", "dark ui", "engagement counters"],
+    "userPhrases": ["make an animated tweet", "dynamic x post", "twitter style testimonial", "social media animation"],
+    "categories": ["social", "platform", "announcement"],
+    "styles": ["dark", "bold", "tech"],
+    "useCases": ["thought leadership", "product update", "testimonial post"],
+    "animations": ["word cascade", "counter", "icon pulse", "spring"],
+    "elements": ["avatar", "display name", "post text", "timestamp", "stats row", "action icons"],
+    "colors": ["black", "white", "blue"],
+    "complexity": "medium",
+    "primaryUse": "Animated X/Twitter card with staged copy reveal and live stats",
+    "similarTo": ["X Post", "LinkedInPost"]
+  },
+  "editability": {
+    "lockBrandShell": true,
+    "allowPaletteOverride": false,
+    "editableTextSlots": [
+      "displayName",
+      "postText",
+      "timestamp",
+      "statReplies",
+      "statReposts",
+      "statLikes",
+      "statViews"
+    ],
+    "editableMediaSlots": ["avatarImage"],
+    "disallowedAttributes": ["xLogo", "actionIconSet", "cardBackground"],
+    "requiresExactAssets": ["xLogo", "iconSet-twitter"]
+  },
+  "slotPlan": [
+    { "id": "displayName", "kind": "text", "label": "Display name", "maxChars": 40, "required": true },
+    { "id": "verified", "kind": "boolean", "label": "Show verified badge", "default": true },
+    { "id": "postText", "kind": "longText", "label": "Post text", "maxChars": 240, "required": true },
+    { "id": "timestamp", "kind": "text", "label": "Timestamp", "maxChars": 48, "required": true },
+    { "id": "statReplies", "kind": "metric", "label": "Replies (K)", "min": 0, "max": 999 },
+    { "id": "statReposts", "kind": "metric", "label": "Reposts (K)", "min": 0, "max": 999 },
+    { "id": "statLikes", "kind": "metric", "label": "Likes (K)", "min": 0, "max": 999 },
+    { "id": "statViews", "kind": "metric", "label": "Views (M)", "min": 0, "max": 999 },
+    { "id": "avatarImage", "kind": "image", "label": "Avatar image", "aspectRatio": "1:1", "required": true }
+  ]
+}

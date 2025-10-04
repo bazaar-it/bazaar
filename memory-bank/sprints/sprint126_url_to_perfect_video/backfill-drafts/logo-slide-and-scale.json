@@ -1,0 +1,29 @@
+{
+  "templateId": "3800ad5b-2fa0-434d-801c-338a27367455",
+  "name": "Logo slide & scale",
+  "matchingMetadata": {
+    "keywords": ["logo reveal", "slide", "wipe", "brand intro", "title card"],
+    "userPhrases": ["simple logo animation", "slide our logo in", "logo plus headline"],
+    "categories": ["logo animation", "hero"],
+    "styles": ["minimal", "clean", "white"],
+    "useCases": ["openers", "brand bumpers", "intro slide"],
+    "animations": ["slide", "scale", "wipe"],
+    "elements": ["logo", "headline"],
+    "colors": ["white", "black"],
+    "complexity": "simple",
+    "primaryUse": "Logo bumper with sliding mark and text wipe",
+    "similarTo": ["LogoReveal", "HeroTemplate"]
+  },
+  "editability": {
+    "lockBrandShell": false,
+    "allowPaletteOverride": true,
+    "editableTextSlots": ["headline"],
+    "editableMediaSlots": ["logoImage"],
+    "disallowedAttributes": ["logoPathMotion"]
+  },
+  "slotPlan": [
+    { "id": "logoImage", "kind": "image", "label": "Logo", "aspectRatio": "4:1", "required": true },
+    { "id": "headline", "kind": "text", "label": "Headline", "maxChars": 48, "required": true },
+    { "id": "backgroundColor", "kind": "color", "label": "Background color", "default": "#ffffff" }
+  ]
+}

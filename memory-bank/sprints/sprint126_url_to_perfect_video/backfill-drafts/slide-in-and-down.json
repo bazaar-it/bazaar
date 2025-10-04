@@ -1,0 +1,28 @@
+{
+  "templateId": "0c2c0ca3-9df5-4467-9dff-dc8d8351c8a2",
+  "name": "Slide in and down",
+  "matchingMetadata": {
+    "keywords": ["quote", "sentence reveal", "letter exit", "slide in", "minimal"],
+    "userPhrases": ["display a quote", "sliding sentence animation", "long sentence hero", "text slide down"],
+    "categories": ["text", "quote"],
+    "styles": ["minimal", "clean", "black on white"],
+    "useCases": ["quotes", "principles", "mission statements"],
+    "animations": ["slide", "fade", "letter cascade"],
+    "elements": ["sentence"],
+    "colors": ["white", "black"],
+    "complexity": "simple",
+    "primaryUse": "Single-sentence quote that slides in then cascades away",
+    "similarTo": ["Slide in text", "QuoteCard"]
+  },
+  "editability": {
+    "lockBrandShell": false,
+    "allowPaletteOverride": true,
+    "editableTextSlots": ["quote"],
+    "editableMediaSlots": [],
+    "disallowedAttributes": ["letterTiming"],
+    "notes": "Keep the quote under ~90 characters to avoid wrapping and preserve exit timing." 
+  },
+  "slotPlan": [
+    { "id": "quote", "kind": "text", "label": "Quote sentence", "maxChars": 90, "required": true }
+  ]
+}

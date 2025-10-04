@@ -1,0 +1,28 @@
+{
+  "templateId": "bbb9c638-f76b-4f70-a09c-983b160d396a",
+  "name": "Scaled up word slide",
+  "matchingMetadata": {
+    "keywords": ["word slide", "massive typography", "gradient text", "glow", "introducing"],
+    "userPhrases": ["sliding hero word", "giant text banner", "gradient word animation", "bold intro word"],
+    "categories": ["text", "hero"],
+    "styles": ["bold", "gradient", "dark"],
+    "useCases": ["product reveal", "brand announcement", "section opener"],
+    "animations": ["slide", "glow", "gradient shift"],
+    "elements": ["single word"],
+    "colors": ["black", "pink", "orange"],
+    "complexity": "simple",
+    "primaryUse": "Single massive word sliding across gradient background",
+    "similarTo": ["Gradient Word", "Logo slide & scale"]
+  },
+  "editability": {
+    "lockBrandShell": false,
+    "allowPaletteOverride": true,
+    "editableTextSlots": ["word"],
+    "editableMediaSlots": [],
+    "disallowedAttributes": ["gradientCycle", "slideTiming"],
+    "notes": "Use a short word (<=12 characters) to avoid clipping; template assumes uppercase styling." 
+  },
+  "slotPlan": [
+    { "id": "word", "kind": "text", "label": "Hero word", "maxChars": 12, "required": true }
+  ]
+}

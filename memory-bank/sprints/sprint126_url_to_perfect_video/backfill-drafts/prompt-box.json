@@ -1,0 +1,29 @@
+{
+  "templateId": "57987abc-8e33-4085-bc8d-9db24e8daabb",
+  "name": "Prompt Box",
+  "matchingMetadata": {
+    "keywords": ["prompt bar", "search ui", "typewriter", "ai input", "app interface"],
+    "userPhrases": ["show a prompt box", "ai text input animation", "product hero search bar"],
+    "categories": ["ui animation", "saas", "product"],
+    "styles": ["minimal", "product", "light"],
+    "useCases": ["hero section", "product walkthrough", "feature highlight"],
+    "animations": ["typewriter", "fade", "spring"],
+    "elements": ["prompt text", "icons", "cta button"],
+    "colors": ["white", "grey"],
+    "complexity": "simple",
+    "primaryUse": "Animated prompt/search bar introducing product actions",
+    "similarTo": ["SearchBox", "PromptUI"]
+  },
+  "editability": {
+    "lockBrandShell": false,
+    "allowPaletteOverride": true,
+    "editableTextSlots": ["lineOne", "lineTwo"],
+    "editableMediaSlots": [],
+    "disallowedAttributes": ["iconSet", "buttonShape"]
+  },
+  "slotPlan": [
+    { "id": "lineOne", "kind": "text", "label": "Prompt line 1", "maxChars": 60, "required": true },
+    { "id": "lineTwo", "kind": "text", "label": "Prompt line 2", "maxChars": 60 },
+    { "id": "primaryAccent", "kind": "color", "label": "Accent color", "default": "#333333" }
+  ]
+}

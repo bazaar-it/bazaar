@@ -1,0 +1,201 @@
+{
+  "templateId": "97e9fc53-f7f1-4501-a32e-8f28768ee6c7",
+  "name": "Revolut 9-scene Journey",
+  "matchingMetadata": {
+    "keywords": ["fintech", "mobile banking", "product tour", "revolut", "transaction list", "app walkthrough"],
+    "userPhrases": ["show an app banking journey", "fintech hero sequence", "mobile product teaser", "finance onboarding video"],
+    "categories": ["multi-scene", "product", "fintech"],
+    "styles": ["modern", "gradient", "product"],
+    "useCases": ["product launch", "customer onboarding", "feature tour", "app store promo"],
+    "animations": ["word wipe", "logo slide", "odometer", "card swipe", "text cascade"],
+    "elements": ["logo", "taglines", "phone mock", "transactions", "cta"],
+    "colors": ["purple", "indigo", "white"],
+    "complexity": "complex",
+    "primaryUse": "Nine-beat fintech launch narrative with hero UI, benefit copy, and CTA",
+    "similarTo": ["OrbitFlow Launch", "MultiSceneOnboarding"]
+  },
+  "editability": {
+    "lockBrandShell": false,
+    "allowPaletteOverride": true,
+    "editableTextSlots": [
+      "hookLine",
+      "brandName",
+      "taglineA",
+      "taglineB",
+      "benefitPrimary",
+      "benefitSecondary",
+      "valueHighlight",
+      "ctaHeadline",
+      "ctaFooter"
+    ],
+    "editableMediaSlots": ["appScreenshot", "brandLogo"],
+    "disallowedAttributes": ["phoneMockupFrame", "transactionLayout", "monthTickerValues"],
+    "notes": "Script assumes a 9-scene arc (hook → brand reveal → value props → CTA). Maintain pacing; keep transaction list item lengths short to avoid overflow."
+  },
+  "slotPlan": [
+    { "id": "hookLine", "kind": "text", "label": "Opening hook", "maxChars": 40, "required": true },
+    { "id": "brandLogo", "kind": "image", "label": "Brand logo", "aspectRatio": "1:1", "required": true },
+    { "id": "brandName", "kind": "text", "label": "Brand name", "maxChars": 20, "required": true },
+    { "id": "taglineA", "kind": "text", "label": "Tagline line 1", "maxChars": 28, "required": true },
+    { "id": "taglineB", "kind": "text", "label": "Tagline line 2", "maxChars": 28, "required": true },
+    { "id": "benefitPrimary", "kind": "text", "label": "Primary benefit", "maxChars": 45, "required": true },
+    { "id": "benefitSecondary", "kind": "text", "label": "Secondary benefit", "maxChars": 45 },
+    { "id": "appScreenshot", "kind": "image", "label": "App screen image", "aspectRatio": "9:16", "required": true },
+    { "id": "valueHighlight", "kind": "text", "label": "Value highlight", "maxChars": 35, "required": true },
+    { "id": "ctaHeadline", "kind": "text", "label": "CTA headline", "maxChars": 32, "required": true },
+    { "id": "ctaFooter", "kind": "text", "label": "Closing kicker", "maxChars": 28, "required": true },
+    { "id": "accentColor", "kind": "color", "label": "Accent color", "default": "#5b21b6" }
+  ],
+  "scenes": [
+    {
+      "sceneId": "bca9a19b-ccb9-41cb-b540-295e829b5e4d",
+      "name": "Hook – Shooting Star",
+      "order": 0,
+      "beatType": "hook",
+      "requires": { "text": ["hookLine"], "colors": ["accentColor"] },
+      "editability": {
+        "allowPaletteOverride": true,
+        "editableTextSlots": ["hookLine"],
+        "editableMediaSlots": [],
+        "disallowedAttributes": ["arcPath"]
+      },
+      "slotSchema": [
+        { "id": "hookLine", "kind": "text", "label": "Hook line", "maxChars": 30, "required": true }
+      ]
+    },
+    {
+      "sceneId": "8136e891-8f8b-4f5d-aeec-2fc6113cf3aa",
+      "name": "Logo Reveal",
+      "order": 1,
+      "beatType": "logo_reveal",
+      "requires": { "text": ["brandName"], "images": ["brandLogo"] },
+      "editability": {
+        "allowPaletteOverride": true,
+        "editableTextSlots": ["brandName"],
+        "editableMediaSlots": ["brandLogo"],
+        "disallowedAttributes": ["logoSlideTiming"]
+      },
+      "slotSchema": [
+        { "id": "brandLogo", "kind": "icon", "label": "Logo icon", "required": true },
+        { "id": "brandName", "kind": "text", "label": "Brand name", "maxChars": 18, "required": true }
+      ]
+    },
+    {
+      "sceneId": "9ab98814-c420-4da0-8a0a-aab37ee49b3b",
+      "name": "Tagline Wipe",
+      "order": 2,
+      "beatType": "tagline",
+      "requires": { "text": ["taglineA", "taglineB"] },
+      "editability": {
+        "allowPaletteOverride": true,
+        "editableTextSlots": ["taglineA", "taglineB"],
+        "editableMediaSlots": [],
+        "disallowedAttributes": ["wipeTiming"]
+      },
+      "slotSchema": [
+        { "id": "taglineA", "kind": "text", "label": "Tagline line 1", "maxChars": 28, "required": true },
+        { "id": "taglineB", "kind": "text", "label": "Tagline line 2", "maxChars": 28, "required": true }
+      ]
+    },
+    {
+      "sceneId": "bdb82bc5-db86-4886-9467-8503b73b17fa",
+      "name": "App Hero",
+      "order": 3,
+      "beatType": "solution_feature",
+      "requires": { "images": ["appScreenshot"], "text": ["benefitPrimary", "benefitSecondary"] },
+      "editability": {
+        "allowPaletteOverride": true,
+        "editableTextSlots": ["benefitPrimary", "benefitSecondary"],
+        "editableMediaSlots": ["appScreenshot"],
+        "disallowedAttributes": ["transactionSeedData", "phoneMockupFrame"]
+      },
+      "slotSchema": [
+        { "id": "benefitPrimary", "kind": "text", "label": "Primary statement", "maxChars": 45, "required": true },
+        { "id": "benefitSecondary", "kind": "text", "label": "Secondary statement", "maxChars": 45 },
+        { "id": "appScreenshot", "kind": "image", "label": "App screenshot", "aspectRatio": "9:16", "required": true }
+      ]
+    },
+    {
+      "sceneId": "b1335638-87b7-4f93-b7be-91627b03bb3e",
+      "name": "Benefit Swap",
+      "order": 4,
+      "beatType": "benefit",
+      "requires": { "text": ["benefitPrimary", "benefitSecondary"] },
+      "editability": {
+        "allowPaletteOverride": true,
+        "editableTextSlots": ["benefitPrimary", "benefitSecondary"],
+        "editableMediaSlots": [],
+        "disallowedAttributes": ["swapTiming"]
+      },
+      "slotSchema": [
+        { "id": "benefitPrimary", "kind": "text", "label": "Benefit line 1", "maxChars": 40, "required": true },
+        { "id": "benefitSecondary", "kind": "text", "label": "Benefit line 2", "maxChars": 40 }
+      ]
+    },
+    {
+      "sceneId": "a4a93b5d-72e0-48fb-8dd7-9de9bf6e5365",
+      "name": "Salary Swipe",
+      "order": 5,
+      "beatType": "problem_impact",
+      "requires": { "text": ["valueHighlight"] },
+      "editability": {
+        "allowPaletteOverride": true,
+        "editableTextSlots": ["valueHighlight"],
+        "editableMediaSlots": [],
+        "disallowedAttributes": ["swipeTiming"]
+      },
+      "slotSchema": [
+        { "id": "valueHighlight", "kind": "text", "label": "Value statement", "maxChars": 36, "required": true }
+      ]
+    },
+    {
+      "sceneId": "e94afd93-b0a8-443e-954a-0fe56e78e887",
+      "name": "Sentence Swipe",
+      "order": 6,
+      "beatType": "benefit",
+      "requires": { "text": ["taglineB"] },
+      "editability": {
+        "allowPaletteOverride": true,
+        "editableTextSlots": ["taglineB"],
+        "editableMediaSlots": [],
+        "disallowedAttributes": ["swipeTiming"]
+      },
+      "slotSchema": [
+        { "id": "taglineB", "kind": "text", "label": "Supporting sentence", "maxChars": 32, "required": true }
+      ]
+    },
+    {
+      "sceneId": "8e4a3219-9e12-4d7d-9ff3-94f67c537e3e",
+      "name": "RevPoints CTA",
+      "order": 7,
+      "beatType": "proof",
+      "requires": { "text": ["ctaHeadline", "ctaFooter"] },
+      "editability": {
+        "allowPaletteOverride": true,
+        "editableTextSlots": ["ctaHeadline", "ctaFooter"],
+        "editableMediaSlots": [],
+        "disallowedAttributes": ["scaleTiming"]
+      },
+      "slotSchema": [
+        { "id": "ctaHeadline", "kind": "text", "label": "CTA headline", "maxChars": 28, "required": true },
+        { "id": "ctaFooter", "kind": "text", "label": "CTA subline", "maxChars": 24, "required": true }
+      ]
+    },
+    {
+      "sceneId": "a9b14099-1fd1-4fd4-a4f6-9fd9a3fd2345",
+      "name": "Closing Bumper",
+      "order": 8,
+      "beatType": "cta",
+      "requires": { "text": ["ctaFooter"] },
+      "editability": {
+        "allowPaletteOverride": true,
+        "editableTextSlots": ["ctaFooter"],
+        "editableMediaSlots": [],
+        "disallowedAttributes": ["wordTiming"]
+      },
+      "slotSchema": [
+        { "id": "ctaFooter", "kind": "text", "label": "Closing bumper", "maxChars": 24, "required": true }
+      ]
+    }
+  ]
+}

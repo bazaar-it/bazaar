@@ -1,0 +1,30 @@
+{
+  "templateId": "fea9aba2-09a4-47f3-b971-cdeed8d6e36c",
+  "name": "Typewriter effect with backspace",
+  "matchingMetadata": {
+    "keywords": ["typewriter", "backspace", "rewrite", "copy swap"],
+    "userPhrases": ["typewriter with backspace", "rewrite sentence animation", "replace final word", "typing correction"],
+    "categories": ["text", "story"],
+    "styles": ["minimal", "white", "monochrome"],
+    "useCases": ["tagline refinement", "feature reveal", "punchline setup"],
+    "animations": ["typewriter", "backspace"],
+    "elements": ["initialSentence", "replacementWord"],
+    "colors": ["white", "black"],
+    "complexity": "simple",
+    "primaryUse": "Typewriter sentence that backspaces the final word and replaces it",
+    "similarTo": ["Typewriter effect", "Slide in and down"]
+  },
+  "editability": {
+    "lockBrandShell": false,
+    "allowPaletteOverride": true,
+    "editableTextSlots": ["sentencePrefix", "initialWord", "replacementWord"],
+    "editableMediaSlots": [],
+    "disallowedAttributes": ["typewriterSpeed", "pauseDuration"],
+    "notes": "Sentence structure is `prefix + word`. Keep prefix under ~30 characters; both words should be similar length to maintain timing."
+  },
+  "slotPlan": [
+    { "id": "sentencePrefix", "kind": "text", "label": "Sentence prefix", "maxChars": 32, "default": "Keep It Simple,", "required": true },
+    { "id": "initialWord", "kind": "text", "label": "Initial final word", "maxChars": 12, "default": "Stupid", "required": true },
+    { "id": "replacementWord", "kind": "text", "label": "Replacement word", "maxChars": 12, "default": "Handsome", "required": true }
+  ]
+}

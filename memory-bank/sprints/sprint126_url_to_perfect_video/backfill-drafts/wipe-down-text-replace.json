@@ -1,0 +1,29 @@
+{
+  "templateId": "443ef1d9-407d-4df9-8625-abb53b6c9bd5",
+  "name": "Wipe down text replace",
+  "matchingMetadata": {
+    "keywords": ["wipe", "two-line", "quote", "text replace"],
+    "userPhrases": ["two line wipe", "text replace animation", "quote wipe down", "motivational swap"],
+    "categories": ["text", "quote"],
+    "styles": ["minimal", "clean"],
+    "useCases": ["quotes", "mission", "tagline swap"],
+    "animations": ["wipe", "fade"],
+    "elements": ["line1", "line2"],
+    "colors": ["white", "black"],
+    "complexity": "simple",
+    "primaryUse": "Two-line motivational quote with wipe transition",
+    "similarTo": ["Slide in and down", "Long sentence slide down"]
+  },
+  "editability": {
+    "lockBrandShell": false,
+    "allowPaletteOverride": true,
+    "editableTextSlots": ["line1", "line2"],
+    "editableMediaSlots": [],
+    "disallowedAttributes": ["wipeTiming"],
+    "notes": "Keep each line under ~32 characters to maintain wipe effect without clipping." 
+  },
+  "slotPlan": [
+    { "id": "line1", "kind": "text", "label": "First line", "maxChars": 32, "required": true },
+    { "id": "line2", "kind": "text", "label": "Second line", "maxChars": 32, "required": true }
+  ]
+}

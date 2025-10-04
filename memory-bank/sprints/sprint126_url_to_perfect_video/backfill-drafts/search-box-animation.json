@@ -1,0 +1,28 @@
+{
+  "templateId": "1d841400-6afa-489b-a1b2-a42db75e2492",
+  "name": "Search box animation",
+  "matchingMetadata": {
+    "keywords": ["search bar", "typewriter", "neon glow", "query", "cta"],
+    "userPhrases": ["animated search bar", "typewriter query", "glowing search hero", "prompt animation"],
+    "categories": ["ui animation", "hero", "text"],
+    "styles": ["gradient", "neon", "modern"],
+    "useCases": ["product hero", "feature highlight", "landing page intro"],
+    "animations": ["typewriter", "glow pulse", "camera push", "button click"],
+    "elements": ["query text", "cursor", "submit icon"],
+    "colors": ["lavender", "violet", "white"],
+    "complexity": "medium",
+    "primaryUse": "Typewriter search query with neon glow and CTA interaction",
+    "similarTo": ["Prompt Box", "SearchBox"]
+  },
+  "editability": {
+    "lockBrandShell": false,
+    "allowPaletteOverride": true,
+    "editableTextSlots": ["searchQuery"],
+    "editableMediaSlots": [],
+    "disallowedAttributes": ["glowEasing", "clickTiming"],
+    "notes": "Keep search query under ~40 characters to respect typewriter pacing and avoid overflow."
+  },
+  "slotPlan": [
+    { "id": "searchQuery", "kind": "text", "label": "Search query", "maxChars": 40, "required": true }
+  ]
+}

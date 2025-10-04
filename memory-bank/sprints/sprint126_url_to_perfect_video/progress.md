@@ -314,3 +314,54 @@ Scene Customization → Video Preview → Export
 - Extended SSE hook/options to forward assistant and scene progress events, pass website metadata to `WebsiteToVideoHandler`, and surface progress in the modal while scenes stream into Zustand.
 - Aggregated streaming output into a live assistant chat message so users see template selection, per-scene completions, and the final summary even after the modal auto-closes.
 - Added 5s inline music previews in the modal and auto-applied the selected soundtrack via AddAudio so videos ship with the chosen vibe.
+
+2025-10-04 – URL modal supports current-scene branding edits
+- Added dual-mode tabs to `URLToVideoModal` so admins can choose between generating a new multi-scene video or applying extracted branding to existing scenes.
+- Scene selection UI (checkbox list + ScrollArea) lets admins target specific scenes; submission streams branding progress and differentiates assistant copy for edits.
+- Extended `useSSEGeneration` query params with `mode`/`sceneIds` and taught it to handle new `scene_updated` SSE events.
+- Refactored `WebsiteToVideoHandler` to share a reusable `analyzeWebsiteBranding` helper and exported `upsertPersonalizationTarget` for reuse.
+- Implemented `WebsiteBrandingSceneApplier` service that runs Edit tool passes per scene using extracted brand context, streaming update events to the SSE route.
+- Updated `/api/generate-stream` to branch on mode, run the new applier, and emit updated scene events so the UI refreshes without page reloads.
+
+2025-10-04 – Branding edit guardrails & duplication issue
+- Observed that applying branding to LinkedIn/X templates recolors the platform chrome and often keeps boilerplate copy; copy rewrites now pull value prop/feature/CTA text, but the LLM still modifies platform styling.
+- Decision: extend template metadata with explicit editability flags (lock platform shell, allowed text/media slots, palette override) and persist those into scene props so the branding applier can enforce them during edits.
+- Noted new bug: multi-scene branding edits duplicated the same value prop across consecutive beats. Need guardrails in the prompt/logic to assign unique copy per beat (e.g., hero headline gets value prop, next beat should pull differentiators or feature bullet instead of repeating).
+2025-10-04 – Template metadata sync analysis
+- Confirmed prod catalog has 96 templates (90 single-scene) while `src/templates/metadata.ts` still only lists the legacy registry entries; 79 rows lack tags so matching metadata never reaches AI services.
+- Captured remediation plan in `template-metadata-sync.md`: add matching/editability/slot JSONB columns in DB, generate a static snapshot module from DB data, and introduce a story planner stage before branding edits.
+- Next: spec the canonical TypeScript interfaces, design the Drizzle migrations, and prototype the metadata exporter so new templates become discoverable to the URL pipeline.
+
+2025-10-04 – Manual metadata backfill checklist drafted
+- Documented the hand-audit workflow in `metadata-backfill-checklist.md` covering schema targets (matching/editability/slots), prioritization order, and review checklist.
+- Clarified requirement to inspect each TSX scene to define guardrails (platform shells first) before we ingest data into the new JSONB columns.
+- Next: spin up `backfill-drafts/` with JSON snippets for LinkedIn, X, Announcement, then schedule peer review before running import tooling.
+
+2025-10-04 – Backfill drafts for latest templates
+- Dropped JSON drafts for the five newest prod templates into `backfill-drafts/` (X Post, Announcement, Prompt Box, Logo slide & scale, Rivian Order Confirmation) capturing matching metadata, editability guardrails, and slot plans.
+- Next: verify required assets like `xLogo` exist in R2/DB before locking `requiresExactAssets`, and schedule peer review on slot naming prior to schema migrations.
+
+2025-10-04 – Added second batch of metadata drafts
+- Authored JSON drafts for the next five prod templates (Long Text Scene, LinkedIn Post, X Post Animation, Revolut 9-scene Journey, Ticking calendar) with matching/editability/slot details and scene-level schemas where applicable.
+- Revolut multi-scene draft includes beat assignments and slot coverage for all nine scenes; calendar template notes the currently hard-coded month/day ranges.
+- Next: validate icon/font dependencies (LinkedIn/X reaction sprites, Revolut icon set) before locking `requiresExactAssets`, then consolidate reviewer feedback ahead of DB schema migrations.
+
+2025-10-04 – Third batch of single-scene metadata drafts
+- Captured drafts for `savings-modal`, `gradient-word`, `icon-sliding`, `search-box-animation`, and `google-ai-search` in `backfill-drafts/`, covering matching vocab plus editability (platform locks for Google shells) and slot plans.
+- Noted guardrail expectations (e.g., keep Google palette fixed, limit search summary length, ensure savings counter inputs are configurable).
+- Next: audit icon dependencies (Iconify IDs listed in `requiresExactAssets`) and confirm these glyphs exist in our bundle/R2 before we finalize the JSONB schema.
+
+2025-10-04 – Additional single-scene metadata drafts
+- Added backfill JSON for `word-scale-up`, `slide-in-and-down`, `circle-expansion`, `scaled-up-word-slide`, and `single-word`, documenting word-slot expectations and timing guardrails.
+- Flagged that these templates rely on fixed word counts/sequence timing; edits should only adjust provided slots, not animation pacing.
+- Next: continue auditing Iconify coverage for locked platform assets and prep schema field definitions so these drafts map cleanly into JSONB columns.
+
+2025-10-04 – Ten more single-scene drafts
+- Documented metadata for Hero scene, Typewriter effect (with & without backspace), Long sentence slide down, Stretching typography, Emphasis, Big words, Icon & Tagline, Scale in logo reveal, and Wipe down text replace.
+- Captured platform locks for icon-based templates (X, NVIDIA) and noted counter/timing constraints for metric and typewriter variants.
+- Next: continue validating Iconify asset coverage and start mapping these slot ids into the planned JSONB schema fields.
+
+2025-10-04 – Story schema planning doc
+- Captured schema enhancements in `story-schema-enhancements.md` covering normalized slots, structured editability, `storyProfile` roles/mood, controlled taxonomy, asset requirements, and compatibility fields.
+- Next: finalize TypeScript interfaces tomorrow and retrofit existing drafts to the new shape before we tackle JSONB migrations.
+

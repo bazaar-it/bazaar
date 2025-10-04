@@ -1,0 +1,32 @@
+{
+  "templateId": "197adc7e-6498-4fb7-aabb-16ab44e24f4f",
+  "name": "Icon & Tagline",
+  "matchingMetadata": {
+    "keywords": ["x", "twitter", "icon", "tagline", "platform shell"],
+    "userPhrases": ["x icon tagline", "twitter hero", "logo + statement", "social platform hero"],
+    "categories": ["logo animation", "social", "hero"],
+    "styles": ["minimal", "platform", "monochrome"],
+    "useCases": ["platform announcement", "social hero", "tagline reveal"],
+    "animations": ["slide", "word cascade"],
+    "elements": ["platformIcon", "taglineWords"],
+    "colors": ["white", "black"],
+    "complexity": "medium",
+    "primaryUse": "X/Twitter icon entrance followed by word cascade tagline",
+    "similarTo": ["LinkedIn Post", "X Post"]
+  },
+  "editability": {
+    "lockBrandShell": true,
+    "allowPaletteOverride": false,
+    "editableTextSlots": ["word1", "word2", "word3", "word4"],
+    "editableMediaSlots": [],
+    "disallowedAttributes": ["xIcon", "wordTiming"],
+    "requiresExactAssets": ["ant-design:x-outlined"],
+    "notes": "Maintains X platform aesthetic; update words only (four tokens recommended)."
+  },
+  "slotPlan": [
+    { "id": "word1", "kind": "text", "label": "Word 1", "maxChars": 8, "default": "The", "required": true },
+    { "id": "word2", "kind": "text", "label": "Word 2", "maxChars": 10, "default": "Global", "required": true },
+    { "id": "word3", "kind": "text", "label": "Word 3", "maxChars": 10, "default": "Town", "required": true },
+    { "id": "word4", "kind": "text", "label": "Word 4", "maxChars": 10, "default": "Square", "required": true }
+  ]
+}

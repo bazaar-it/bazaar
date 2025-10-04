@@ -1,0 +1,29 @@
+{
+  "templateId": "cf41abe2-eaae-42b5-b84f-81a0c20200b8",
+  "name": "Scale in logo reveal",
+  "matchingMetadata": {
+    "keywords": ["logo reveal", "scale", "nvidia", "brand intro"],
+    "userPhrases": ["nvidia logo reveal", "simple logo scale", "brand intro bumper", "logo fade in"],
+    "categories": ["logo animation", "intro"],
+    "styles": ["minimal", "brand", "white"],
+    "useCases": ["brand bumper", "intro", "cta stinger"],
+    "animations": ["scale", "fade"],
+    "elements": ["logo"],
+    "colors": ["white", "green"],
+    "complexity": "simple",
+    "primaryUse": "Quick scale-in reveal for NVIDIA logo",
+    "similarTo": ["Logo slide & scale", "Icon & Tagline"]
+  },
+  "editability": {
+    "lockBrandShell": true,
+    "allowPaletteOverride": false,
+    "editableTextSlots": [],
+    "editableMediaSlots": ["logoIcon"],
+    "disallowedAttributes": ["logoAnimation"],
+    "requiresExactAssets": ["logos:nvidia"],
+    "notes": "Template designed for NVIDIA mark; swap icon only if supplying alternate brand asset with matching proportions."
+  },
+  "slotPlan": [
+    { "id": "logoIcon", "kind": "icon", "label": "Logo icon", "default": "logos:nvidia", "required": true }
+  ]
+}

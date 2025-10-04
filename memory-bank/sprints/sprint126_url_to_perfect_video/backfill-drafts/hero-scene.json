@@ -1,0 +1,32 @@
+{
+  "templateId": "6710e440-fcb5-41a5-be59-f24d941680eb",
+  "name": "Hero scene",
+  "matchingMetadata": {
+    "keywords": ["hero", "metric", "counter", "badge", "gradient"],
+    "userPhrases": ["hero counter animation", "landing metric hero", "bold product hero", "metric driven intro"],
+    "categories": ["hero", "text", "ui animation"],
+    "styles": ["bold", "gradient", "product"],
+    "useCases": ["product homepage", "metrics highlight", "section opener"],
+    "animations": ["slide", "fade", "scale", "counter"],
+    "elements": ["badge", "headline", "counter", "subtitle"],
+    "colors": ["rose", "pink", "white"],
+    "complexity": "medium",
+    "primaryUse": "Metric-driven hero block with animated counter and badge",
+    "similarTo": ["Savings modal", "Prompt Box"]
+  },
+  "editability": {
+    "lockBrandShell": false,
+    "allowPaletteOverride": true,
+    "editableTextSlots": ["badgeLabel", "headline", "subtitle"],
+    "editableNumericSlots": ["counterValue"],
+    "editableMediaSlots": [],
+    "disallowedAttributes": ["counterAnimationTiming", "gradientPalette"],
+    "notes": "Counter animates up to 100M+; set `counterValue` to target integer (will render with + suffix). Keep headline under ~40 chars per line to maintain layout."
+  },
+  "slotPlan": [
+    { "id": "badgeLabel", "kind": "text", "label": "Badge text", "maxChars": 24, "default": "World's First", "required": true },
+    { "id": "headline", "kind": "text", "label": "Headline", "maxChars": 60, "required": true },
+    { "id": "counterValue", "kind": "number", "label": "Counter target", "default": 100000000, "required": true },
+    { "id": "subtitle", "kind": "text", "label": "Subtitle", "maxChars": 32, "default": "Lines of Code", "required": true }
+  ]
+}

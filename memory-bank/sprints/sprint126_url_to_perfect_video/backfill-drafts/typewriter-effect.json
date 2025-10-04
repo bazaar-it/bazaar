@@ -1,0 +1,29 @@
+{
+  "templateId": "153a36b6-7e3a-4f58-bcad-438ae55ad846",
+  "name": "Typewriter effect",
+  "matchingMetadata": {
+    "keywords": ["typewriter", "search prompt", "line break", "minimal"],
+    "userPhrases": ["simple typewriter animation", "two-line prompt", "minimal type animation", "short type reveal"],
+    "categories": ["text", "hero"],
+    "styles": ["minimal", "clean", "white"],
+    "useCases": ["tagline", "feature statement", "cta intro"],
+    "animations": ["typewriter"],
+    "elements": ["line1", "line2"],
+    "colors": ["white", "black"],
+    "complexity": "simple",
+    "primaryUse": "Two-part typewriter headline with optional suffix",
+    "similarTo": ["Single word", "Word scale up"]
+  },
+  "editability": {
+    "lockBrandShell": false,
+    "allowPaletteOverride": true,
+    "editableTextSlots": ["line1", "line2"],
+    "editableMediaSlots": [],
+    "disallowedAttributes": ["typewriterSpeed"],
+    "notes": "Template concatenates two segments; keep combined length under ~40 characters to avoid overflow."
+  },
+  "slotPlan": [
+    { "id": "line1", "kind": "text", "label": "First segment", "maxChars": 24, "required": true },
+    { "id": "line2", "kind": "text", "label": "Second segment", "maxChars": 16 }
+  ]
+}

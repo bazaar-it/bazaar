@@ -1,0 +1,29 @@
+{
+  "templateId": "209f76ff-8704-4aab-b082-9bbfb2c1ff4b",
+  "name": "Ticking calendar",
+  "matchingMetadata": {
+    "keywords": ["calendar", "delivery date", "countdown", "schedule", "odometer"],
+    "userPhrases": ["show a ticking calendar", "animate delivery date", "date countdown", "timeline calendar animation"],
+    "categories": ["ui animation", "timeline", "status"],
+    "styles": ["minimal", "white", "product"],
+    "useCases": ["shipping update", "launch countdown", "roadmap milestone"],
+    "animations": ["slide", "scale", "odometer", "fade"],
+    "elements": ["header text", "month ticker", "day ticker", "accent color"],
+    "colors": ["white", "amber", "gray"],
+    "complexity": "medium",
+    "primaryUse": "Animated month/day odometer to communicate delivery timelines",
+    "similarTo": ["DeliveryCountdown", "DateReveal"]
+  },
+  "editability": {
+    "lockBrandShell": false,
+    "allowPaletteOverride": true,
+    "editableTextSlots": ["headerText"],
+    "editableMediaSlots": [],
+    "disallowedAttributes": ["monthTickerValues", "dayTickerTiming"],
+    "notes": "Month sequence is hard-coded (JAN-JUN); adjust code if alternate months are required."
+  },
+  "slotPlan": [
+    { "id": "headerText", "kind": "text", "label": "Header copy", "maxChars": 40, "required": true },
+    { "id": "accentColor", "kind": "color", "label": "Accent color", "default": "#ffb22b" }
+  ]
+}

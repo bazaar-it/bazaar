@@ -1,0 +1,120 @@
+{
+  "templateId": "14d3d28b-ee64-451d-94cd-0bdf6dcce055",
+  "name": "Rivian Order Confirmation",
+  "matchingMetadata": {
+    "keywords": ["order confirmation", "delivery timeline", "automotive", "purchase follow-up", "customer journey"],
+    "userPhrases": ["show order confirmation sequence", "delivery countdown video", "post-purchase follow up"],
+    "categories": ["multi-scene", "customer journey", "automotive"],
+    "styles": ["clean", "product", "white"],
+    "useCases": ["post-purchase", "onboarding", "lifecycle email"],
+    "animations": ["word reveal", "swipe", "odometer", "fade"],
+    "elements": ["greeting", "logo", "product photo", "calendar", "sign-off"],
+    "colors": ["white", "charcoal", "amber"],
+    "complexity": "complex",
+    "primaryUse": "Four-beat order confirmation narrative with delivery timeline",
+    "similarTo": ["MultiSceneOnboarding", "DeliveryCountdown"]
+  },
+  "editability": {
+    "lockBrandShell": false,
+    "allowPaletteOverride": true,
+    "editableTextSlots": [
+      "customerName",
+      "brandName",
+      "headline",
+      "deliveryMonth",
+      "deliveryDay",
+      "signoff"
+    ],
+    "editableMediaSlots": ["brandLogo", "productImage"],
+    "disallowedAttributes": ["calendarStructure"]
+  },
+  "slotPlan": [
+    { "id": "customerName", "kind": "text", "label": "Customer name", "maxChars": 24, "required": true },
+    { "id": "brandName", "kind": "text", "label": "Brand name", "maxChars": 24, "required": true },
+    { "id": "brandLogo", "kind": "image", "label": "Brand logo", "aspectRatio": "4:1", "required": true },
+    { "id": "productImage", "kind": "image", "label": "Product hero", "aspectRatio": "16:9", "required": true },
+    { "id": "deliveryMonth", "kind": "text", "label": "Delivery month", "maxChars": 3, "required": true },
+    { "id": "deliveryDay", "kind": "number", "label": "Delivery day", "min": 1, "max": 31, "required": true },
+    { "id": "signoff", "kind": "text", "label": "Closing line", "maxChars": 40, "required": true }
+  ],
+  "scenes": [
+    {
+      "sceneId": "251b6ce7-6e42-45bd-8a59-80a547acbc60",
+      "name": "Greeting + Logo",
+      "order": 0,
+      "beatType": "logo_reveal",
+      "requires": {
+        "text": ["greetingPrimary", "greetingSecondary"],
+        "images": ["brandLogo"]
+      },
+      "editability": {
+        "allowPaletteOverride": true,
+        "editableTextSlots": ["greetingPrimary", "greetingSecondary"],
+        "editableMediaSlots": ["brandLogo"],
+        "disallowedAttributes": ["wordRevealTiming"]
+      },
+      "slotSchema": [
+        { "id": "greetingPrimary", "kind": "text", "label": "Greeting headline", "maxChars": 24, "required": true },
+        { "id": "greetingSecondary", "kind": "text", "label": "Secondary line", "maxChars": 40, "required": true },
+        { "id": "brandLogo", "kind": "image", "label": "Logo mark", "aspectRatio": "3:1", "required": true }
+      ]
+    },
+    {
+      "sceneId": "abbdec17-ab28-4621-9832-61016c49c162",
+      "name": "Vehicle Reveal",
+      "order": 1,
+      "beatType": "benefit",
+      "requires": {
+        "text": ["statusLine"],
+        "images": ["productImage"]
+      },
+      "editability": {
+        "allowPaletteOverride": true,
+        "editableTextSlots": ["statusLine"],
+        "editableMediaSlots": ["productImage"]
+      },
+      "slotSchema": [
+        { "id": "statusLine", "kind": "text", "label": "Status headline", "maxChars": 42, "required": true },
+        { "id": "productImage", "kind": "image", "label": "Product image", "aspectRatio": "21:9", "required": true }
+      ]
+    },
+    {
+      "sceneId": "4c2e8548-5ca2-409c-8776-d8569a8e1a9c",
+      "name": "Delivery Timeline",
+      "order": 2,
+      "beatType": "solution_feature",
+      "requires": {
+        "text": ["deliveryMonth", "deliveryDay"],
+        "colors": ["accent"]
+      },
+      "editability": {
+        "allowPaletteOverride": true,
+        "editableTextSlots": ["deliveryMonth", "deliveryDay"],
+        "editableMediaSlots": [],
+        "disallowedAttributes": ["odometerStructure"]
+      },
+      "slotSchema": [
+        { "id": "deliveryMonth", "kind": "text", "label": "Month abbreviation", "maxChars": 3, "required": true },
+        { "id": "deliveryDay", "kind": "number", "label": "Day number", "min": 1, "max": 31, "required": true },
+        { "id": "accent", "kind": "color", "label": "Calendar accent", "default": "#ffb22b" }
+      ]
+    },
+    {
+      "sceneId": "81d10c57-c810-4ff5-b4ab-8c5825f4b641",
+      "name": "Sign-off",
+      "order": 3,
+      "beatType": "cta",
+      "requires": {
+        "text": ["signoff"]
+      },
+      "editability": {
+        "allowPaletteOverride": true,
+        "editableTextSlots": ["signoff"],
+        "editableMediaSlots": []
+      },
+      "slotSchema": [
+        { "id": "signoff", "kind": "text", "label": "Closing message", "maxChars": 36, "required": true }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "templateId": "e41aa14d-b417-4be9-913a-8efb1fac4088",
+  "name": "Long Text Scene",
+  "matchingMetadata": {
+    "keywords": ["long form text", "typography", "story slide", "gradient background", "sequence"],
+    "userPhrases": ["animate a long paragraph", "slow text reveal", "multi-line headline animation", "story typography scene"],
+    "categories": ["text", "story", "hero"],
+    "styles": ["bold", "gradient", "modern"],
+    "useCases": ["narrative intro", "product story", "brand manifesto"],
+    "animations": ["sequence", "typewriter", "slide", "scale"],
+    "elements": ["headline", "subtitle", "background gradient"],
+    "colors": ["purple", "orange", "pink"],
+    "complexity": "medium",
+    "primaryUse": "Multi-line storytelling typography over animated gradient",
+    "similarTo": ["FastText", "CarouselText"]
+  },
+  "editability": {
+    "lockBrandShell": false,
+    "allowPaletteOverride": true,
+    "editableTextSlots": ["line1", "line2", "line3", "line4", "line5"],
+    "editableMediaSlots": [],
+    "disallowedAttributes": ["backgroundGradientMotion"],
+    "notes": "Keep total sentence count <= 5 to preserve pacing across sequences."
+  },
+  "slotPlan": [
+    { "id": "line1", "kind": "text", "label": "Opening line", "maxChars": 50, "required": true },
+    { "id": "line2", "kind": "text", "label": "Supporting line 1", "maxChars": 55 },
+    { "id": "line3", "kind": "text", "label": "Supporting line 2", "maxChars": 55 },
+    { "id": "line4", "kind": "text", "label": "Supporting line 3", "maxChars": 55 },
+    { "id": "line5", "kind": "text", "label": "Closing line", "maxChars": 55 }
+  ]
+}
