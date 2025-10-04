@@ -1,9 +1,16 @@
 # 🏆 Bazaar-Vid Progress Summary
 
+## 📝 Latest Update (Oct 03, 2025)
+- Sprint 107/140 merge reconciliation: Merged `main` into `personalization`, resolved ChatPanel/PreviewPanel/template conflicts, and preserved URL personalization while adopting main's scene sync + infinite pagination fixes.【src/app/projects/[id]/generate/workspace/panels/ChatPanelG.tsx:35】【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx:460】【src/server/api/routers/generation/template-operations.ts:24】【src/server/api/routers/templates.ts:102】
+- Template panels now share the infinite scroll data flow: both desktop and mobile use cursor-based tRPC pagination, local caches, and load-more triggers matching main's scene sync helpers.【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx:400】【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelMobile.tsx:448】
+- Documented merge context and verified conflicts in sprint107 log for future reference.【memory-bank/sprints/sprint107_general_reliability/progress.md:370】
+
 ## 📝 Latest Update (Oct 02, 2025)
 - Sprint 107: Unified cubic easing guidance across add/edit prompts so generated scenes default to `Easing.bezier(0.4, 0, 0.2, 1)` unless users ask otherwise, keeping motion curves consistent between new content and tweaks.【src/config/prompts/active/bases/technical-guardrails.ts:8】
 
 ## 📝 Latest Update (Sep 29, 2025)
+- Sprint 124: Started Template Bootstrap onboarding sprint; captured the template-first personalization brief for Amy with brand-data extraction and orchestration guardrails.【memory-bank/sprints/sprint124_template_bootstrap/2025-09-29-template-onboarding-strategy.md:1】【memory-bank/sprints/sprint124_template_bootstrap/README.md:1】
+- Sprint 124: Delivered admin-only multi-scene templates end-to-end (schema, tRPC, add flow, desktop/mobile UI) and seeded the OrbitFlow 4-scene demo for QA.【src/server/api/routers/templates.ts:11】【src/server/api/routers/generation/template-operations.ts:24】【src/components/CreateTemplateModal.tsx:1】【src/app/projects/[id]/generate/workspace/panels/TemplatesPanelG.tsx:364】【scripts/seed-admin-multiscene-template.ts:1】
 - Sprint 140: Refactored `NewProjectButton` to reuse the shared `useIsMobile` hook, fixing the mobile TDZ crash and aligning project creation with the central breakpoint system.【src/components/client/NewProjectButton.tsx:11】【src/components/client/NewProjectButton.tsx:41】
 - Sprint 140: Synced the mobile format picker sheet with breakpoint changes so it auto-closes when dropdowns are disabled or the viewport shifts back to desktop layouts.【src/components/client/NewProjectButton.tsx:108】【memory-bank/sprints/sprint140_mobile/progress.md:39】
 - Sprint 140: Projects panel now renders real scene thumbnails on mobile (frame 15) instead of placeholder initials, bringing parity with desktop cards while keeping previews optional.【src/app/projects/[id]/generate/workspace/panels/MyProjectsPanelG.tsx:197】【src/app/projects/[id]/generate/workspace/panels/MyProjectsPanelG.tsx:298】
@@ -44,6 +51,14 @@
 - Marketing: Added Product Hunt featured badge to homepage (under hero CTA) ahead of launch. Link opens in new tab with noopener for safety; uses official PH SVG widget.
 - Sprint 107/UX: Fixed portrait preview sizing in workspace. Reworked RemotionPreview to compute fit via ResizeObserver (min(container/comp)) and removed brittle aspect-ratio wrapper. Prevents preview from overflowing under Timeline and ensures live resize when adding side panels.
 - UX: Enabled default autoplay for preview player (new and existing projects). Player now starts automatically; audio remains gesture-unlocked per existing logic.
+
+## 📝 Latest Update (Sep 26, 2025)
+- Sprint 130: Rebuilt the personalize dashboard with a two-panel layout showing extraction status, brand snapshot, and per-scene personalization controls. Scene selection now feeds directly into the new `applyBrandToScenes` LLM edit pipeline with live status feedback.
+- Sprint 130: generate workspace fix—brand variant selection no longer crashes due to block-scoped ordering; active variants are memoized and reused during VideoState sync so theme swaps immediately show edited scenes.
+
+## 📝 Latest Update (Sep 27, 2025)
+- Sprint 130: WebAnalysisV4 now ignores customer logo carousels, honours `og:site_name`, derives a fallback from the request domain, and waits longer before scraping so brand names like Y Combinator are detected instead of partner logos.
+- Sprint 130: Brand editor prompt/payload upgraded to demand palette swaps and copy overrides; fallback theme injection now uses the active brand copy to prevent legacy "Bazaar" strings from leaking into variants.
 
 ## 📝 Latest Update (Sep 11, 2025)
 ## 📝 Latest Update (Sep 13, 2025)
@@ -1203,6 +1218,40 @@ The core video generation pipeline is **production-ready** with:
 
 2025-09-21 – Sprint 130 kickoff
 - Created `sprint130_mass_brand_personalization` scaffold with scope (theme token refactor, bulk renderer, orchestration UX) and seeded TODO/progress logs.
+
+2025-09-21 – Bulk personalization dataset & UI plan
+- Added Sprint 130 dataset scaffolding (`brand-personalization-dataset.{md,json}`) and evaluated UI entrypoints, recommending a dedicated `/projects/[id]/personalize` page (see `ui-bulk-personalization-options.md`).
+
+2025-09-21 – BrandTheme contract & personalize wireframe
+- Introduced `src/lib/theme/brandTheme.ts` (token contract + profile mapping) and expanded Sprint 130 dataset to 10 targets for regression testing.
+- Sketched dedicated `/projects/[id]/personalize` page wireframe (`personalize-page-wireframe.md`) to host upload, review, and batch launch flows.
+
+2025-09-21 – Personalize workspace scaffold
+- Implemented `/projects/[id]/personalize` prototype using BrandTheme tokens, sample dataset table, and staged upload/launch flow; seeded downloadable `sample-personalization-targets.json`.
+
+2025-09-21 – Automated brand tokenization pipeline
+- Added LLM-powered `project.tokenizeScenes` mutation plus personalize-page button for one-click conversion of scenes to BrandTheme tokens.
+- Brand tokenizer prompt + service outputs JSON (code + summary) and recompiles scenes automatically; UI surfaces success/error via toasts.
+
+2025-09-22 – Brand tokenization guardrails
+- Fixed personalize-tokenization regressions where generated scenes lacked a safe `BrandTheme` fallback and crashed without the runtime.
+- Hardened the tokenizer prompt for SSR-safe retrieval and added server-side rewriting that injects `{ colors: {}, fonts: {}, assets: {} }` fallback objects when missing.
+
+2025-09-22 – Preserve editable scene TSX
+- Stopped the preview sync from overwriting `scene.data.code` with compiled JS so the Monaco editor continues to show the real TSX source.
+- Propagated separate `tsxCode`/`jsCode` fields across workspace mappers and updated hashing logic to detect changes while still preferring precompiled JS in the Remotion player.
+
+2025-09-22 – Token compiler return fix
+- `compileSceneToJS` now mirrors the main compiler by auto-returning the detected component, and the personalize/tokenize mutation recompiles scenes whose stored JS lacks that return so preview evaluation no longer yields `undefined` components.
+
+2025-09-22 – Brand preview workflow
+- Personalize badge detection accepts `theme?.`/`brandThemeRuntime` scenes so the UI reflects token readiness after conversion.
+- Injected a brand-theme toolbar in the Generate preview that hooks into the sample dataset so QA can apply/reset target palettes with a button instead of console scripts.
+
+2025-09-22 – URL-based personalization targets
+- Added API + database support for saving company targets pulled from a pasted URL (Playwright brand extraction → stored `BrandTheme`).
+- Personalize page surfaces target statuses and allows quick adds; generate preview now reads those saved themes instead of hardcoded mocks.
+- Normalized OKLCH / RGB colors to hex when creating themes so previews render the scraped palette accurately.
  
 2025-09-24 – Homepage cleanup
 - Removed the Product Hunt featured badge from the marketing homepage hero to reflect the post-launch state and reduce above-the-fold distractions.
@@ -1230,6 +1279,13 @@ The core video generation pipeline is **production-ready** with:
 - Production logs exposed `MediaPlanService.resolvePlan` dereferencing a disabled debug accumulator; wrapped debug map creation so prod runs skip instrumentation without crashing.
 - Added GitHub connection lookup fallback: detects missing `token_type`/`is_active` columns and re-queries using the legacy schema, unblocking brain orchestration while logging a schema-mismatch warning.
 - Incident captured in `sprint116_images/2025-09-24-live-media-plan-failure.md`; follow-up migration needed to align prod table structure with current Drizzle schema.
+
+2025-09-29 – Personalization admin guard & GitHub fallback update
+- Queried dev/prod Neon branches: dev holds `bazaar-vid_personalization_target`/`bazaar-vid_template_scene`, prod still missing personalization targets and newer GitHub columns (`token_type`, `selected_repos`, etc.).
+- PreviewPanel brand theme controls and personalization list query now check `session.user.isAdmin`; non-admins auto-load the default theme and skip personalization tRPC calls. `/projects/[id]/personalize` hard-gated to admins.
+- `githubRouter.getConnection` retries using a legacy `SELECT` when new columns are absent, while `personalizationTargets.list` returns an empty array (with warning) if the table is missing and createFromUrl surfaces a PRECONDITION_FAILED until migrations land.
+- Attempted `npx eslint` / `npm run typecheck`; both still fail due to pre-existing repo issues (`structuredClone` config, legacy TS errors across unrelated files). Left untouched but recorded here.
+- Added admin-only delete controls for multi-scene templates (desktop + mobile panels) that call the soft-delete API, confirm intent, and invalidate the template list so the UI updates immediately.
 
 2025-09-24 – Cross-project asset guard regression
 - Prod project `fa164d69…` failing to add scenes traced to new media-plan guard skipping linked assets when the R2 URL encodes a different project UUID.
@@ -1270,6 +1326,28 @@ The core video generation pipeline is **production-ready** with:
 - Drafted and wired the fifth batch (Shazam animation, Testimonials, UI Data Visualisation, 50+ Integrations, Bar Chart) into the canonical metadata workflow.
 - Added `template-metadata-coverage.md` in Sprint 119 to track IDs, formats, and completion status for all production templates.
 - Documented Toggle, Banking App, Blur, portrait Gradient Globe, and I want to break free in canonical metadata and refreshed the coverage checklist.
+
+2025-09-28 – Desktop templates incremental load
+- Swapped TemplatesPanelG to page Remotion templates 10-at-a-time with tRPC infinite query + scroll fetch, so we only compile what is visible.
+- Backend getAll now accepts cursor/search, filtering by name server-side instead of pulling 100 rows every time.
+- Implemented client-side template cache (memory + localStorage) with hashed modules so compiled templates reuse instantly in desktop panel.
+- Skip missing brand profile table in personalize page (return null instead of 404 when migration not applied).
+2025-09-30 – Shared brand dataset audit
+- Production still lacks the Sprint 99.5 brand tables; only `bazaar-vid_personalization_target` is live and it scopes entries by `(project_id, website_url)` so nothing is shared.
+- Dev schema requires `user_id` on `bazaar-vid_brand_extraction` and `project_id` on `bazaar-vid_brand_profile`, generating duplicate rows for the same domain (four copies of `https://ramp.com`, several screenshot URLs stored as brands).
+- Captured recommended data model shift (normalized domain key + project linkage table + real cache) in `sprints/sprint107_general_reliability/analysis/2025-09-30-shared-brand-dataset.md`.
+2025-09-30 – Multi-scene selector integration
+- Added shared multi-scene template metadata + personality scoring to unlock URL→video pipeline.
+- Build selector that derives brand personality/keywords from extracted data and picks the best template with reasoning.
+- Website-to-video flow now streams 8-scene builds driven by the new selector, replacing the hero-journey + single-scene mapping.
+
+- 2025-10-01: Refreshed sprint126 documentation to reflect the new shared brand repo + selector pipeline, noting outstanding multi-template coverage and SSE UI work (`sprints/sprint126_url_to_perfect_video/MASTER_PLAN.md`, `sprints/sprint126_url_to_perfect_video/PIPELINE_FLOW.md`, `sprints/sprint126_url_to_perfect_video/UX_FLOW.md`).
+- 2025-10-01: Applied migration `0021_shared_brand_repository.sql` to the dev database and confirmed the new shared tables/indexes exist (awaiting backfill + prod rollout plan).
+- 2025-10-01: Authored the URL onboarding modal implementation plan detailing trigger mechanics, form UX, SSE wiring, and handler updates (`sprints/sprint126_url_to_perfect_video/url-to-video-modal-plan.md`).
+- 2025-10-01: Implemented the first-run URL onboarding modal; generating a project now redirects with `?onboarding=1`, opens the modal for URL/duration/music inputs, and passes those selections through SSE into `WebsiteToVideoHandler` for automatic multi-scene generation.
+- 2025-10-01: Added live assistant progress messages (template selection → per-scene completion → summary) so users see the streaming status even after the modal closes.
+- 2025-10-01: Added 5s music previews in the URL modal and auto-applied the selected soundtrack via the AddAudio tool so generated videos come with the chosen vibe.
+- 2025-09-30: Investigating unnecessary media plan resolutions when only user-library assets exist; drafted skip heuristics for zero project media.
 2025-09-30 – Assistant chat consistency audit
 - Investigated reports of assistant replies changing post-refresh; traced ChatPanelG optimistic updates to `decision.chatResponse` while the server overwrites the same row with `formatSceneOperationMessage` after tool execution.
 - Verified with dev DB queries that single UUIDs carry multiple payloads over their lifetime (`createdAt` vs. `updatedAt` deltas) and that `syncDbMessages` re-merges both strings because it dedups on content snippets.
@@ -1291,3 +1369,14 @@ The core video generation pipeline is **production-ready** with:
 2025-10-02 – Preview audio unlocks
 - Preview player now launches muted and global pointer/keyboard gestures unlock audio, matching Chrome autoplay rules; the Remotion controls live in a portal so the old container listener never fired, which is why audio stayed silent even though exports contained it.【src/app/projects/[id]/generate/components/RemotionPreview.tsx:132】【src/app/projects/[id]/generate/workspace/panels/PreviewPanelG.tsx:2699】
 - Removed premature unmute logic from the chat play handler to avoid triggering NotAllowed errors before the user interacts, eliminating the console spam loop.【src/app/projects/[id]/generate/workspace/panels/PreviewPanelG.tsx:2699】
+2025-10-04 – Export failure investigation for Banana Image Studio
+- Queried prod project `fdd4eece-c98a-4bd5-a3aa-5981ece6ada3` and confirmed the hero scene (`27f81c2d-868a-47c8-ae1c-177ebebb1a6e`) stores `export const BananaImageStudioPresentation` instead of a default export, so admin/share players that rely on `module.default` fall back to the red "Scene Compilation Error" screen.
+- `SceneCompiler` auto-added `return BananaImageStudioPresentation` in `js_code`, which keeps the in-app preview working, but we never rewrite `tsxCode` to add `export default`, so secondary viewers break; newest export attempt still fails with `Easing is not defined`, showing we bypassed the sprint 108 Easing injection during Lambda preprocess.
+- No auto-fix iteration was triggered after the failure (only two `scene_iteration` rows, both `create` operations), so the project stayed in a broken state; need default-export enforcement during compilation or a follow-up auto-fix.
+2025-10-04 – Lambda Remotion bindings hotfix
+- `preprocessSceneForLambda` now records which primitives were destructured from `window.Remotion`, and the Lambda runtime passes `Easing` alongside the existing helpers while `MainCompositionSimple` stubs `window.Remotion` with those values. Exports that rely on `Easing` now resolve instead of throwing. Targeted icon isolation tests still fail on legacy expectations, matching the pre-change state.
+2025-10-04 – Video state persistence hardening
+- Recorded the localStorage quota crash analysis for Sprint 127 and confirmed `persist` was serializing full TSX/JS payloads into `bazaar-video-state`.
+- Added sanitizers so persisted scenes drop code-heavy fields and prune large nested strings before hitting storage.【src/stores/videoState.ts:238】【src/stores/videoState.ts:323】
+- `partialize` now runs every project through `sanitizePropsForPersistence`, keeping UI state (audio, selection, drafts) while letting DB sync repopulate heavy scene code post-reload.【src/stores/videoState.ts:1701】
+- Attempted `npx eslint src/stores/videoState.ts` and `npx tsc --noEmit`; both failed on pre-existing repo configuration/type issues (missing `structuredClone`, large TS backlog). Logged the failure context.

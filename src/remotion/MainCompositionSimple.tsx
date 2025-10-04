@@ -1,7 +1,7 @@
 // src/remotion/MainCompositionSimple.tsx
 // Simplified version for Lambda without any dynamic compilation
 import React from "react";
-import { Composition, AbsoluteFill, useCurrentFrame, interpolate, spring, Sequence, Img, Audio, Video, staticFile } from "remotion";
+import { Composition, AbsoluteFill, useCurrentFrame, interpolate, spring, Sequence, Img, Audio, Video, staticFile, Easing } from "remotion";
 // Import CSS fonts - works in both local and Lambda without cancelRender() errors
 import './fonts.css';
 
@@ -151,6 +151,7 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
         'useCurrentFrame',
         'interpolate',
         'spring',
+        'Easing',
         'Sequence',
         'useVideoConfig',
         'random',
@@ -166,8 +167,11 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
         `
           // Additional Remotion components that might be used
           const Series = Sequence; // Alias for compatibility
-          
-          // Stubs for external dependencies
+
+          // Override useVideoConfig to use actual dimensions
+          const actualUseVideoConfig = () => ({ width: videoWidth, height: videoHeight, fps: 30, durationInFrames: videoDuration });
+
+          // Stubs for external dependencies and globals the scene code may expect
           const window = {
             RemotionGoogleFonts: {
               loadFont: () => {} // No-op for Lambda
@@ -190,6 +194,19 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
                 }
               );
             },
+            // Provide Remotion primitives for any leftover window.Remotion usage
+            Remotion: {
+              AbsoluteFill,
+              useCurrentFrame,
+              useVideoConfig: actualUseVideoConfig,
+              interpolate,
+              spring,
+              Sequence,
+              Easing,
+              Img,
+              Audio,
+              Video,
+            },
             // IconifyIcon should already be replaced with SVGs during preprocessing
             BazaarAvatars: {
               'asian-woman': '/avatars/asian-woman.png',
@@ -199,9 +216,6 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
               'white-woman': '/avatars/white-woman.png'
             }
           };
-          
-          // Override useVideoConfig to use actual dimensions
-          const actualUseVideoConfig = () => ({ width: videoWidth, height: videoHeight, fps: 30, durationInFrames: videoDuration });
           
           // Execute the scene code
           // The last expression (Component;) will be returned
@@ -227,6 +241,7 @@ const DynamicScene: React.FC<{ scene: any; index: number; width?: number; height
         useCurrentFrame, 
         interpolate, 
         spring, 
+        Easing,
         Sequence,
         () => ({ width: width, height: height, fps: 30, durationInFrames: scene.duration || 150 }),
         (seed: number) => {

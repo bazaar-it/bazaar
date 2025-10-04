@@ -2,9 +2,11 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo, Suspense, useRef } from 'react';
+import { useSession } from "next-auth/react";
 import { useVideoState } from '~/stores/videoState';
 import type { InputProps } from '~/lib/types/video/input-props';
 import { Button } from "~/components/ui/button";
+import { Badge } from "~/components/ui/badge";
 import { RefreshCwIcon, CodeIcon, WrenchIcon } from "lucide-react";
 import { ErrorBoundary } from 'react-error-boundary';
 import { transform } from 'sucrase';
@@ -19,6 +21,55 @@ import { computeSceneRanges, findSceneAtFrame } from '~/lib/utils/scene-ranges';
 import { wrapSceneNamespace } from '~/lib/video/wrapSceneNamespace';
 import { buildCompositeHeader } from '~/lib/video/buildCompositeHeader';
 import { buildSingleSceneModule, buildMultiSceneModule } from '~/lib/video/buildComposite';
+import { DEFAULT_BRAND_THEME, ensureBrandThemeCopy, type BrandTheme } from '~/lib/theme/brandTheme';
+
+function sanitizeTheme(theme: BrandTheme | null | undefined): BrandTheme {
+  if (!theme) {
+    return DEFAULT_BRAND_THEME;
+  }
+
+  return {
+    ...DEFAULT_BRAND_THEME,
+    ...theme,
+    colors: {
+      ...DEFAULT_BRAND_THEME.colors,
+      ...theme.colors,
+      primary: theme.colors?.primary || DEFAULT_BRAND_THEME.colors.primary,
+      secondary: theme.colors?.secondary || DEFAULT_BRAND_THEME.colors.secondary,
+      background: theme.colors?.background || DEFAULT_BRAND_THEME.colors.background,
+      textDefault: theme.colors?.textDefault || DEFAULT_BRAND_THEME.colors.textDefault,
+      accents:
+        theme.colors?.accents && theme.colors.accents.length > 0
+          ? theme.colors.accents
+          : DEFAULT_BRAND_THEME.colors.accents,
+      neutrals: theme.colors?.neutrals || DEFAULT_BRAND_THEME.colors.neutrals,
+    },
+    fonts: {
+      heading: {
+        ...DEFAULT_BRAND_THEME.fonts.heading,
+        ...(theme.fonts?.heading || {}),
+      },
+      body: {
+        ...DEFAULT_BRAND_THEME.fonts.body,
+        ...(theme.fonts?.body || {}),
+      },
+      mono: theme.fonts?.mono || DEFAULT_BRAND_THEME.fonts.mono,
+    },
+    assets: {
+      ...DEFAULT_BRAND_THEME.assets,
+      ...theme.assets,
+      logo: theme.assets?.logo || DEFAULT_BRAND_THEME.assets.logo,
+      productShots: theme.assets?.productShots || DEFAULT_BRAND_THEME.assets.productShots,
+      heroImage: theme.assets?.heroImage || DEFAULT_BRAND_THEME.assets.heroImage,
+    },
+    iconography: theme.iconography || DEFAULT_BRAND_THEME.iconography,
+    backgroundEffects: theme.backgroundEffects || DEFAULT_BRAND_THEME.backgroundEffects,
+    motion: theme.motion || DEFAULT_BRAND_THEME.motion,
+    copy: ensureBrandThemeCopy(theme.copy),
+    variants: theme.variants || DEFAULT_BRAND_THEME.variants,
+    meta: theme.meta || DEFAULT_BRAND_THEME.meta,
+  };
+}
 
 // Error fallback component
 function ErrorFallback({ error }: { error: Error }) {
@@ -70,15 +121,26 @@ export function PreviewPanelG({
   initial?: InputProps;
   selectedSceneId?: string | null;
 }) {
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.isAdmin ?? false;
+  const utils = api.useUtils();
+  const brandifyScenesMutation = api.project.applyBrandToScenes.useMutation({
+    onSuccess: async () => {
+      await utils.generation.getProjectScenes.invalidate({ projectId });
+    },
+  });
   // Phase 1 metrics (lightweight, console-based)
   const metricsRef = useRef({ precompiled: 0, slowPath: 0, errors: 0, runs: 0 });
   // Track when code saves happen to force refresh bypassing signature check
   const forceRefreshRef = useRef(false);
   // ✅ FIXED: Use separate selectors to prevent infinite loops
-  const currentProps = useVideoState((state) => {
-    const project = state.projects[projectId];
-    return project?.props || initial;
-  });
+const currentProps = useVideoState((state) => {
+  const project = state.projects[projectId];
+  return project?.props || initial;
+});
+  const [selectedBrandTargetId, setSelectedBrandTargetId] = useState<string>('default');
+  const [activeBrandTargetId, setActiveBrandTargetId] = useState<string>('default');
+  const [isApplyingBrandTheme, setIsApplyingBrandTheme] = useState(false);
   
   // Get audio data from project state
   const projectAudio = useVideoState((state) => state.projects[projectId]?.audio);
@@ -96,6 +158,44 @@ export function PreviewPanelG({
       // This will be invalidated when scenes are created
     }
   );
+
+const { data: personalizationTargetsData } = api.personalizationTargets.list.useQuery(
+  { projectId },
+  {
+    enabled: isAdmin,
+    refetchInterval: isAdmin ? 15000 : false,
+  },
+);
+
+const readyBrandTargets = useMemo(() => {
+  if (!isAdmin || !personalizationTargetsData) {
+    return [] as Array<any>;
+  }
+  return personalizationTargetsData
+    .filter((target: any) => target.status === 'ready' && target.brandTheme)
+    .map((target: any) => ({
+      ...target,
+      brandTheme: sanitizeTheme(target.brandTheme as BrandTheme),
+    }));
+}, [isAdmin, personalizationTargetsData]);
+
+useEffect(() => {
+  if (!isAdmin) {
+    return;
+  }
+  if (
+    selectedBrandTargetId !== 'default' &&
+    !readyBrandTargets.some((target: any) => target.id === selectedBrandTargetId)
+  ) {
+    setSelectedBrandTargetId('default');
+  }
+  if (
+    activeBrandTargetId !== 'default' &&
+    !readyBrandTargets.some((target: any) => target.id === activeBrandTargetId)
+  ) {
+    setActiveBrandTargetId('default');
+  }
+}, [isAdmin, readyBrandTargets, selectedBrandTargetId, activeBrandTargetId]);
   
   // Debug: Check if jsCode is coming from API and data updates
   React.useEffect(() => {
@@ -126,6 +226,32 @@ export function PreviewPanelG({
   const [lastSyncedSceneIds, setLastSyncedSceneIds] = useState<string>('');
   const [syncDebounceTimer, setSyncDebounceTimer] = useState<NodeJS.Timeout | null>(null);
 
+  const activeBrandTarget = useMemo(() => {
+    if (activeBrandTargetId === 'default') {
+      return null;
+    }
+    return readyBrandTargets.find((target: any) => target.id === activeBrandTargetId) ?? null;
+  }, [activeBrandTargetId, readyBrandTargets]);
+
+  const selectedBrandTarget = useMemo(() => {
+    if (selectedBrandTargetId === 'default') {
+      return null;
+    }
+    return readyBrandTargets.find((target: any) => target.id === selectedBrandTargetId) ?? null;
+  }, [selectedBrandTargetId, readyBrandTargets]);
+
+  const activeBrandVariants = useMemo(() => {
+    return (activeBrandTarget?.brandTheme as BrandTheme | null)?.variants ?? {};
+  }, [activeBrandTarget]);
+
+  const activeVariantKey = useMemo(() => {
+    if (!activeBrandTarget) {
+      return 'default';
+    }
+    const keys = Object.keys(activeBrandVariants).sort().join('-');
+    return `${activeBrandTargetId}:${keys}`;
+  }, [activeBrandTarget, activeBrandTargetId, activeBrandVariants]);
+
   // Listen for code save events from CodePanel
   useEffect(() => {
     const handleCodeSaved = async (e: Event) => {
@@ -145,7 +271,7 @@ export function PreviewPanelG({
   useEffect(() => {
     if (dbScenes && currentProps) {
       // 🚨 FIX: Check if scenes have actually changed to prevent redundant syncs
-      const currentSceneIds = dbScenes.map(s => `${s.id}-${s.updatedAt}`).join(',');
+      const currentSceneIds = `${dbScenes.map(s => `${s.id}-${s.updatedAt}`).join(',')}|variant=${activeVariantKey}`;
       
       if (currentSceneIds === lastSyncedSceneIds) {
         // Database scenes unchanged, skipping sync
@@ -178,19 +304,23 @@ export function PreviewPanelG({
         return !(pendingDeleteSet && pendingDeleteSet.has(dbScene.id));
       }).map((dbScene: any) => {
         const sceneDuration = dbScene.duration || 150;
-        if (!dbScene.tsxCode) {
+        const variant = activeBrandVariants?.[dbScene.id];
+        const effectiveTsxCode = variant?.tsxCode ?? dbScene.tsxCode;
+        const effectiveJsCode = variant?.jsCode ?? (dbScene as any).jsCode;
+        if (!effectiveTsxCode) {
           console.warn('[PreviewPanelG] Scene missing tsxCode:', dbScene.id, dbScene.name);
         }
         const localScene = currentProps.scenes?.find((s: any) => s.id === dbScene.id);
         const localName = (localScene as any)?.name || localScene?.data?.name;
-        const hasCompiled = !!(dbScene as any).jsCode;
+        const hasCompiled = !!effectiveJsCode;
         // Per-scene visibility: whether compiled JS will be used
         console.log('[PreviewPanelG] Scene source:', {
           id: dbScene.id,
           name: dbScene.name,
           use: hasCompiled ? 'compiled-js' : 'tsx',
           hasJsCode: hasCompiled,
-          jsCodeLength: hasCompiled ? ((dbScene as any).jsCode?.length || 0) : 0,
+          jsCodeLength: hasCompiled ? (effectiveJsCode?.length || 0) : 0,
+          variantApplied: !!variant,
           duration: sceneDuration,
           order: dbScene.order ?? 0,
           revision: dbScene.revision ?? localScene?.revision ?? 1,
@@ -204,10 +334,10 @@ export function PreviewPanelG({
           revision: dbScene.revision ?? localScene?.revision ?? 1,
           name: localName || dbScene.name,
           data: {
-            // Prefer pre-compiled JS if available; fallback to TSX
-            code: (dbScene as any).jsCode || dbScene.tsxCode,
-            jsCode: (dbScene as any).jsCode,
-            tsxCode: dbScene.tsxCode,
+            // Keep TSX as canonical editing source; expose compiled JS separately
+            code: effectiveTsxCode,
+            tsxCode: effectiveTsxCode,
+            jsCode: effectiveJsCode,
             name: localName || dbScene.name,
             componentId: dbScene.id,
             props: dbScene.props || {}
@@ -222,10 +352,13 @@ export function PreviewPanelG({
         const order = s.order ?? 0;
         const duration = s.duration || 150;
         const revision = s.revision ?? 1;
-        // Prefer compiled JS when present; otherwise use TSX
-        const code = (s?.data?.code || (s as any).jsCode || (s as any).tsxCode || '') as string;
-        const h = (typeof hashString === 'function') ? hashString(code) : String(code.length);
-        return `${s.id}:${order}:${duration}:${revision}:${h}`;
+        const tsx = (s?.data?.tsxCode || s?.data?.code || (s as any).tsxCode || '') as string;
+        const js = ((s?.data as any)?.jsCode || (s as any).jsCode || '') as string;
+        const combined = `${tsx}::${js}`;
+        const hashed = (typeof hashString === 'function')
+          ? hashString(combined)
+          : String(combined.length);
+        return `${s.id}:${order}:${duration}:${revision}:${hashed}`;
       }).join('|');
       const serverSig = sigFrom(convertedScenes);
       const localSig = sigFrom((currentProps.scenes || []) as any[]);
@@ -272,7 +405,7 @@ export function PreviewPanelG({
         clearTimeout(syncDebounceTimer);
       }
     };
-  }, [dbScenes, projectId, currentProps, lastSyncedSceneIds]);
+  }, [dbScenes, projectId, currentProps, lastSyncedSceneIds, activeVariantKey, activeBrandVariants]);
   
   // Component compilation state
   const [componentImporter, setComponentImporter] = useState<(() => Promise<any>) | null>(null);
@@ -280,6 +413,62 @@ export function PreviewPanelG({
   const [isCompiling, setIsCompiling] = useState(false);
   const [componentError, setComponentError] = useState<Error | null>(null);
   const [refreshToken, setRefreshToken] = useState(`initial-${Date.now()}`);
+
+  const applyBrandTheme = useCallback((theme: BrandTheme, key: string) => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    (window as any).BrandTheme = {
+      defaultTheme: theme,
+      useTheme: () => theme,
+    };
+
+    setRefreshToken(`brand-${key}-${Date.now()}`);
+  }, [setRefreshToken]);
+
+  useEffect(() => {
+    applyBrandTheme(DEFAULT_BRAND_THEME, 'default');
+  }, [applyBrandTheme]);
+
+  const handleApplyBrandTheme = useCallback(async (targetId: string) => {
+    if (!isAdmin) {
+      return;
+    }
+    setIsApplyingBrandTheme(true);
+    try {
+      if (targetId !== 'default') {
+        const target = readyBrandTargets.find((entry: any) => entry.id === targetId);
+        if (!target) {
+          throw new Error('Selected brand target not found');
+        }
+
+        let themeToApply = sanitizeTheme(target.brandTheme as BrandTheme | null);
+        const hasVariants = Object.keys(themeToApply.variants ?? {}).length > 0;
+
+        if (!hasVariants) {
+          const result = await brandifyScenesMutation.mutateAsync({
+            projectId,
+            targetId,
+          });
+          await utils.personalizationTargets.list.invalidate({ projectId });
+          themeToApply = {
+            ...themeToApply,
+            variants: result.variants ?? {},
+          };
+        }
+
+        applyBrandTheme(sanitizeTheme(themeToApply), targetId);
+      } else {
+        applyBrandTheme(DEFAULT_BRAND_THEME, 'default');
+      }
+      setActiveBrandTargetId(targetId);
+    } catch (error) {
+      console.error('Failed to apply brand theme', error);
+    } finally {
+      setIsApplyingBrandTheme(false);
+    }
+  }, [applyBrandTheme, brandifyScenesMutation, isAdmin, projectId, readyBrandTargets, utils.personalizationTargets.list]);
   
   // Playback speed state
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
@@ -2672,7 +2861,7 @@ export default function FallbackComposition() {
         style={{ display: 'none' }}
         aria-hidden="true"
       />
-      
+
       <div className="relative flex-grow min-h-0 min-w-0 flex items-center justify-center">
         {/* Preview source indicator removed in this branch */}
         {componentImporter && playerProps ? (

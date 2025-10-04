@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useSession } from "next-auth/react";
 import { Input } from "~/components/ui/input";
 import { Card } from "~/components/ui/card";
 import { SearchIcon, Loader2 } from "lucide-react";
@@ -17,6 +18,9 @@ import { TemplateAdminMenu } from "~/components/templates/TemplateAdminMenu";
 type ExtendedTemplateDefinition = TemplateDefinition & {
   previewImage?: string | null;
   tags?: string[];
+  sceneCount?: number;
+  totalDuration?: number | null;
+  adminOnly?: boolean;
 };
 
 interface TemplatesPanelGProps {
@@ -158,7 +162,15 @@ const TemplateVideoPlayer = ({ template, format }: { template: ExtendedTemplateD
 };
 
 // Template preview component with thumbnail/video toggle
-const TemplatePreview = ({ template, onClick, isLoading, format, isTouchDevice, projectId, isAdmin }: {
+const TemplatePreview = ({
+  template,
+  onClick,
+  isLoading,
+  format,
+  isTouchDevice,
+  projectId,
+  isAdmin,
+}: {
   template: ExtendedTemplateDefinition;
   onClick: () => void;
   isLoading: boolean;
@@ -169,6 +181,8 @@ const TemplatePreview = ({ template, onClick, isLoading, format, isTouchDevice, 
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const utils = api.useUtils();
+  const isMultiScene = (template.sceneCount ?? 1) > 1;
+  const totalDurationFrames = template.totalDuration ?? template.duration;
 
   const handleMouseEnter = useCallback(() => {
     if (!isTouchDevice) {
@@ -183,15 +197,16 @@ const TemplatePreview = ({ template, onClick, isLoading, format, isTouchDevice, 
   }, [isTouchDevice]);
 
   const handleAdminUpdate = useCallback(() => {
-    // Invalidate queries to refresh templates list
-    utils.templates.getAll.invalidate();
+    void utils.templates.getAll.invalidate();
+    void utils.templates.getCategories.invalidate();
   }, [utils]);
 
   const className = `relative w-full ${getAspectRatioClass(format)} bg-black rounded-lg overflow-hidden cursor-pointer transition-all duration-200 group${isTouchDevice ? '' : ' hover:scale-[1.01]'}`;
   const showVideo = !isTouchDevice && isHovered;
-  const showInfo = false;
-  const showFooter = true;
+  const showInfo = isMultiScene;
+  const showFooter = isMultiScene;
   const formattedDuration = `${Math.round((template.duration / 30) * 10) / 10}s`;
+  const formattedTotalDuration = `${Math.round(((totalDurationFrames ?? template.duration) / 30) * 10) / 10}s`;
 
   return (
     <div
@@ -201,19 +216,18 @@ const TemplatePreview = ({ template, onClick, isLoading, format, isTouchDevice, 
       onMouseLeave={!isTouchDevice ? handleMouseLeave : undefined}
     >
       {showInfo && (
-        <div className="absolute top-2 left-2 right-2 z-10 flex items-center justify-between gap-2">
-          <div className="bg-white/90 text-gray-900 text-[10px] sm:text-xs px-2 py-1 rounded-full font-medium shadow-sm max-w-[70%] truncate">
-            {template.name}
+        <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
+          <div className="bg-black/80 text-white text-[10px] sm:text-xs px-2 py-1 rounded-full font-medium shadow-sm max-w-[12rem] truncate">
+            {template.sceneCount ?? 1} scenes
           </div>
-          <div className="bg-gray-900/80 text-white text-[10px] sm:text-xs px-2 py-1 rounded-full font-medium">
-            {formattedDuration}
+          <div className="bg-black/70 text-white text-[10px] sm:text-xs px-2 py-1 rounded-full font-medium">
+            {formattedTotalDuration}
           </div>
         </div>
       )}
 
-      {/* Admin Menu - Top Right */}
       {isAdmin && template.isFromDatabase && (
-        <div className="absolute top-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="absolute top-2 right-2 z-20">
           <TemplateAdminMenu
             template={{
               id: template.id,
@@ -245,16 +259,21 @@ const TemplatePreview = ({ template, onClick, isLoading, format, isTouchDevice, 
 
       {showFooter && !isLoading && (
         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-2 sm:p-3 z-10 space-y-1">
-          <div className="text-white/70 text-[10px] sm:text-xs font-medium">
-            {formattedDuration}
+          <div className="text-white text-[10px] sm:text-xs font-medium truncate">
+            {template.name}
           </div>
+          <div className="text-white/70 text-[10px] sm:text-xs font-medium">
+            {isMultiScene ? `${template.sceneCount ?? 1} scenes • ${formattedTotalDuration}` : formattedDuration}
+          </div>
+          {isAdmin && template.adminOnly && (
+            <div className="text-amber-300 text-[10px] sm:text-xs font-medium">Admin only</div>
+          )}
         </div>
       )}
 
     </div>
   );
 };
-
 // Real template compilation component  
 const useCompiledTemplate = (
   template: ExtendedTemplateDefinition,
@@ -388,22 +407,76 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [loadingTemplateId, setLoadingTemplateId] = useState<string | null>(null);
   const isTouchDevice = useIsTouchDevice();
-
+  const { data: session } = useSession();
+  const sessionIsAdmin = session?.user?.isAdmin ?? false;
   // Get tRPC utils for cache invalidation
   const utils = api.useUtils();
 
   // Get video state methods
-  const { addScene, getCurrentProps } = useVideoState();
+  const { addScene } = useVideoState();
 
-  // Get current project format
-  const currentFormat = getCurrentProps()?.meta?.format ?? 'landscape';
+  // Get current project format from the specific project (not global currentProjectId)
+  const currentFormat = useVideoState(state => state.projects[projectId]?.props?.meta?.format ?? 'landscape');
 
-  // Check if user is admin
-  const { data: adminCheck } = api.admin.checkAdminAccess.useQuery();
-  const isAdmin = adminCheck?.isAdmin === true;
+  // Check if user is admin (fallback to API if session not definitive)
+  const { data: adminCheck } = api.admin.checkAdminAccess.useQuery(undefined, {
+    enabled: !sessionIsAdmin,
+  });
+  const apiIsAdmin = adminCheck?.isAdmin === true;
+  const isAdmin = sessionIsAdmin || apiIsAdmin;
 
-  // Get categories from database
+  // Fetch template categories from server for dynamic chips
   const { data: categoriesData } = api.templates.getCategories.useQuery();
+
+  const categoryOptions = useMemo(
+    () => {
+      const base: Array<{ key: string; label: string; value?: string }> = [
+        { key: 'all', label: 'All', value: undefined },
+      ];
+
+      if (categoriesData) {
+        for (const category of categoriesData) {
+          const rawValue = category.category ?? 'uncategorized';
+          const normalizedKey = rawValue.toLowerCase();
+          const labelName = category.category
+            ? category.category.charAt(0).toUpperCase() + category.category.slice(1)
+            : 'Uncategorized';
+
+          base.push({
+            key: normalizedKey,
+            label: `${labelName} (${category.count})`,
+            value: rawValue,
+          });
+        }
+      }
+
+      if (isAdmin) {
+        base.push({ key: 'multi', label: 'Multi-scene', value: undefined });
+      }
+
+      return base;
+    },
+    [categoriesData, isAdmin]
+  );
+
+  const selectedCategoryOption = useMemo(
+    () => categoryOptions.find((option) => option.key === selectedCategory),
+    [categoryOptions, selectedCategory]
+  );
+
+  const templatesQueryInput = useMemo(
+    () => ({
+      format: currentFormat,
+      limit: 10,
+      category:
+        selectedCategoryOption &&
+        selectedCategoryOption.key !== 'all' &&
+        selectedCategoryOption.key !== 'multi'
+          ? selectedCategoryOption.value
+          : undefined,
+    }),
+    [currentFormat, selectedCategoryOption]
+  );
 
   // Use infinite query for pagination - only loads 10 at a time
   const {
@@ -413,7 +486,7 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
     isFetchingNextPage,
     isLoading: isLoadingDbTemplates,
   } = api.templates.getAll.useInfiniteQuery(
-    { format: currentFormat, limit: 10 },
+    templatesQueryInput,
     {
       getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
       staleTime: 5 * 60 * 1000,
@@ -449,40 +522,51 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
   
   // Direct template addition mutation - bypasses LLM pipeline
   const addTemplateMutation = api.generation.addTemplate.useMutation({
-    onSuccess: async (result) => {
+    onSuccess: async (result, variables) => {
       setLoadingTemplateId(null);
-      if (result.success && result.scene) {
-        // Only show toast if there's a message
-        if (result.message?.trim()) {
-          toast.success(`${result.message}`);
+      const createdScenes = result.scenes ?? [];
+
+      if (result.success && createdScenes.length > 0) {
+        const sceneCount = createdScenes.length;
+        const defaultMessage = `${variables.templateName}${sceneCount > 1 ? ` (${sceneCount} scenes)` : ''} added`;
+        const toastMessage = result.message?.trim() || defaultMessage;
+        toast.success(toastMessage);
+
+        console.log('[TemplatesPanelG] Template added successfully:', createdScenes.map((s) => s.id));
+        console.log('[TemplatesPanelG] Updating video state directly with', sceneCount, 'scene(s)');
+
+        for (const scene of createdScenes) {
+          addScene(projectId, scene);
         }
-        console.log('[TemplatesPanelG] Template added successfully:', result.scene);
-        
-        // 🚨 CRITICAL: Update video state directly for immediate UI update
-        console.log('[TemplatesPanelG] Updating video state directly...');
-        
-        // Add the scene to video state (addScene checks for duplicates internally)
-        addScene(projectId, result.scene);
-        
-        // Note: The server already creates the "Added template:" message in the database
-        // so we don't need to create it client-side to avoid duplicates
-        
-        // Call the callback first, before cache invalidation to prevent double refresh
-        if (onSceneGenerated && result.scene?.id) {
-          console.log('[TemplatesPanelG] Calling onSceneGenerated callback...');
-          await onSceneGenerated(result.scene.id);
+
+        const lastSceneId = createdScenes[createdScenes.length - 1]?.id;
+        if (onSceneGenerated && lastSceneId) {
+          console.log('[TemplatesPanelG] Calling onSceneGenerated callback for', lastSceneId);
+          await onSceneGenerated(lastSceneId);
         }
-        
-        // Minimize preview re-renders: we already updated local VideoState optimistically
-        // Only invalidate chat messages (server adds a message). Skip scenes invalidate here.
+
         setTimeout(async () => {
-          console.log('[TemplatesPanelG] Invalidating chat messages (skip scenes to avoid double refresh)...');
+          console.log('[TemplatesPanelG] Invalidating chat messages after template add');
           await utils.chat.getMessages.invalidate({ projectId });
+          await utils.templates.getCategories.invalidate();
         }, 100);
-        
+
         console.log('[TemplatesPanelG] ✅ Video state updated and caches invalidated');
       } else {
-        toast.error("Failed to add template");
+        const fallback = 'Failed to add template';
+        const rawMessage = result.message?.trim();
+        const errorMessage = (() => {
+          switch (rawMessage) {
+            case 'Template scenes missing':
+              return 'Template scenes are missing. Please recreate or delete this template.';
+            case 'Template code missing for non-database template':
+              return 'Template is incomplete (no code available). Delete and recreate it from a project.';
+            default:
+              return rawMessage || fallback;
+          }
+        })();
+        console.warn('[TemplatesPanelG] Template add returned without scenes:', result);
+        toast.error(errorMessage);
       }
     },
     onError: (error) => {
@@ -492,42 +576,63 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
     },
   });
 
-  // Track template usage mutation
+  useEffect(() => {
+    if (!isAdmin && selectedCategory === 'multi') {
+      setSelectedCategory('all');
+    }
+  }, [isAdmin, selectedCategory]);
+
   const trackUsageMutation = api.templates.trackUsage.useMutation();
-  
-  // Handle template addition
+
   const handleAddTemplate = useCallback(async (template: ExtendedTemplateDefinition) => {
     console.log('[TemplatesPanelG] Adding template:', template.name);
     console.log('[TemplatesPanelG] Template object:', template);
-    const templateCode = template.getCode?.() ?? '';
-    if (!templateCode) {
-      console.warn('[TemplatesPanelG] Template has no code, aborting add.');
-      setLoadingTemplateId(null);
-      toast.error('Template preview unavailable right now. Please try again later.');
+
+    const isMultiScene = (template.sceneCount ?? 1) > 1;
+    if (isMultiScene && !isAdmin) {
+      toast.error('Multi-scene templates are limited to admin accounts right now.');
       return;
     }
 
-    console.log('[TemplatesPanelG] Template code preview:', templateCode.substring(0, 200) + '...');
-    
+    let templateCode = '';
+    if (!isMultiScene) {
+      templateCode = template.getCode?.() ?? '';
+      if (!templateCode) {
+        console.warn('[TemplatesPanelG] Template has no code, aborting add.');
+        setLoadingTemplateId(null);
+        toast.error('Template preview unavailable right now. Please try again later.');
+        return;
+      }
+      console.log('[TemplatesPanelG] Template code preview:', templateCode.substring(0, 200) + '...');
+    }
+
     setLoadingTemplateId(template.id);
-    
-    // Track usage if it's a database template
+
     if (template.isFromDatabase) {
       trackUsageMutation.mutate(template.id);
     }
-    
-    const mutationParams = {
+
+    const mutationParams: {
+      projectId: string;
+      templateId: string;
+      templateName: string;
+      templateCode?: string;
+      templateDuration?: number;
+    } = {
       projectId,
       templateId: template.id,
       templateName: template.name,
-      templateCode,
-      templateDuration: template.duration,
     };
-    
+
+    if (!isMultiScene) {
+      mutationParams.templateCode = templateCode;
+      mutationParams.templateDuration = template.duration;
+    }
+
     console.log('[TemplatesPanelG] Mutation parameters:', mutationParams);
-    
+
     addTemplateMutation.mutate(mutationParams);
-  }, [projectId, addTemplateMutation, trackUsageMutation]);
+  }, [projectId, addTemplateMutation, trackUsageMutation, isAdmin]);
 
   // Combine hardcoded and database templates (DB first, then hardcoded after all pages loaded)
   const combinedTemplates = useMemo<ExtendedTemplateDefinition[]>(() => {
@@ -545,37 +650,57 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
       creator: dbTemplate.creator,
       previewImage: dbTemplate.thumbnailUrl ?? null,
       tags: dbTemplate.tags ?? [],
+      sceneCount: dbTemplate.sceneCount ?? 1,
+      totalDuration: dbTemplate.totalDuration ?? dbTemplate.duration,
+      adminOnly: dbTemplate.adminOnly ?? false,
     }));
 
-    // Only append hardcoded templates AFTER all DB templates are loaded (no more pages)
-    // This ensures DB templates (newest first) appear before hardcoded ones
+    const staticTemplatesFormatted: ExtendedTemplateDefinition[] = (TEMPLATES as ExtendedTemplateDefinition[]).map((template) => ({
+      ...template,
+      sceneCount: template.sceneCount ?? 1,
+      totalDuration: template.totalDuration ?? template.duration,
+      adminOnly: template.adminOnly ?? false,
+    }));
+
     const shouldShowHardcoded = !hasNextPage && !isFetchingNextPage;
     return shouldShowHardcoded
-      ? [...dbTemplatesFormatted, ...TEMPLATES] as ExtendedTemplateDefinition[]
-      : dbTemplatesFormatted as ExtendedTemplateDefinition[];
+      ? [...dbTemplatesFormatted, ...staticTemplatesFormatted]
+      : dbTemplatesFormatted;
   }, [databaseTemplates, hasNextPage, isFetchingNextPage]);
 
-  const isInitialLoading = isLoadingDbTemplates;
-  
+  const isInitialLoading = isLoadingDbTemplates && databaseTemplates.length === 0;
+
   // Filter templates based on search and format compatibility
   const filteredTemplates = useMemo(() => {
     let templates = combinedTemplates;
-    // Category filter
-    if (selectedCategory !== 'all') {
-      templates = templates.filter(t => (t.category || '').toLowerCase() === selectedCategory.toLowerCase());
+    if (!isAdmin) {
+      templates = templates.filter((template) => (template.sceneCount ?? 1) <= 1 && !template.adminOnly);
     }
-    // Format compatibility
-    templates = templates.filter(template => {
+
+    if (selectedCategoryOption && selectedCategoryOption.key !== 'all') {
+      if (selectedCategoryOption.key === 'multi') {
+        templates = templates.filter((t) => (t.sceneCount ?? 1) > 1);
+      } else {
+        const normalizedSelected = (selectedCategoryOption.value ?? selectedCategoryOption.key).toLowerCase();
+        templates = templates.filter((t) => {
+          const templateCategory = (t.category ?? 'uncategorized').toLowerCase();
+          return templateCategory === normalizedSelected;
+        });
+      }
+    }
+
+    templates = templates.filter((template) => {
       if (!template.supportedFormats || template.supportedFormats.length === 0) return true;
       return template.supportedFormats.includes(currentFormat);
     });
-    // Search
+
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      templates = templates.filter(template => template.name.toLowerCase().includes(q));
+      templates = templates.filter((template) => template.name.toLowerCase().includes(q));
     }
+
     return templates;
-  }, [searchQuery, currentFormat, combinedTemplates, selectedCategory]);
+  }, [searchQuery, currentFormat, combinedTemplates, selectedCategoryOption, isAdmin]);
 
   // Get grid columns based on format for better layout
   const getGridColumns = (format: string) => {
@@ -608,26 +733,15 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
         </div>
         {/* Category chips */}
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => setSelectedCategory('all')}
-            className={`px-2 py-1 text-xs rounded-full border ${selectedCategory === 'all' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
-          >
-            All
-          </button>
-          {(categoriesData || []).map((c) => {
-            const categoryLabel = c.category
-              ? c.category.charAt(0).toUpperCase() + c.category.slice(1)
-              : 'Uncategorized';
-            return (
-              <button
-                key={c.category}
-                onClick={() => setSelectedCategory(c.category || '')}
-                className={`px-2 py-1 text-xs rounded-full border ${selectedCategory === c.category ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
-              >
-                {categoryLabel} ({c.count})
-              </button>
-            );
-          })}
+          {categoryOptions.map((c) => (
+            <button
+              key={c.key}
+              onClick={() => setSelectedCategory(c.key)}
+              className={`px-2 py-1 text-xs rounded-full border ${selectedCategory === c.key ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+            >
+              {c.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -652,21 +766,21 @@ export default function TemplatesPanelG({ projectId, onSceneGenerated }: Templat
         ) : (
           <div className={`grid gap-2 sm:gap-3 ${getGridColumns(currentFormat)}`}>
             {filteredTemplates.map((template) => (
-              <Card key={template.id} className="overflow-hidden hover:shadow-lg transition-shadow p-0">
-                {/* Clickable Full-Size Preview with correct aspect ratio */}
-                <TemplatePreview
-                  template={template}
-                  onClick={() => handleAddTemplate(template)}
-                  isLoading={loadingTemplateId === template.id}
-                  format={currentFormat}
-                  isTouchDevice={isTouchDevice}
-                  projectId={projectId}
-                  isAdmin={isAdmin}
-                />
-              </Card>
-            ))}
-          </div>
-        )}
+          <Card key={template.id} className="overflow-hidden hover:shadow-lg transition-shadow p-0">
+            {/* Clickable Full-Size Preview with correct aspect ratio */}
+            <TemplatePreview
+              template={template}
+              onClick={() => handleAddTemplate(template)}
+              isLoading={loadingTemplateId === template.id}
+              format={currentFormat}
+              isTouchDevice={isTouchDevice}
+              projectId={projectId}
+              isAdmin={isAdmin}
+            />
+          </Card>
+        ))}
+      </div>
+    )}
 
         {filteredTemplates.length === 0 && !isInitialLoading && (
           <div className="text-center py-6 text-gray-500">

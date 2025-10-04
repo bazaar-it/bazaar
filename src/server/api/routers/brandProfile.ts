@@ -1,20 +1,41 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
-import { brandProfiles } from "~/server/db/schema";
-import { eq } from "drizzle-orm";
+import {
+  brandRepository,
+  projectBrandUsage,
+  users,
+} from "~/server/db/schema";
+import { desc, eq, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { normalizeBrandUrl } from "~/lib/utils/brand-url";
 
 export const brandProfileRouter = createTRPCRouter({
   getByProject: protectedProcedure
     .input(z.object({ projectId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const brandProfile = await ctx.db
-        .select()
-        .from(brandProfiles)
-        .where(eq(brandProfiles.projectId, input.projectId))
-        .limit(1);
+      try {
+        const result = await ctx.db
+          .select({
+            brand: brandRepository,
+            usage: projectBrandUsage,
+          })
+          .from(projectBrandUsage)
+          .innerJoin(
+            brandRepository,
+            eq(projectBrandUsage.brandRepositoryId, brandRepository.id),
+          )
+          .where(eq(projectBrandUsage.projectId, input.projectId))
+          .orderBy(desc(projectBrandUsage.usedAt))
+          .limit(1);
 
-      return brandProfile[0] || null;
+        return result[0]?.brand ?? null;
+      } catch (error) {
+        if ((error as { code?: string })?.code === "42P01") {
+          console.warn('[brandProfile.getByProject] Table missing; returning null');
+          return null;
+        }
+        throw error;
+      }
     }),
 
   update: protectedProcedure
@@ -36,12 +57,18 @@ export const brandProfileRouter = createTRPCRouter({
       }
 
       const updated = await ctx.db
-        .update(brandProfiles)
+        .update(brandRepository)
         .set({
           brandData: input.brandData,
+          colors: input.brandData?.colors ?? {},
+          typography: input.brandData?.typography ?? {},
+          logos: input.brandData?.logos ?? {},
+          copyVoice: input.brandData?.copyVoice ?? {},
+          productNarrative: input.brandData?.productNarrative ?? {},
+          socialProof: input.brandData?.socialProof ?? {},
           updatedAt: new Date(),
         })
-        .where(eq(brandProfiles.id, input.id))
+        .where(eq(brandRepository.id, input.id))
         .returning();
 
       return updated[0];
@@ -54,18 +81,78 @@ export const brandProfileRouter = createTRPCRouter({
       brandData: z.any(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const created = await ctx.db
-        .insert(brandProfiles)
+      const normalizedUrl = normalizeBrandUrl(input.websiteUrl);
+      if (!normalizedUrl) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Invalid website URL",
+        });
+      }
+
+      const ttlDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+      const [brand] = await ctx.db
+        .insert(brandRepository)
         .values({
-          projectId: input.projectId,
-          websiteUrl: input.websiteUrl,
+          normalizedUrl,
+          originalUrl: input.websiteUrl,
           brandData: input.brandData,
+          colors: input.brandData?.colors ?? {},
+          typography: input.brandData?.typography ?? {},
+          logos: input.brandData?.logos ?? {},
+          copyVoice: input.brandData?.copyVoice ?? {},
+          productNarrative: input.brandData?.productNarrative ?? {},
+          socialProof: input.brandData?.socialProof ?? {},
+          screenshots: input.brandData?.screenshots ?? [],
+          mediaAssets: input.brandData?.mediaAssets ?? [],
           extractionVersion: "1.0.0",
+          usageCount: 0,
+          lastUsedAt: new Date(),
+          lastExtractedAt: new Date(),
+          ttl: ttlDate,
           createdAt: new Date(),
           updatedAt: new Date(),
         })
+        .onConflictDoUpdate({
+          target: brandRepository.normalizedUrl,
+          set: {
+            brandData: input.brandData,
+            colors: input.brandData?.colors ?? {},
+            typography: input.brandData?.typography ?? {},
+            logos: input.brandData?.logos ?? {},
+            copyVoice: input.brandData?.copyVoice ?? {},
+            productNarrative: input.brandData?.productNarrative ?? {},
+            socialProof: input.brandData?.socialProof ?? {},
+            screenshots: input.brandData?.screenshots ?? [],
+            mediaAssets: input.brandData?.mediaAssets ?? [],
+            updatedAt: new Date(),
+          },
+        })
         .returning();
 
-      return created[0];
+      await ctx.db
+        .insert(projectBrandUsage)
+        .values({
+          projectId: input.projectId,
+          brandRepositoryId: brand.id,
+        })
+        .onConflictDoUpdate({
+          target: [projectBrandUsage.projectId, projectBrandUsage.brandRepositoryId],
+          set: { usedAt: new Date() },
+        });
+
+      const usageCountResult = await ctx.db
+        .select({ count: sql<number>`count(*)` })
+        .from(projectBrandUsage)
+        .where(eq(projectBrandUsage.brandRepositoryId, brand.id));
+
+      const usageCount = usageCountResult[0]?.count ?? 0;
+
+      await ctx.db
+        .update(brandRepository)
+        .set({ usageCount, lastUsedAt: new Date(), ttl: ttlDate })
+        .where(eq(brandRepository.id, brand.id));
+
+      return brand;
     }),
 });

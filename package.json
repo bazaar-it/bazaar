@@ -77,7 +77,8 @@
     "log:raw:mcp": "tsx src/scripts/log-tools/log-raw.ts",
     "analyze:errors": "tsx scripts/analyze-production-errors.ts",
     "postinstall": "npm rebuild lightningcss @tailwindcss/oxide || true && npx playwright install chromium || true",
-    "sanitize:avatars": "tsx scripts/sanitize-scenes-avatars.ts"
+    "sanitize:avatars": "tsx scripts/sanitize-scenes-avatars.ts",
+    "seed:multi-template": "tsx scripts/seed-admin-multiscene-template.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.3.22",

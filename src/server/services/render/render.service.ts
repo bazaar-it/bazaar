@@ -225,18 +225,18 @@ async function preprocessSceneForLambda(scene: any, onWarning?: RenderConfig['on
     });
     
     // Extract Remotion components being used (if any)
-    const remotionComponents = [];
-    const remotionMatch = transformedCode.match(/const\s*{\s*([^}]+)\s*}\s*=\s*window\.Remotion\s*;?/);
-    if (remotionMatch) {
-      remotionComponents.push(...remotionMatch[1].split(',').map((h: string) => h.trim()));
-    }
-    
-    // Remove ONLY the window.Remotion destructuring line (we'll provide it differently)
-    // Make sure to only match the specific line, not remove other code
-    transformedCode = transformedCode.replace(
-      /const\s*{\s*[^}]+\s*}\s*=\s*window\.Remotion\s*;?\n?/g,
-      ''
-    );
+    const remotionComponentSet = new Set<string>();
+    const remotionDestructureRegex = /const\s*{\s*([^}]+)\s*}\s*=\s*window\.Remotion\s*;?\n?/g;
+    transformedCode = transformedCode.replace(remotionDestructureRegex, (_match, group: string) => {
+      group
+        .split(',')
+        .map((token: string) => token.trim())
+        .filter((token: string) => token.length > 0)
+        .forEach((token: string) => remotionComponentSet.add(token));
+      return '';
+    });
+
+    const remotionComponents = Array.from(remotionComponentSet);
     
     // Extract React hooks being used (if any)
     const reactHooks = [];

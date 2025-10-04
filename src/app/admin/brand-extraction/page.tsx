@@ -101,11 +101,12 @@ export default function BrandExtractionPage() {
           addLog('🎨 Brand data extracted successfully');
         }
         
-        // Hero's Journey narrative
-        if (data.debugData.heroJourney) {
-          setHeroJourneyData(data.debugData.heroJourney);
-          updateStep('narrative', 'completed', data.debugData.heroJourney);
-          addLog(`📖 Created ${data.debugData.heroJourney.length} narrative scenes`);
+        // Narrative scenes (multi-scene aware)
+        const narrativeScenes = data.debugData.narrativeScenes || data.debugData.heroJourney;
+        if (narrativeScenes) {
+          setHeroJourneyData(narrativeScenes);
+          updateStep('narrative', 'completed', narrativeScenes);
+          addLog(`📖 Created ${narrativeScenes.length} narrative scenes`);
         }
         
         // Template selections

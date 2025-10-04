@@ -1,21 +1,48 @@
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "~/server/db";
-import { brandProfiles } from "~/server/db/schema";
-import { eq } from "drizzle-orm";
-import { dbLogger } from '~/lib/utils/logger';
+import {
+  brandRepository,
+  projectBrandUsage,
+  brandExtractionCache,
+  brandProfiles,
+} from "~/server/db/schema";
+import { dbLogger } from "~/lib/utils/logger";
+import {
+  hashNormalizedUrl,
+  normalizeBrandUrl,
+} from "~/lib/utils/brand-url";
+import { BrandPersonalityAnalyzer } from "~/server/services/ai/brand-personality-analyzer";
+import { VisualBrandAnalyzer } from "~/server/services/ai/visual-brand-analyzer";
+
+const BRAND_TTL_DAYS = 30;
+
+export interface SaveBrandProfileParams {
+  projectId: string;
+  websiteUrl: string;
+  extractedData: any;
+  userId?: string;
+}
 
 /**
- * Save extracted brand data to brand_profile table
+ * Save extracted brand data into the shared brand repository and link it to the project.
  */
-export async function saveBrandProfile(
-  projectId: string,
-  websiteUrl: string,
-  extractedData: any
-) {
-  dbLogger.info('💾 [BRAND PROFILE] Saving brand data to database...');
-  
+export async function saveBrandProfile(params: SaveBrandProfileParams) {
+  const { projectId, websiteUrl, extractedData, userId } = params;
+  dbLogger.info("💾 [BRAND PROFILE] Saving brand data to shared repository...", {
+    projectId,
+    websiteUrl,
+  });
+
+  const normalizedUrl = normalizeBrandUrl(websiteUrl);
+  if (!normalizedUrl) {
+    throw new Error(`Cannot normalize provided website URL: ${websiteUrl}`);
+  }
+
+  const now = new Date();
+  const ttlDate = new Date(now.getTime() + BRAND_TTL_DAYS * 24 * 60 * 60 * 1000);
+
   try {
-    // Log the structure we're receiving for debugging
-    dbLogger.debug('💾 [BRAND PROFILE] Received data structure:', {
+    dbLogger.debug("💾 [BRAND PROFILE] Received data structure:", {
       hasPageData: !!extractedData.pageData,
       hasBrand: !!extractedData.brand,
       hasProduct: !!extractedData.product,
@@ -58,13 +85,7 @@ export async function saveBrandProfile(
     });
     
     // Check if profile already exists
-    const existing = await db.query.brandProfiles.findFirst({
-      where: eq(brandProfiles.projectId, projectId),
-    });
-    
-    const profileData = {
-      projectId,
-      websiteUrl,
+    const baseBrandData = {
       brandData: {
         ...brandData,
         // Include V4's enhanced brand insights
@@ -115,32 +136,231 @@ export async function saveBrandProfile(
         psychology: extractedData.extractionMeta?.confidence?.psychology || 0.88,
         competitors: extractedData.extractionMeta?.confidence?.competitors || 0.75,
       },
-      lastAnalyzedAt: new Date(),
+      lastAnalyzedAt: now,
     };
-    
-    if (existing) {
-      dbLogger.debug('💾 [BRAND PROFILE] Updating existing profile...');
-      await db
-        .update(brandProfiles)
-        .set({
-          ...profileData,
-          updatedAt: new Date(),
-        })
-        .where(eq(brandProfiles.id, existing.id));
-      
-      return { ...existing, ...profileData };
-    } else {
-      dbLogger.debug('💾 [BRAND PROFILE] Creating new profile...');
-      const [newProfile] = await db
-        .insert(brandProfiles)
-        .values(profileData)
-        .returning();
-      
-      return newProfile;
+
+    // Analyze screenshots with vision (if available)
+    let visualAnalysis;
+    if (baseBrandData.screenshots && baseBrandData.screenshots.length > 0) {
+      dbLogger.info("👁️ [VISUAL ANALYSIS] Analyzing screenshots with GPT-4o Vision...");
+      const visualAnalyzer = new VisualBrandAnalyzer();
+      visualAnalysis = await visualAnalyzer.analyzeScreenshots(
+        baseBrandData.screenshots.map((s: any) => s.url || s).filter(Boolean)
+      );
+      dbLogger.info("👁️ [VISUAL ANALYSIS] Complete:", {
+        density: visualAnalysis.density,
+        colorEmotion: visualAnalysis.colorEmotion,
+        professionalLevel: visualAnalysis.professionalLevel,
+        confidence: visualAnalysis.confidence
+      });
     }
+
+    // Analyze brand personality using AI (with optional visual signals)
+    dbLogger.info("🧠 [BRAND PERSONALITY] Analyzing brand personality...");
+    const analyzer = new BrandPersonalityAnalyzer();
+    const personality = await analyzer.analyzeBrandPersonality({
+      colors: brandData.colors,
+      typography: brandData.typography,
+      copyVoice: baseBrandData.copyVoice,
+      productNarrative: baseBrandData.productNarrative,
+      screenshots: baseBrandData.screenshots,
+      visualAnalysis, // Include visual analysis for better personality scoring
+    });
+    dbLogger.info("🧠 [BRAND PERSONALITY] Analysis complete:", personality);
+
+    const screenshotUrls = (media.screenshots || [])
+      .map((shot: { url?: string }) => shot?.url)
+      .filter((url: string | undefined): url is string => typeof url === 'string' && url.length > 0);
+
+    const cachePayload = {
+      normalizedUrl,
+      cacheKey: hashNormalizedUrl(normalizedUrl),
+      rawHtml: extractedData.html || extractedData.rawHtml || null,
+      screenshotUrls,
+      colorSwatches: brandData.colors?.accents || [],
+      ttl: ttlDate,
+      extractedAt: now,
+      createdAt: now,
+    };
+
+    const brandRecord = await db.transaction(async (tx) => {
+      const existingBrand = await tx.query.brandRepository.findFirst({
+        where: eq(brandRepository.normalizedUrl, normalizedUrl),
+      });
+
+      if (existingBrand) {
+        dbLogger.debug("💾 [BRAND PROFILE] Updating shared repository entry", {
+          normalizedUrl,
+          brandId: existingBrand.id,
+        });
+
+        await tx
+          .update(brandRepository)
+          .set({
+            ...baseBrandData,
+            originalUrl: existingBrand.originalUrl || websiteUrl,
+            firstExtractedBy: existingBrand.firstExtractedBy ?? userId ?? existingBrand.firstExtractedBy,
+            personality,
+            confidenceScore:
+              extractedData.extractionMeta?.confidence?.overall ?? existingBrand.confidenceScore ?? 0.95,
+            extractionVersion: extractedData.extractionMeta?.version || existingBrand.extractionVersion,
+            reviewStatus: existingBrand.reviewStatus ?? 'automated',
+            lastExtractedAt: now,
+            updatedAt: now,
+          })
+          .where(eq(brandRepository.id, existingBrand.id));
+      } else {
+        dbLogger.debug("💾 [BRAND PROFILE] Creating shared repository entry", {
+          normalizedUrl,
+        });
+
+        await tx.insert(brandRepository).values({
+          normalizedUrl,
+          originalUrl: websiteUrl,
+          firstExtractedBy: userId ?? null,
+          latestExtractionId: null,
+          ...baseBrandData,
+          personality,
+          confidenceScore: extractedData.extractionMeta?.confidence?.overall ?? 0.95,
+          reviewStatus: 'automated',
+          extractionVersion: extractedData.extractionMeta?.version || '4.0.0',
+          usageCount: 0,
+          lastUsedAt: now,
+          lastExtractedAt: now,
+          ttl: ttlDate,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+
+      const brand = await tx.query.brandRepository.findFirst({
+        where: eq(brandRepository.normalizedUrl, normalizedUrl),
+      });
+
+      if (!brand) {
+        throw new Error(`Failed to locate brand repository entry for ${normalizedUrl}`);
+      }
+
+      const existingUsage = await tx.query.projectBrandUsage.findFirst({
+        where: and(
+          eq(projectBrandUsage.projectId, projectId),
+          eq(projectBrandUsage.brandRepositoryId, brand.id),
+        ),
+      });
+
+      if (existingUsage) {
+        await tx
+          .update(projectBrandUsage)
+          .set({ usedAt: now })
+          .where(eq(projectBrandUsage.id, existingUsage.id));
+      } else {
+        await tx.insert(projectBrandUsage).values({
+          projectId,
+          brandRepositoryId: brand.id,
+          usedAt: now,
+        });
+      }
+
+      const usageCountResult = await tx
+        .select({ count: sql<number>`count(*)` })
+        .from(projectBrandUsage)
+        .where(eq(projectBrandUsage.brandRepositoryId, brand.id));
+
+      const usageCount = usageCountResult[0]?.count ?? 0;
+
+      const [finalBrand] = await tx
+        .update(brandRepository)
+        .set({
+          usageCount,
+          lastUsedAt: now,
+          ttl: ttlDate,
+          updatedAt: now,
+        })
+        .where(eq(brandRepository.id, brand.id))
+        .returning();
+
+      await tx
+        .insert(brandExtractionCache)
+        .values(cachePayload)
+        .onConflictDoUpdate({
+          target: brandExtractionCache.normalizedUrl,
+          set: {
+            cacheKey: cachePayload.cacheKey,
+            rawHtml: cachePayload.rawHtml,
+            screenshotUrls: cachePayload.screenshotUrls,
+            colorSwatches: cachePayload.colorSwatches,
+            ttl: cachePayload.ttl,
+            extractedAt: cachePayload.extractedAt,
+          },
+        });
+
+      return finalBrand;
+    });
+
+    // Maintain legacy per-project table for backward compatibility until callers migrate
+    await syncLegacyBrandProfile(projectId, websiteUrl, baseBrandData);
+
+    return brandRecord;
   } catch (error) {
     console.error('💾 [BRAND PROFILE] Error saving:', error);
     throw error;
+  }
+}
+
+async function syncLegacyBrandProfile(
+  projectId: string,
+  websiteUrl: string,
+  profileData: {
+    brandData: Record<string, unknown>;
+    colors: Record<string, unknown>;
+    typography: Record<string, unknown>;
+    logos: Record<string, unknown>;
+    copyVoice: Record<string, unknown>;
+    productNarrative: Record<string, unknown>;
+    socialProof: Record<string, unknown>;
+    screenshots: Array<Record<string, unknown>>;
+    mediaAssets: Array<Record<string, unknown>>;
+    extractionVersion: string;
+    extractionConfidence: Record<string, unknown>;
+    lastAnalyzedAt: Date;
+  }
+) {
+  try {
+    const existing = await db.query.brandProfiles.findFirst({
+      where: eq(brandProfiles.projectId, projectId),
+    });
+
+    const legacyPayload = {
+      projectId,
+      websiteUrl,
+      brandData: profileData.brandData,
+      colors: profileData.colors,
+      typography: profileData.typography,
+      logos: profileData.logos,
+      copyVoice: profileData.copyVoice,
+      productNarrative: profileData.productNarrative,
+      socialProof: profileData.socialProof,
+      screenshots: profileData.screenshots,
+      mediaAssets: profileData.mediaAssets,
+      extractionVersion: profileData.extractionVersion,
+      extractionConfidence: profileData.extractionConfidence || {},
+      lastAnalyzedAt: profileData.lastAnalyzedAt ?? new Date(),
+      updatedAt: new Date(),
+    } as const;
+
+    if (existing) {
+      await db
+        .update(brandProfiles)
+        .set(legacyPayload)
+        .where(eq(brandProfiles.id, existing.id));
+    } else {
+      await db.insert(brandProfiles).values({
+        ...legacyPayload,
+        createdAt: new Date(),
+      });
+    }
+  } catch (legacyError) {
+    console.warn('[BRAND PROFILE] Failed syncing legacy brand_profile table (non-blocking)', legacyError);
   }
 }
 

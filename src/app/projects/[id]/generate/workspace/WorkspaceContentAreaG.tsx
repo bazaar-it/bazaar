@@ -510,6 +510,8 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
           duration: sceneDuration,
           data: {
             code: dbScene.tsxCode,
+            tsxCode: dbScene.tsxCode,
+            jsCode: (dbScene as any).jsCode,
             name: dbScene.name || 'Generated Scene',
             componentId: dbScene.id, // Use scene ID as component ID for now
             props: dbScene.props || {}
@@ -617,10 +619,10 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
     // Callback for handling new scene generation with validation
     const handleSceneGenerated = useCallback(async (sceneId: string) => {
       console.log('[WorkspaceContentAreaG] 🎉 NEW SCENE GENERATED! Scene ID:', sceneId);
-      
-      // 🚨 FIX DOUBLE REFRESH: Check if scene already exists in state
-      const currentProps = getCurrentProps();
-      const existingScene = currentProps?.scenes?.find((s: any) => s.id === sceneId);
+
+      // 🚨 FIX DOUBLE REFRESH: Check if scene already exists in state from specific project
+      const props = useVideoState.getState().projects[projectId]?.props;
+      const existingScene = props?.scenes?.find((s: any) => s.id === sceneId);
       
       if (existingScene) {
         console.log('[WorkspaceContentAreaG] ✅ Scene already in state (added optimistically), skipping DB fetch');
@@ -820,18 +822,22 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
       }, PANEL_ANIM_MS);
     }, []);
 
-    // Memoize current scenes to avoid recalculation on every render
+    // Memoize current scenes to avoid recalculation on every render from specific project
     const currentScenes = useMemo(() => {
-      const props = getCurrentProps();
+      const props = useVideoState.getState().projects[projectId]?.props;
       return props?.scenes || [];
-    }, [getCurrentProps, projectId]);
+    }, [projectId]);
 
     // Smoothly animate to restored layout on first mount
     const [animateLayout, setAnimateLayout] = useState(false);
+    // Delay PanelGroup hydration until after first paint to avoid react-resizable-panels race conditions
+    const [panelGroupReady, setPanelGroupReady] = useState(false);
     useEffect(() => {
-      // Enable transitions after first paint so default -> saved layout animates
-      const id = window.requestAnimationFrame(() => setAnimateLayout(true));
-      return () => window.cancelAnimationFrame(id);
+      const raf = window.requestAnimationFrame(() => {
+        setAnimateLayout(true);
+        setPanelGroupReady(true);
+      });
+      return () => window.cancelAnimationFrame(raf);
     }, []);
 
     // Generate panel content - memoized to prevent unnecessary re-renders
@@ -915,6 +921,15 @@ const WorkspaceContentAreaG = forwardRef<WorkspaceContentAreaGHandle, WorkspaceC
       window.addEventListener('timeline-select-scene', onTimelineSelect as EventListener);
       return () => window.removeEventListener('timeline-select-scene', onTimelineSelect as EventListener);
     }, []);
+
+    // Avoid mounting PanelGroup until after first paint to prevent "No group found" errors
+    if (!panelGroupReady) {
+      return (
+        <div className="flex h-full w-full items-center justify-center bg-slate-100 dark:bg-slate-900">
+          <span className="text-xs text-slate-500">Loading workspace…</span>
+        </div>
+      );
+    }
 
     // Render empty state if no panels are open
     if (openPanels.length === 0) {

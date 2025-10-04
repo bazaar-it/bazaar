@@ -17,14 +17,18 @@ function generateUUID(): string {
   });
 }
 
+import type { UrlToVideoUserInputs } from '~/lib/types/url-to-video';
+
 interface UseSSEGenerationOptions {
   projectId: string;
   onMessageCreated?: (assistantMessageId?: string, metadata?: { userMessage: string; imageUrls?: string[]; videoUrls?: string[]; audioUrls?: string[]; sceneUrls?: string[]; modelOverride?: string; useGitHub?: boolean }) => void;
   onComplete?: () => void;
   onError?: (error: string) => void;
+  onAssistantChunk?: (message: string, isComplete: boolean) => void;
+  onSceneProgress?: (event: { sceneId?: string; sceneIndex: number; sceneName: string; totalScenes: number; progress: number }) => void;
 }
 
-export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onError }: UseSSEGenerationOptions) {
+export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onError, onAssistantChunk, onSceneProgress }: UseSSEGenerationOptions) {
   const eventSourceRef = useRef<EventSource | null>(null);
   const { addAssistantMessage, updateMessage } = useVideoState();
   
@@ -39,7 +43,10 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
     sceneUrls?: string[], 
     modelOverride?: string,
     useGitHub?: boolean,
-    websiteUrl?: string
+    options?: {
+      websiteUrl?: string;
+      userInputs?: UrlToVideoUserInputs;
+    }
   ) => {
     // Close any existing connection
     if (eventSourceRef.current) {
@@ -75,9 +82,17 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
     if (useGitHub) {
       params.append('useGitHub', 'true');
     }
-    
-    if (websiteUrl) {
-      params.append('websiteUrl', websiteUrl);
+
+    if (options?.websiteUrl) {
+      params.append('websiteUrl', options.websiteUrl);
+    }
+
+    if (options?.userInputs) {
+      try {
+        params.append('userInputs', JSON.stringify(options.userInputs));
+      } catch (error) {
+        console.warn('[useSSEGeneration] Failed to serialize userInputs', error);
+      }
     }
 
     // Create new EventSource
@@ -86,6 +101,31 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
 
     let currentMessageId: string | null = null;
     let hasReceivedMessage = false;
+    let aggregatedAssistantMessage = '';
+
+    const appendAssistantMessage = (
+      line: string | undefined,
+      status: 'pending' | 'success' | 'error' = 'pending'
+    ) => {
+      if (!line) return;
+      aggregatedAssistantMessage = aggregatedAssistantMessage
+        ? `${aggregatedAssistantMessage}\n${line}`
+        : line;
+
+      if (currentMessageId) {
+        updateMessage(projectId, currentMessageId, {
+          content: aggregatedAssistantMessage,
+          status,
+        });
+      } else {
+        const newMessageId = generateUUID();
+        addAssistantMessage(projectId, newMessageId, aggregatedAssistantMessage);
+        currentMessageId = newMessageId;
+        updateMessage(projectId, newMessageId, {
+          status,
+        });
+      }
+    };
 
     eventSource.onmessage = (event) => {
       try {
@@ -111,18 +151,8 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
           // ✅ NEW: Handle streaming assistant message updates
           case 'assistant_message_chunk':
             hasReceivedMessage = true;
-            // Website pipeline streaming - update message in real-time
-            if (currentMessageId) {
-              updateMessage(projectId, currentMessageId, { 
-                content: data.message,
-                status: data.isComplete ? 'success' : 'pending'
-              });
-            } else {
-              // Create new assistant message with a proper UUID
-              const newMessageId = generateUUID();
-              addAssistantMessage(projectId, newMessageId, data.message);
-              currentMessageId = newMessageId;
-            }
+            onAssistantChunk?.(data.message, Boolean(data.isComplete));
+            appendAssistantMessage(data.message, data.isComplete ? 'success' : 'pending');
             
             // Close stream if message is complete
             if (data.isComplete) {
@@ -136,7 +166,14 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
             console.log(`Scene ${data.data.progress}% complete:`, data.data.sceneName);
             
             // Trigger immediate video state refresh
-            utils.scenes.getByProject.invalidate({ projectId });
+            utils.project.getFullProject.invalidate({ id: projectId });
+            onSceneProgress?.({
+              sceneId: data.data.sceneId,
+              sceneIndex: data.data.sceneIndex,
+              sceneName: data.data.sceneName,
+              totalScenes: data.data.totalScenes,
+              progress: data.data.progress,
+            });
             
             // Optional: Show progress notification
             // toast.success(`Scene added: ${data.data.sceneName}`);
@@ -174,6 +211,7 @@ export function useSSEGeneration({ projectId, onMessageCreated, onComplete, onEr
               errorMessage = `${errorMessage} (Retryable error)`;
             }
             
+            appendAssistantMessage(errorMessage, 'error');
             onError?.(errorMessage);
             eventSource.close();
             break;
