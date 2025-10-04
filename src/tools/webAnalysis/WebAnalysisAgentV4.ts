@@ -134,42 +134,54 @@ export class WebAnalysisAgentV4 {
 
   async analyze(url: string): Promise<ExtractedBrandDataV4> {
     toolsLogger.info(`🚀 WebAnalysisV4: Starting analysis of ${url}`);
-    
+    console.log('[WebAnalysisV4] Step 1: Starting analysis');
+
     let context: any = null;
     let page: any = null;
-    
+
     try {
       // Connect to Browserless
+      console.log('[WebAnalysisV4] Step 2: Connecting to browser...');
       await this.connectBrowser();
+      console.log('[WebAnalysisV4] Step 3: Browser connected, creating context...');
       context = await this.createContext();
+      console.log('[WebAnalysisV4] Step 4: Context created, opening new page...');
       page = await context.newPage();
-      
+      console.log('[WebAnalysisV4] Step 5: Page opened, setting timeout...');
+
       // Set extended page timeout for complex sites
       page.setDefaultTimeout(60000);
-      
+
       // Navigate to the website
       try {
+        console.log('[WebAnalysisV4] Step 6: Navigating to URL with networkidle...');
         await page.goto(url, {
           waitUntil: 'networkidle',
           timeout: 45_000,
         });
+        console.log('[WebAnalysisV4] Step 7: Navigation successful (networkidle)');
       } catch (error) {
         toolsLogger.warn('⚠️ WebAnalysisV4: networkidle navigation timeout, falling back to domcontentloaded', {
           url,
           message: error instanceof Error ? error.message : String(error),
         });
+        console.log('[WebAnalysisV4] Step 7b: Retrying with domcontentloaded...');
         await page.goto(url, {
           waitUntil: 'domcontentloaded',
           timeout: 45_000,
         });
+        console.log('[WebAnalysisV4] Step 7c: Navigation successful (domcontentloaded)');
       }
-      
+
       // Wait a bit longer so heavy hero sections and client logos load
+      console.log('[WebAnalysisV4] Step 8: Waiting 4s for content to load...');
       await page.waitForTimeout(4000);
-      
+      console.log('[WebAnalysisV4] Step 9: Wait complete, extracting page data...');
+
       // Extract brand data from the page
       toolsLogger.info('🔍 WebAnalysisV4: Extracting page data...');
       const extractedData = await this.extractPageData(page);
+      console.log('[WebAnalysisV4] Step 10: Page data extracted, processing...');
       
       // Log what we actually extracted
       toolsLogger.debug('🔍 WebAnalysisV4: Extracted raw data:', {
@@ -191,11 +203,14 @@ export class WebAnalysisAgentV4 {
       });
       
       // Take screenshots with validation
+      console.log('[WebAnalysisV4] Step 11: Capturing screenshots...');
       let screenshots: any[] = [];
       if (page && !page.isClosed()) {
         screenshots = await this.captureScreenshots(page, url);
+        console.log(`[WebAnalysisV4] Step 12: Screenshots captured (${screenshots.length} total)`);
       } else {
         toolsLogger.warn('⚠️ WebAnalysisV4: Page closed before screenshots, skipping');
+        console.log('[WebAnalysisV4] Step 12: Page closed, skipping screenshots');
       }
       
       // Get the domain name for brand identity
@@ -966,13 +981,16 @@ export class WebAnalysisAgentV4 {
   }
 
   private async captureScreenshots(page: any, _url: string) {
+    console.log('[WebAnalysisV4] captureScreenshots: Starting...');
     const screenshots = [];
-    
+
     // Validate page is still open
     if (!page || page.isClosed()) {
       toolsLogger.warn('⚠️ WebAnalysisV4: Page is closed, cannot take screenshots');
+      console.log('[WebAnalysisV4] captureScreenshots: Page is closed, aborting');
       return screenshots;
     }
+    console.log('[WebAnalysisV4] captureScreenshots: Page is open, proceeding...');
     
     // Helper function to safely take screenshot with retry
     const takeScreenshotWithRetry = async (options: any, maxRetries = 3): Promise<Buffer | null> => {
