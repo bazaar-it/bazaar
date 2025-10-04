@@ -235,6 +235,116 @@ interface VideoState {
   clearDraft: (projectId: string) => void;
 }
 
+const SCENE_PERSISTENCE_STRIPPED_KEYS = new Set<string>([
+  'code',
+  'tsxCode',
+  'jsCode',
+  'compiledCode',
+  'compiledJs',
+  'compiledTsx',
+  'rawCode',
+  'rawTsx',
+  'rawJs',
+  'renderedJs',
+  'renderedTsx',
+  'serverCompiledJs',
+  'serverCompiledTsx',
+  'transformedCode',
+  'generatedCode',
+  'sceneSource',
+  'componentSource',
+  'componentCode',
+  'codeBefore',
+  'codeAfter',
+  'diffHtml',
+  'llmResponseRaw',
+  'toolOutputRaw',
+]);
+
+const LARGE_PERSISTED_STRING_THRESHOLD = 8000;
+const MAX_PERSISTENCE_DEPTH = 6;
+
+const sanitizeValueForPersistence = (value: unknown, depth = 0, parentKey?: string): unknown => {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    if ((parentKey && SCENE_PERSISTENCE_STRIPPED_KEYS.has(parentKey)) || value.length > LARGE_PERSISTED_STRING_THRESHOLD) {
+      return undefined;
+    }
+    return value;
+  }
+
+  if (typeof value !== 'object') {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    if (depth >= MAX_PERSISTENCE_DEPTH) {
+      return undefined;
+    }
+    const sanitizedItems = value
+      .map((item) => sanitizeValueForPersistence(item, depth + 1))
+      .filter((item) => item !== undefined);
+    return sanitizedItems;
+  }
+
+  if (Object.prototype.toString.call(value) !== '[object Object]') {
+    return value;
+  }
+
+  if (depth >= MAX_PERSISTENCE_DEPTH) {
+    return undefined;
+  }
+
+  const result: Record<string, unknown> = {};
+  for (const [key, nestedValue] of Object.entries(value as Record<string, unknown>)) {
+    if (SCENE_PERSISTENCE_STRIPPED_KEYS.has(key)) {
+      continue;
+    }
+    const sanitized = sanitizeValueForPersistence(nestedValue, depth + 1, key);
+    if (sanitized !== undefined) {
+      result[key] = sanitized;
+    }
+  }
+
+  return result;
+};
+
+const sanitizeSceneDataForPersistence = (data: Record<string, unknown> | undefined): Record<string, unknown> => {
+  const sanitized = sanitizeValueForPersistence(data ?? {}, 0);
+  if (!sanitized || typeof sanitized !== 'object' || Array.isArray(sanitized)) {
+    return {};
+  }
+  return sanitized as Record<string, unknown>;
+};
+
+const sanitizeScenesForPersistence = (scenes: InputProps['scenes']): InputProps['scenes'] => {
+  return scenes.map((scene) => {
+    const sanitizedScene = {
+      ...scene,
+      data: sanitizeSceneDataForPersistence(scene.data as Record<string, unknown>),
+    };
+
+    const sceneRecord = sanitizedScene as unknown as Record<string, unknown>;
+    for (const key of SCENE_PERSISTENCE_STRIPPED_KEYS) {
+      if (key in sceneRecord) {
+        delete sceneRecord[key];
+      }
+    }
+
+    return sanitizedScene as InputProps['scenes'][number];
+  });
+};
+
+const sanitizePropsForPersistence = (props: InputProps): InputProps => {
+  return {
+    ...props,
+    scenes: sanitizeScenesForPersistence(props.scenes),
+  };
+};
+
 // Simple hash function for cache keys
 const hashPrompt = (projectId: string, prompt: string): string => {
   const normalized = prompt.toLowerCase().trim().replace(/\s+/g, ' ');
@@ -1588,7 +1698,7 @@ export const useVideoState = create<VideoState>()(
         for (const [pid, p] of Object.entries(state.projects)) {
           projects[pid] = {
             // Persist props, audio, and a few UI prefs
-            props: p.props,
+            props: sanitizePropsForPersistence(p.props),
             chatHistory: [], // never persist messages
             dbMessagesLoaded: false,
             activeStreamingMessageId: null,

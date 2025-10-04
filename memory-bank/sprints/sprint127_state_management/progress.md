@@ -72,3 +72,17 @@
 ## Next
 - Consider persisting the “audio unlocked” flag per session so the player can start unmuted after the first interaction.  
 - Add automated coverage for playback mute/unmute transitions if we expand Jest + jsdom audio mocks.
+
+**Date**: 2025-10-04  
+**Engineer**: Codex
+
+## ✅ Today
+- Captured localStorage quota crash analysis (`2025-10-04-localstorage-quota-analysis.md`) and traced it to `useVideoState` persisting full scene code into `bazaar-video-state`.
+- Added persistence sanitizers in `videoState.ts` so `partialize` strips TSX/JS payloads and large nested strings before writing to storage.
+- Ensured persisted project snapshots still include timing/selection state while delegating full scene data back to the DB sync path.
+
+## Validation
+- `npx eslint src/stores/videoState.ts` and `npx tsc --noEmit` fail due to pre-existing repo configuration/type errors (missing `structuredClone`, large backlog of TS issues); no new errors attributable to this change surfaced before the commands aborted.
+
+## Next
+- Monitor preview rehydration for placeholder flicker; consider lightweight size instrumentation for persisted blobs.
