@@ -200,26 +200,35 @@ export class WebsiteToVideoHandler {
       // Create personalization_target record for UI polling
       const domain = new URL(input.websiteUrl).hostname.replace('www.', '');
       const now = new Date();
-      await db.insert(personalizationTargets).values({
-        projectId: input.projectId,
-        websiteUrl: input.websiteUrl,
-        companyName: websiteData.brand?.identity?.name || domain,
-        status: 'ready',
-        brandProfile: websiteData as any,
-        brandTheme: brandStyle as any,
-        extractedAt: now,
-        createdAt: now,
-        updatedAt: now,
-      }).onConflictDoUpdate({
-        target: personalizationTargets.projectId,
-        set: {
+
+      // Check if record exists and update, otherwise insert
+      const existingTarget = await db.query.personalizationTargets.findFirst({
+        where: eq(personalizationTargets.projectId, input.projectId),
+      });
+
+      if (existingTarget) {
+        await db.update(personalizationTargets)
+          .set({
+            status: 'ready',
+            brandProfile: websiteData as any,
+            brandTheme: brandStyle as any,
+            extractedAt: now,
+            updatedAt: now,
+          })
+          .where(eq(personalizationTargets.id, existingTarget.id));
+      } else {
+        await db.insert(personalizationTargets).values({
+          projectId: input.projectId,
+          websiteUrl: input.websiteUrl,
+          companyName: websiteData.brand?.identity?.name || domain,
           status: 'ready',
           brandProfile: websiteData as any,
           brandTheme: brandStyle as any,
           extractedAt: now,
+          createdAt: now,
           updatedAt: now,
-        }
-      });
+        });
+      }
       toolsLogger.info('🌐 [WEBSITE HANDLER] Created personalization_target record');
 
       // 3. Select multi-scene template with AI personality
